@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/apstndb/spannerplanviz/queryplan"
+	"github.com/apstndb/spannerplan/queryplan"
 )
 
 func main() {

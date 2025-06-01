@@ -6,7 +6,7 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/goccy/go-yaml"
 
-	"github.com/apstndb/spannerplanviz/protoyaml"
+	"github.com/apstndb/spannerplan/protoyaml"
 )
 
 func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) {

@@ -13,8 +13,8 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/samber/lo"
 
-	"github.com/apstndb/spannerplanviz/queryplan"
-	"github.com/apstndb/spannerplanviz/stats"
+	"github.com/apstndb/spannerplan/queryplan"
+	"github.com/apstndb/spannerplan/stats"
 )
 
 type RowWithPredicates struct {

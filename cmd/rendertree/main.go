@@ -16,8 +16,8 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/samber/lo"
 
-	"github.com/apstndb/spannerplanviz/plantree"
-	"github.com/apstndb/spannerplanviz/queryplan"
+	"github.com/apstndb/spannerplan/plantree"
+	"github.com/apstndb/spannerplan/queryplan"
 )
 
 func main() {
