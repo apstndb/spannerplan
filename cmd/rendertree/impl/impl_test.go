@@ -178,22 +178,22 @@ Predicates(identified by ID):
 			withStatsToRenderDefMap[true],
 			nil,
 			heredoc.Doc(`
-+-----+-------------------------------------------------------------------------------------------+------+-------+------------+
-| ID  | Operator                                                                                  | Rows | Exec. | Latency    |
-+-----+-------------------------------------------------------------------------------------------+------+-------+------------+
-|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                                             |   33 |     1 | 1.92 msecs |
-|  *1 | +- Distributed Cross Apply <Row>                                                          |   33 |     1 |  1.9 msecs |
-|   2 |    +- [Input] Create Batch <Row>                                                          |      |       |            |
-|   3 |    |  +- Local Distributed Union <Row>                                                    |    7 |     1 | 0.95 msecs |
-|   4 |    |     +- Compute Struct <Row>                                                          |    7 |     1 | 0.94 msecs |
-|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full scan, scan_method: Automatic) |    7 |     1 | 0.93 msecs |
-|  11 |    +- [Map] Serialize Result <Row>                                                        |   33 |     1 | 0.88 msecs |
-|  12 |       +- Cross Apply <Row>                                                                |   33 |     1 | 0.87 msecs |
-|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Row)                            |    7 |     1 | 0.01 msecs |
-|  16 |          +- [Map] Local Distributed Union <Row>                                           |   33 |     7 | 0.85 msecs |
-| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |       |            |
-|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |     7 | 0.84 msecs |
-+-----+-------------------------------------------------------------------------------------------+------+-------+------------+
++-----+-------------------------------------------------------------------------------------------+------+-------+---------+
+| ID  | Operator                                                                                  | Rows | Exec. | Latency |
++-----+-------------------------------------------------------------------------------------------+------+-------+---------+
+|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                                             |   33 |     1 | 1.92 ms |
+|  *1 | +- Distributed Cross Apply <Row>                                                          |   33 |     1 |  1.9 ms |
+|   2 |    +- [Input] Create Batch <Row>                                                          |      |       |         |
+|   3 |    |  +- Local Distributed Union <Row>                                                    |    7 |     1 | 0.95 ms |
+|   4 |    |     +- Compute Struct <Row>                                                          |    7 |     1 | 0.94 ms |
+|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full scan, scan_method: Automatic) |    7 |     1 | 0.93 ms |
+|  11 |    +- [Map] Serialize Result <Row>                                                        |   33 |     1 | 0.88 ms |
+|  12 |       +- Cross Apply <Row>                                                                |   33 |     1 | 0.87 ms |
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Row)                            |    7 |     1 | 0.01 ms |
+|  16 |          +- [Map] Local Distributed Union <Row>                                           |   33 |     7 | 0.85 ms |
+| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |       |         |
+|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |     7 | 0.84 ms |
++-----+-------------------------------------------------------------------------------------------+------+-------+---------+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -317,36 +317,38 @@ Predicates(identified by ID):
 	}
 
 	for _, tcase := range tests {
-		stats, _, err := spannerplan.ExtractQueryPlan(tcase.input)
-		if err != nil {
-			t.Fatalf("invalid input at protoyaml.Unmarshal:\nerror: %v", err)
-		}
+		t.Run(tcase.desc, func(t *testing.T) {
+			stats, _, err := spannerplan.ExtractQueryPlan(tcase.input)
+			if err != nil {
+				t.Fatalf("invalid input at protoyaml.Unmarshal:\nerror: %v", err)
+			}
 
-		opts := []plantree.Option{plantree.WithQueryPlanOptions(
-			spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatOn),
-			spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatAngle),
-			spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatLabel),
-		)}
+			opts := []plantree.Option{plantree.WithQueryPlanOptions(
+				spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatOn),
+				spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatAngle),
+				spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatLabel),
+			)}
 
-		opts = append(opts, tcase.opts...)
+			opts = append(opts, tcase.opts...)
 
-		qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
-		if err != nil {
-			t.Fatal(err)
-		}
+			qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		rows, err := plantree.ProcessPlan(qp, opts...)
-		if err != nil {
-			t.Fatal(err)
-		}
+			rows, err := plantree.ProcessPlan(qp, opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		got, err := printResult(tcase.renderDef, rows, PrintPredicates)
-		if err != nil {
-			t.Fatal(err)
-		}
+			got, err := printResult(tcase.renderDef, rows, PrintPredicates)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		if diff := cmp.Diff(tcase.want, got); diff != "" {
-			t.Errorf("mismatch (-want +got):\n%s", diff)
-		}
+			if diff := cmp.Diff(tcase.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
