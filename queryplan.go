@@ -110,13 +110,15 @@ const (
 	ExecutionMethodFormatAngle
 )
 
+// TargetMetadataFormat controls how to render target metadata.
+// target metadata are scan_target, distribution_table, and table.
 type TargetMetadataFormat int64
 
 const (
-	// TargetMetadataFormatRaw prints scan_target and distribution_table metadata as is.
+	// TargetMetadataFormatRaw prints target metadata as is.
 	TargetMetadataFormatRaw TargetMetadataFormat = iota
 
-	// TargetMetadataFormatOn prints scan_target and distribution_table metadata as `on <target>`.
+	// TargetMetadataFormatOn prints target metadata as `on <target>`.
 	TargetMetadataFormatOn
 )
 
@@ -218,12 +220,20 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 		case "subquery_cluster_node": // Skip because it is useless
 			continue
 		case "scan_target":
+			if o.targetMetadataFormat != TargetMetadataFormatRaw {
+				continue
+			}
+
 			fields = append(fields, fmt.Sprintf("%s: %s",
 				strings.TrimSuffix(metadataFields["scan_type"].GetStringValue(), "Scan"),
 				v.GetStringValue()))
 			continue
 		case "execution_method":
 			if o.executionMethodFormat != ExecutionMethodFormatRaw {
+				continue
+			}
+		case "distribution_table", "table":
+			if o.targetMetadataFormat != TargetMetadataFormatRaw {
 				continue
 			}
 		}
