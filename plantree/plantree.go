@@ -13,8 +13,8 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/samber/lo"
 
-	"github.com/apstndb/spannerplanviz/queryplan"
-	"github.com/apstndb/spannerplanviz/stats"
+	"github.com/apstndb/spannerplan"
+	"github.com/apstndb/spannerplan/stats"
 )
 
 type RowWithPredicates struct {
@@ -24,7 +24,7 @@ type RowWithPredicates struct {
 	Predicates     []string
 	Keys           map[string][]string
 	ExecutionStats stats.ExecutionStats
-	ChildLinks     map[string][]*queryplan.ResolvedChildLink
+	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
 }
 
 func (r RowWithPredicates) Text() string {
@@ -47,7 +47,7 @@ func (r RowWithPredicates) FormatID() string {
 
 type options struct {
 	disallowUnknownStats bool
-	queryplanOptions     []queryplan.Option
+	queryplanOptions     []spannerplan.Option
 	treeprintOptions     []treeprint.Option
 	compact              bool
 	indentSize           int
@@ -63,7 +63,7 @@ func DisallowUnknownStats() Option {
 	}
 }
 
-func WithQueryPlanOptions(opts ...queryplan.Option) Option {
+func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 	return func(o *options) {
 		o.queryplanOptions = append(o.queryplanOptions, opts...)
 	}
@@ -92,7 +92,7 @@ func EnableCompact() Option {
 	return func(o *options) {
 		o.indentSize = 0
 		o.compact = true
-		o.queryplanOptions = append(o.queryplanOptions, queryplan.EnableCompact())
+		o.queryplanOptions = append(o.queryplanOptions, spannerplan.EnableCompact())
 		o.treeprintOptions = append(
 			o.treeprintOptions,
 			treeprint.WithEdgeTypeLink("|"),
@@ -104,7 +104,7 @@ func EnableCompact() Option {
 	}
 }
 
-func ProcessPlan(qp *queryplan.QueryPlan, opts ...Option) (rows []RowWithPredicates, err error) {
+func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredicates, err error) {
 	o := options{
 		indentSize: 2,
 		// default values to be override
@@ -172,11 +172,11 @@ func ProcessPlan(qp *queryplan.QueryPlan, opts ...Option) (rows []RowWithPredica
 
 		resolvedChildLinks := lox.MapWithoutIndex(node.GetChildLinks(), qp.ResolveChildLink)
 
-		scalarChildLinks := lox.FilterWithoutIndex(resolvedChildLinks, func(item *queryplan.ResolvedChildLink) bool {
+		scalarChildLinks := lox.FilterWithoutIndex(resolvedChildLinks, func(item *spannerplan.ResolvedChildLink) bool {
 			return item.Child.GetKind() == sppb.PlanNode_SCALAR
 		})
 
-		childLinks := lo.GroupBy(scalarChildLinks, func(item *queryplan.ResolvedChildLink) string {
+		childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
 			return item.ChildLink.GetType()
 		})
 
@@ -197,7 +197,7 @@ func ProcessPlan(qp *queryplan.QueryPlan, opts ...Option) (rows []RowWithPredica
 	return result, nil
 }
 
-func getLinkType(qp *queryplan.QueryPlan, link *sppb.PlanNode_ChildLink) string {
+func getLinkType(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink) string {
 	var linkType string
 	if link.GetType() != "" {
 		linkType = link.GetType()
@@ -213,7 +213,7 @@ func getLinkType(qp *queryplan.QueryPlan, link *sppb.PlanNode_ChildLink) string 
 	return linkType
 }
 
-func buildTree(qp *queryplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNode_ChildLink, level int, opts *options) error {
+func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNode_ChildLink, level int, opts *options) error {
 	if !qp.IsVisible(link) {
 		// empty tree
 		return nil
@@ -230,7 +230,7 @@ func buildTree(qp *queryplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNode
 	sep := lo.Ternary(!opts.compact, " ", "")
 
 	// node := qp.GetNodeByIndex(link.GetChildIndex())
-	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + queryplan.NodeTitle(node, opts.queryplanOptions...)
+	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
 		nodeText = opts.wrapper.Wrap(nodeText, *opts.wrapWidth-level*(opts.indentSize+1)-opts.wrapper.StringWidth(sep))
 	}

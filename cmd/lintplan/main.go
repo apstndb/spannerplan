@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/apstndb/spannerplanviz/queryplan"
+	"github.com/apstndb/spannerplan"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	stats, _, err := queryplan.ExtractQueryPlan(b)
+	stats, _, err := spannerplan.ExtractQueryPlan(b)
 	if err != nil {
 		var collapsedStr string
 		if len(b) > jsonSnippetLen {
@@ -37,7 +37,7 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	qp := queryplan.New(stats.GetQueryPlan().GetPlanNodes())
+	qp := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
 
 	for _, row := range qp.PlanNodes() {
 		var msgs []string
@@ -74,7 +74,7 @@ func run(ctx context.Context) error {
 			}
 		}
 		if len(msgs) > 0 {
-			fmt.Printf("%v: %v\n", row.GetIndex(), queryplan.NodeTitle(row))
+			fmt.Printf("%v: %v\n", row.GetIndex(), spannerplan.NodeTitle(row))
 			for _, msg := range msgs {
 				fmt.Printf("    %v\n", msg)
 			}
