@@ -2,6 +2,7 @@ package spannerplan
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -17,9 +18,11 @@ type QueryPlan struct {
 	parentMap map[int32]int32
 }
 
+var ErrEmptyPlanNodes = errors.New("spannerplan: planNodes cannot be empty")
+
 func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	if len(planNodes) == 0 {
-		return nil, fmt.Errorf("planNodes is empty")
+		return nil, ErrEmptyPlanNodes
 	}
 
 	parentMap := make(map[int32]int32)
