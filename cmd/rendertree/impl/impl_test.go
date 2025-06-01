@@ -289,7 +289,12 @@ Predicates(identified by ID):
 
 		opts = append(opts, tcase.opts...)
 
-		rows, err := plantree.ProcessPlan(spannerplan.New(stats.GetQueryPlan().GetPlanNodes()), opts...)
+		qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rows, err := plantree.ProcessPlan(qp, opts...)
 		if err != nil {
 			t.Fatal(err)
 		}
