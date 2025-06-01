@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -90,7 +91,9 @@ type columnRenderDef struct {
 }
 
 func templateMapFunc(tmplName, tmplText string) (func(row plantree.RowWithPredicates) (string, error), error) {
-	tmpl, err := template.New(tmplName).Parse(tmplText)
+	tmpl, err := template.New(tmplName).Funcs(map[string]any{
+		"secsToS": secsToS,
+	}).Parse(tmplText)
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +124,13 @@ var (
 		},
 	}
 )
+
+var secsRe = regexp.MustCompile(`secs$`)
+
+func secsToS(v any) string {
+	return secsRe.ReplaceAllString(fmt.Sprint(v), "s")
+}
+
 var (
 	withStatsToRenderDefMap = map[bool]tableRenderDef{
 		false: {
@@ -146,7 +156,7 @@ var (
 				},
 				{
 					MapFunc: func(row plantree.RowWithPredicates) (string, error) {
-						return row.ExecutionStats.Latency.String(), nil
+						return secsToS(row.ExecutionStats.Latency), nil
 					},
 					Name:      "Latency",
 					Alignment: tw.AlignRight,
