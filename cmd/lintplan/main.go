@@ -37,7 +37,10 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	qp := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
+	qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
+	if err != nil {
+		return err
+	}
 
 	for _, row := range qp.PlanNodes() {
 		var msgs []string

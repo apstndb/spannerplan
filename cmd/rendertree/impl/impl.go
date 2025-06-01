@@ -177,16 +177,16 @@ const (
 	PrintFull
 )
 
-func parsePrintMode(s string) PrintMode {
+func parsePrintMode(s string) (PrintMode, error) {
 	switch strings.ToLower(s) {
 	case "predicates":
-		return PrintPredicates
+		return PrintPredicates, nil
 	case "typed":
-		return PrintTyped
+		return PrintTyped, nil
 	case "full":
-		return PrintFull
+		return PrintFull, nil
 	default:
-		panic(fmt.Sprintf("unknown PrintMode: %s", s))
+		return 0, fmt.Errorf("unknown PrintMode: %s", s)
 	}
 }
 
@@ -218,7 +218,10 @@ func run() error {
 		*knownFlag = *fullscan
 	}
 
-	printMode := parsePrintMode(*printModeStr)
+	printMode, err := parsePrintMode(*printModeStr)
+	if err != nil {
+		return err
+	}
 
 	var withStats bool
 	switch strings.ToUpper(*mode) {
@@ -291,7 +294,12 @@ func run() error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	rows, err := plantree.ProcessPlan(spannerplan.New(stats.GetQueryPlan().GetPlanNodes()), opts...)
+	qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
+	if err != nil {
+		return err
+	}
+
+	rows, err := plantree.ProcessPlan(qp, opts...)
 	if err != nil {
 		return err
 	}

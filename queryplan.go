@@ -17,9 +17,9 @@ type QueryPlan struct {
 	parentMap map[int32]int32
 }
 
-func New(planNodes []*sppb.PlanNode) *QueryPlan {
+func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	if len(planNodes) == 0 {
-		panic("planNodes is empty")
+		return nil, fmt.Errorf("planNodes is empty")
 	}
 
 	parentMap := make(map[int32]int32)
@@ -29,7 +29,7 @@ func New(planNodes []*sppb.PlanNode) *QueryPlan {
 		}
 	}
 
-	return &QueryPlan{planNodes, parentMap}
+	return &QueryPlan{planNodes, parentMap}, nil
 }
 
 func (qp *QueryPlan) IsFunction(childLink *sppb.PlanNode_ChildLink) bool {
