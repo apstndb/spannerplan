@@ -1,7 +1,6 @@
 package spannerplan
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -111,13 +110,15 @@ const (
 	ExecutionMethodFormatAngle
 )
 
+// TargetMetadataFormat controls how to render target metadata.
+// target metadata are scan_target, distribution_table, and table.
 type TargetMetadataFormat int64
 
 const (
-	// TargetMetadataFormatRaw prints scan_target and distribution_table metadata as is.
+	// TargetMetadataFormatRaw prints target metadata as is.
 	TargetMetadataFormatRaw TargetMetadataFormat = iota
 
-	// TargetMetadataFormatOn prints scan_target and distribution_table metadata as `on <target>`.
+	// TargetMetadataFormatOn prints target metadata as `on <target>`.
 	TargetMetadataFormatOn
 )
 
@@ -167,7 +168,10 @@ func EnableCompact() Option {
 	}
 }
 
-var knownBooleanFlagKeys = []string{"Full scan", "split_ranges_aligned"}
+var (
+	knownBooleanFlagKeys = []string{"Full scan", "split_ranges_aligned"}
+	targetMetadataKeys   = []string{"scan_target", "distribution_table", "table"}
+)
 
 func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 	var o option
@@ -180,7 +184,14 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 	metadataFields := node.GetMetadata().GetFields()
 
 	executionMethod := metadataFields["execution_method"].GetStringValue()
-	target := cmp.Or(metadataFields["scan_target"].GetStringValue(), metadataFields["distribution_table"].GetStringValue())
+
+	var target string
+	for _, k := range targetMetadataKeys {
+		if v := metadataFields[k].GetStringValue(); v != "" {
+			target = v
+			break
+		}
+	}
 
 	operator := joinIfNotEmpty(" ",
 		metadataFields["call_type"].GetStringValue(),
@@ -197,6 +208,10 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 	var labels []string
 	var fields []string
 	for k, v := range metadataFields {
+		if o.targetMetadataFormat != TargetMetadataFormatRaw && slices.Contains(targetMetadataKeys, k) {
+			continue
+		}
+
 		switch k {
 		case "call_type", "iterator_type": // Skip because it is displayed in node title
 			continue
@@ -217,7 +232,7 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 			if o.executionMethodFormat != ExecutionMethodFormatRaw {
 				continue
 			}
-		case "distribution_table":
+		case "distribution_table", "table":
 			if o.targetMetadataFormat != TargetMetadataFormatRaw {
 				continue
 			}
