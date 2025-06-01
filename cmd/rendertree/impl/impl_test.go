@@ -42,6 +42,9 @@ var dcaYAML []byte
 //go:embed testdata/distributed_cross_apply_profile.yaml
 var dcaProfileYAML []byte
 
+//go:embed testdata/delete.yaml
+var deleteYAML []byte
+
 func TestRenderTree(t *testing.T) {
 	tests := []struct {
 		desc      string
@@ -271,6 +274,44 @@ Predicates(identified by ID):
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+`),
+		},
+		{
+			"DELETE PLAN",
+			deleteYAML,
+			withStatsToRenderDefMap[false],
+			nil,
+			heredoc.Doc(`
++----+----------------------------------------------------------------------------------+
+| ID | Operator                                                                         |
++----+----------------------------------------------------------------------------------+
+|  0 | Apply Mutations on MutationTest <Row> (operation_type: DELETE)                   |
+|  1 | +- Distributed Union on MutationTest <Row>                                       |
+|  2 |    +- Local Distributed Union <Row>                                              |
+|  3 |       +- Serialize Result <Row>                                                  |
+|  4 |          +- Table Scan on MutationTest <Row> (Full scan, scan_method: Automatic) |
++----+----------------------------------------------------------------------------------+
+`),
+		},
+		{
+			"DELETE PLAN traditional",
+			deleteYAML,
+			withStatsToRenderDefMap[false],
+			sliceOf(plantree.WithQueryPlanOptions(
+				spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatRaw),
+				spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatRaw),
+				spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatRaw),
+			)),
+			heredoc.Doc(`
++----+--------------------------------------------------------------------------------------------------------------+
+| ID | Operator                                                                                                     |
++----+--------------------------------------------------------------------------------------------------------------+
+|  0 | Apply Mutations (execution_method: Row, operation_type: DELETE, table: MutationTest)                         |
+|  1 | +- Distributed Union (distribution_table: MutationTest, execution_method: Row, split_ranges_aligned: false)  |
+|  2 |    +- Local Distributed Union (execution_method: Row)                                                        |
+|  3 |       +- Serialize Result (execution_method: Row)                                                            |
+|  4 |          +- Table Scan (Full scan: true, Table: MutationTest, execution_method: Row, scan_method: Automatic) |
++----+--------------------------------------------------------------------------------------------------------------+
 `),
 		},
 	}

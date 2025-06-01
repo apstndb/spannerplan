@@ -1,0 +1,81 @@
+metadata:
+    rowType: {}
+    transaction:
+        id: QVB4b0hEQUVodUpGSV9qWTNvU3RYNmdIN0VqeTVodDhCZ2pWYU1CcllHbTl5Q3k5aEE=
+    undeclaredParameters: {}
+stats:
+    queryPlan:
+        planNodes:
+            - childLinks:
+                - childIndex: 1
+              displayName: Apply Mutations
+              executionStats:
+                execution_summary:
+                    num_executions: "1"
+                latency:
+                    total: "0.04"
+                    unit: msecs
+                rows:
+                    total: "0"
+                    unit: rows
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                operation_type: DELETE
+                table: MutationTest
+            - childLinks:
+                - childIndex: 2
+                - childIndex: 7
+                  type: Split Range
+              displayName: Distributed Union
+              index: 1
+              kind: RELATIONAL
+              metadata:
+                distribution_table: MutationTest
+                execution_method: Row
+                split_ranges_aligned: "false"
+                subquery_cluster_node: "2"
+            - childLinks:
+                - childIndex: 3
+              displayName: Distributed Union
+              index: 2
+              kind: RELATIONAL
+              metadata:
+                call_type: Local
+                execution_method: Row
+                subquery_cluster_node: "3"
+            - childLinks:
+                - childIndex: 4
+                - childIndex: 6
+              displayName: Serialize Result
+              index: 3
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+            - childLinks:
+                - childIndex: 5
+                  variable: PK
+              displayName: Scan
+              index: 4
+              kind: RELATIONAL
+              metadata:
+                Full scan: "true"
+                execution_method: Row
+                scan_method: Automatic
+                scan_target: MutationTest
+                scan_type: TableScan
+            - displayName: Reference
+              index: 5
+              kind: SCALAR
+              shortRepresentation:
+                description: PK
+            - displayName: Reference
+              index: 6
+              kind: SCALAR
+              shortRepresentation:
+                description: $PK
+            - displayName: Constant
+              index: 7
+              kind: SCALAR
+              shortRepresentation:
+                description: "true"
