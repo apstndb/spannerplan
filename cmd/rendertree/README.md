@@ -31,14 +31,14 @@ Predicates(identified by ID):
 # with gcloud spanner databases execute-sql
 $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singers" --format=json --query-mode=PROFILE |
     rendertree --mode=PROFILE
-+----+-------------------------------------------------------+------+-------+------------+
-| ID | Operator                                              | Rows | Exec. | Latency    |
-+----+-------------------------------------------------------+------+-------+------------+
-|  0 | Distributed Union                                     | 1000 |     1 | 6.29 msecs |
-|  1 | +- Local Distributed Union                            | 1000 |     1 | 6.21 msecs |
-|  2 |    +- Serialize Result                                | 1000 |     1 | 6.16 msecs |
-|  3 |       +- Table Scan (Full scan: true, Table: Singers) | 1000 |     1 | 5.78 msecs |
-+----+-------------------------------------------------------+------+-------+------------+
++----+-------------------------------------------------------+------+-------+---------+
+| ID | Operator                                              | Rows | Exec. | Latency |
++----+-------------------------------------------------------+------+-------+---------+
+|  0 | Distributed Union                                     | 1000 |     1 | 6.29 ms |
+|  1 | +- Local Distributed Union                            | 1000 |     1 | 6.21 ms |
+|  2 |    +- Serialize Result                                | 1000 |     1 | 6.16 ms |
+|  3 |       +- Table Scan (Full scan: true, Table: Singers) | 1000 |     1 | 5.78 ms |
++----+-------------------------------------------------------+------+-------+---------+
 ```
 
 Rendered stats columns are customizable using `--custom-file`.
@@ -83,6 +83,30 @@ Predicates(identified by ID):
  27: Seek Condition: STARTS_WITH($SongName_1, 'Thi')
 ```
 
+You can also use `--custom`.
+
+```
+$ cat distributed_cross_apply_profile.yaml | rendertree --custom "ID:{{.FormatID}}:RIGHT,Operator:{{.Text}},CPU Time:{{.ExecutionStats.CpuTime | secsToS}},Remote Calls:{{.ExecutionStats.RemoteCalls}}" 
++-----+-------------------------------------------------------------------------------------------+----------+--------------+
+| ID  | Operator                                                                                  | CPU Time | Remote Calls |
++-----+-------------------------------------------------------------------------------------------+----------+--------------+
+|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                                             | 0.59 ms  | 0 calls      |
+|  *1 | +- Distributed Cross Apply <Row>                                                          | 0.57 ms  | 0 calls      |
+|   2 |    +- [Input] Create Batch <Row>                                                          |          |              |
+|   3 |    |  +- Local Distributed Union <Row>                                                    | 0.28 ms  | 0 calls      |
+|   4 |    |     +- Compute Struct <Row>                                                          | 0.27 ms  |              |
+|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full scan, scan_method: Automatic) | 0.26 ms  |              |
+|  11 |    +- [Map] Serialize Result <Row>                                                        | 0.22 ms  |              |
+|  12 |       +- Cross Apply <Row>                                                                | 0.2 ms   |              |
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Row)                            | 0.01 ms  |              |
+|  16 |          +- [Map] Local Distributed Union <Row>                                           | 0.19 ms  | 0 calls      |
+| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |          |              |
+|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      | 0.18 ms  |              |
++-----+-------------------------------------------------------------------------------------------+----------+--------------+
+Predicates(identified by ID):
+  1: Split Range: ($AlbumId = $AlbumId_1)
+ 17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+```
 ## Options for narrower width
 
 rendertree supports a compact format and wrapping for limited width environment.
