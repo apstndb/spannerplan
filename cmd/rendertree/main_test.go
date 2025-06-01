@@ -9,8 +9,8 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/samber/lo"
 
+	"github.com/apstndb/spannerplan"
 	"github.com/apstndb/spannerplan/plantree"
-	"github.com/apstndb/spannerplan/queryplan"
 )
 
 func sliceOf[T any](vs ...T) []T {
@@ -276,20 +276,20 @@ Predicates(identified by ID):
 	}
 
 	for _, tcase := range tests {
-		stats, _, err := queryplan.ExtractQueryPlan(tcase.input)
+		stats, _, err := spannerplan.ExtractQueryPlan(tcase.input)
 		if err != nil {
 			t.Fatalf("invalid input at protoyaml.Unmarshal:\nerror: %v", err)
 		}
 
 		opts := []plantree.Option{plantree.WithQueryPlanOptions(
-			queryplan.WithTargetMetadataFormat(queryplan.TargetMetadataFormatOn),
-			queryplan.WithExecutionMethodFormat(queryplan.ExecutionMethodFormatAngle),
-			queryplan.WithKnownFlagFormat(queryplan.KnownFlagFormatLabel),
+			spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatOn),
+			spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatAngle),
+			spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatLabel),
 		)}
 
 		opts = append(opts, tcase.opts...)
 
-		rows, err := plantree.ProcessPlan(queryplan.New(stats.GetQueryPlan().GetPlanNodes()), opts...)
+		rows, err := plantree.ProcessPlan(spannerplan.New(stats.GetQueryPlan().GetPlanNodes()), opts...)
 		if err != nil {
 			t.Fatal(err)
 		}

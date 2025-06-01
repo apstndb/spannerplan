@@ -1,4 +1,4 @@
-package queryplan
+package spannerplan
 
 import (
 	"errors"

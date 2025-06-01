@@ -16,8 +16,8 @@ import (
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/samber/lo"
 
+	"github.com/apstndb/spannerplan"
 	"github.com/apstndb/spannerplan/plantree"
-	"github.com/apstndb/spannerplan/queryplan"
 )
 
 func main() {
@@ -240,9 +240,9 @@ func run() error {
 
 	switch strings.ToUpper(*executionMethod) {
 	case "", "ANGLE":
-		opts = append(opts, plantree.WithQueryPlanOptions(queryplan.WithExecutionMethodFormat(queryplan.ExecutionMethodFormatAngle)))
+		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatAngle)))
 	case "RAW":
-		opts = append(opts, plantree.WithQueryPlanOptions(queryplan.WithExecutionMethodFormat(queryplan.ExecutionMethodFormatRaw)))
+		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatRaw)))
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid value for -execution-method flag: %s.  Must be 'angle' or 'raw'.\n", *executionMethod)
 		flag.Usage()
@@ -251,9 +251,9 @@ func run() error {
 
 	switch strings.ToUpper(*targetMetadata) {
 	case "", "ON":
-		opts = append(opts, plantree.WithQueryPlanOptions(queryplan.WithTargetMetadataFormat(queryplan.TargetMetadataFormatOn)))
+		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatOn)))
 	case "RAW":
-		opts = append(opts, plantree.WithQueryPlanOptions(queryplan.WithTargetMetadataFormat(queryplan.TargetMetadataFormatRaw)))
+		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatRaw)))
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid value for -target-metadata flag: %s.  Must be 'on' or 'raw'.\n", *targetMetadata)
 		flag.Usage()
@@ -262,9 +262,9 @@ func run() error {
 
 	switch strings.ToUpper(*knownFlag) {
 	case "", "LABEL":
-		opts = append(opts, plantree.WithQueryPlanOptions(queryplan.WithKnownFlagFormat(queryplan.KnownFlagFormatLabel)))
+		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatLabel)))
 	case "RAW":
-		opts = append(opts, plantree.WithQueryPlanOptions(queryplan.WithKnownFlagFormat(queryplan.KnownFlagFormatRaw)))
+		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatRaw)))
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid value for -known-flag flag: %s.  Must be 'label' or 'raw'.\n", *knownFlag)
 		flag.Usage()
@@ -280,7 +280,7 @@ func run() error {
 		return err
 	}
 
-	stats, _, err := queryplan.ExtractQueryPlan(b)
+	stats, _, err := spannerplan.ExtractQueryPlan(b)
 	if err != nil {
 		var collapsedStr string
 		if len(b) > jsonSnippetLen {
@@ -289,7 +289,7 @@ func run() error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	rows, err := plantree.ProcessPlan(queryplan.New(stats.GetQueryPlan().GetPlanNodes()), opts...)
+	rows, err := plantree.ProcessPlan(spannerplan.New(stats.GetQueryPlan().GetPlanNodes()), opts...)
 	if err != nil {
 		return err
 	}
@@ -462,7 +462,7 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				prefix = strings.Repeat(" ", maxIDLength+1)
 			}
 
-			join := strings.Join(lo.Map(childLinks, func(item *queryplan.ResolvedChildLink, index int) string {
+			join := strings.Join(lo.Map(childLinks, func(item *spannerplan.ResolvedChildLink, index int) string {
 				if varName := item.ChildLink.GetVariable(); varName != "" {
 					return fmt.Sprintf("$%s=%s", item.ChildLink.GetVariable(), item.Child.GetShortRepresentation().GetDescription())
 				} else {
