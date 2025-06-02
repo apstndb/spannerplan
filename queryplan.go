@@ -281,3 +281,11 @@ type ResolvedChildLink struct {
 	ChildLink *sppb.PlanNode_ChildLink
 	Child     *sppb.PlanNode
 }
+
+func HasStats(nodes []*sppb.PlanNode) bool {
+	if len(nodes) == 0 {
+		return false
+	}
+
+	return nodes[0].ExecutionStats != nil
+}

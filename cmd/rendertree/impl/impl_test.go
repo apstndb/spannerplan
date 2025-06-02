@@ -16,6 +16,7 @@ import (
 func sliceOf[T any](vs ...T) []T {
 	return vs
 }
+
 func Test_customFileToTableRenderDef(t *testing.T) {
 	yamlContent := `
 - name: ID

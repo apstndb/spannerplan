@@ -200,9 +200,30 @@ func parsePrintMode(s string) (PrintMode, error) {
 	}
 }
 
+type mode string
+
+const (
+	modePlan    mode = "PLAN"
+	modeProfile mode = "PROFILE"
+	modeAuto    mode = "AUTO"
+)
+
+func parseExplainMode(s string) (mode, error) {
+	switch strings.ToUpper(s) {
+	case "PLAN":
+		return modePlan, nil
+	case "PROFILE":
+		return modeProfile, nil
+	case "AUTO":
+		return modeAuto, nil
+	default:
+		return "", fmt.Errorf("unknown mode: %s", s)
+	}
+}
+
 func run() error {
 	customFile := flag.String("custom-file", "", "")
-	mode := flag.String("mode", "", "PROFILE or PLAN(ignore case)")
+	mode := flag.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printModeStr := flag.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
 	disallowUnknownStats := flag.Bool("disallow-unknown-stats", false, "error on unknown stats field")
 	executionMethod := flag.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
@@ -233,13 +254,9 @@ func run() error {
 		return err
 	}
 
-	var withStats bool
-	switch strings.ToUpper(*mode) {
-	case "", "PLAN":
-		withStats = false
-	case "PROFILE":
-		withStats = true
-	default:
+	parsedMode, err := parseExplainMode(*mode)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid value for -mode flag: %s.  Must be one of AUTO, PLAN, PROFILE.\n", *mode)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -302,6 +319,16 @@ func run() error {
 			collapsedStr = "(collapsed)"
 		}
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
+	}
+
+	var withStats bool
+	switch parsedMode {
+	case modePlan:
+		withStats = false
+	case modeProfile:
+		withStats = true
+	case modeAuto:
+		withStats = spannerplan.HasStats(stats.GetQueryPlan().GetPlanNodes())
 	}
 
 	qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
