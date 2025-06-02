@@ -287,6 +287,7 @@ type ResolvedChildLink struct {
 }
 
 func HasStats(nodes []*sppb.PlanNode) bool {
+	// hasStats returns true only if the first node has ExecutionStats.
 	if len(nodes) == 0 {
 		return false
 	}
