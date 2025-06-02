@@ -8,9 +8,6 @@ import (
 )
 
 func TestHasStats(t *testing.T) {
-	type args struct {
-		nodes []*sppb.PlanNode
-	}
 	tests := []struct {
 		name  string
 		input []*sppb.PlanNode
