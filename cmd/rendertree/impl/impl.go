@@ -217,7 +217,7 @@ func parseExplainMode(s string) (explainMode, error) {
 	case "AUTO":
 		return explainModeAuto, nil
 	default:
-		return "", fmt.Errorf("unknown mode: %s", s)
+		return "", fmt.Errorf("invalid input: %s. Must be one of AUTO, PLAN, PROFILE (case-insensitive)", s)
 	}
 }
 
@@ -256,7 +256,7 @@ func run() error {
 
 	parsedMode, err := parseExplainMode(*mode)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid value for -mode flag: %s.  Must be one of AUTO, PLAN, PROFILE.\n", *mode)
+		fmt.Fprintf(os.Stderr, "Invalid value for -mode flag: %v\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
