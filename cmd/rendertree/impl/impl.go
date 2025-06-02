@@ -200,9 +200,30 @@ func parsePrintMode(s string) (PrintMode, error) {
 	}
 }
 
+type explainMode string
+
+const (
+	explainModePlan    explainMode = "PLAN"
+	explainModeProfile explainMode = "PROFILE"
+	explainModeAuto    explainMode = "AUTO"
+)
+
+func parseExplainMode(s string) (explainMode, error) {
+	switch strings.ToUpper(s) {
+	case "PLAN":
+		return explainModePlan, nil
+	case "PROFILE":
+		return explainModeProfile, nil
+	case "AUTO":
+		return explainModeAuto, nil
+	default:
+		return "", fmt.Errorf("invalid input: %s. Must be one of AUTO, PLAN, PROFILE (case-insensitive)", s)
+	}
+}
+
 func run() error {
 	customFile := flag.String("custom-file", "", "")
-	mode := flag.String("mode", "", "PROFILE or PLAN(ignore case)")
+	mode := flag.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printModeStr := flag.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
 	disallowUnknownStats := flag.Bool("disallow-unknown-stats", false, "error on unknown stats field")
 	executionMethod := flag.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
@@ -233,13 +254,9 @@ func run() error {
 		return err
 	}
 
-	var withStats bool
-	switch strings.ToUpper(*mode) {
-	case "", "PLAN":
-		withStats = false
-	case "PROFILE":
-		withStats = true
-	default:
+	parsedMode, err := parseExplainMode(*mode)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid value for -mode flag: %v\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -330,6 +347,7 @@ func run() error {
 			return err
 		}
 	} else {
+		withStats := shouldRenderWithStats(qp, parsedMode)
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
@@ -340,6 +358,17 @@ func run() error {
 
 	_, err = os.Stdout.WriteString(s)
 	return err
+}
+
+func shouldRenderWithStats(qp *spannerplan.QueryPlan, parsedMode explainMode) bool {
+	switch parsedMode {
+	case explainModePlan:
+		return false
+	case explainModeProfile:
+		return true
+	default:
+		return qp.HasStats()
+	}
 }
 
 func unmarshalAlign(t *tw.Align, bytes []byte) error {

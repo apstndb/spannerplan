@@ -34,6 +34,10 @@ func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	return &QueryPlan{planNodes, parentMap}, nil
 }
 
+func (qp *QueryPlan) HasStats() bool {
+	return HasStats(qp.PlanNodes())
+}
+
 func (qp *QueryPlan) IsFunction(childLink *sppb.PlanNode_ChildLink) bool {
 	// Known predicates are Condition(Filter, Hash Join) or Seek Condition(FilterScan) or Residual Condition(FilterScan, Hash Join) or Split Range(Distributed Union).
 	// Agg(Aggregate) is a Function but not a predicate.
@@ -280,4 +284,13 @@ func (qp *QueryPlan) ResolveChildLink(item *sppb.PlanNode_ChildLink) *ResolvedCh
 type ResolvedChildLink struct {
 	ChildLink *sppb.PlanNode_ChildLink
 	Child     *sppb.PlanNode
+}
+
+func HasStats(nodes []*sppb.PlanNode) bool {
+	// hasStats returns true only if the first node has ExecutionStats.
+	if len(nodes) == 0 {
+		return false
+	}
+
+	return nodes[0].ExecutionStats != nil
 }

@@ -41,6 +41,8 @@ $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singe
 +----+-------------------------------------------------------+------+-------+---------+
 ```
 
+Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--mode=AUTO` can detect whether the input has execution statistics or not.
+
 Rendered stats columns are customizable using `--custom-file`.
 
 ```
