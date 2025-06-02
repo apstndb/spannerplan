@@ -200,22 +200,22 @@ func parsePrintMode(s string) (PrintMode, error) {
 	}
 }
 
-type mode string
+type explainMode string
 
 const (
-	modePlan    mode = "PLAN"
-	modeProfile mode = "PROFILE"
-	modeAuto    mode = "AUTO"
+	explainModePlan    explainMode = "PLAN"
+	explainModeProfile explainMode = "PROFILE"
+	explainModeAuto    explainMode = "AUTO"
 )
 
-func parseExplainMode(s string) (mode, error) {
+func parseExplainMode(s string) (explainMode, error) {
 	switch strings.ToUpper(s) {
 	case "PLAN":
-		return modePlan, nil
+		return explainModePlan, nil
 	case "PROFILE":
-		return modeProfile, nil
+		return explainModeProfile, nil
 	case "AUTO":
-		return modeAuto, nil
+		return explainModeAuto, nil
 	default:
 		return "", fmt.Errorf("unknown mode: %s", s)
 	}
@@ -321,16 +321,6 @@ func run() error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	var withStats bool
-	switch parsedMode {
-	case modePlan:
-		withStats = false
-	case modeProfile:
-		withStats = true
-	case modeAuto:
-		withStats = spannerplan.HasStats(stats.GetQueryPlan().GetPlanNodes())
-	}
-
 	qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
 	if err != nil {
 		return err
@@ -357,6 +347,7 @@ func run() error {
 			return err
 		}
 	} else {
+		withStats := shouldRenderWithStats(qp, parsedMode)
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
@@ -367,6 +358,17 @@ func run() error {
 
 	_, err = os.Stdout.WriteString(s)
 	return err
+}
+
+func shouldRenderWithStats(qp *spannerplan.QueryPlan, parsedMode explainMode) bool {
+	switch parsedMode {
+	case explainModePlan:
+		return false
+	case explainModeProfile:
+		return true
+	default:
+		return qp.HasStats()
+	}
 }
 
 func unmarshalAlign(t *tw.Align, bytes []byte) error {

@@ -353,3 +353,66 @@ Predicates(identified by ID):
 		})
 	}
 }
+
+func TestShouldRenderWithStats(t *testing.T) {
+	decodeQueryPlan := func(b []byte) (*spannerplan.QueryPlan, error) {
+		stats, _, err := spannerplan.ExtractQueryPlan(b)
+		if err != nil {
+			return nil, err
+		}
+		return spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
+	}
+
+	tests := []struct {
+		desc       string
+		qp         *spannerplan.QueryPlan
+		parsedMode explainMode
+		want       bool
+	}{
+		{
+			"PLAN mode, no stats",
+			lo.Must(decodeQueryPlan(dcaYAML)),
+			explainModePlan,
+			false,
+		},
+		{
+			"PLAN mode, with stats",
+			lo.Must(decodeQueryPlan(dcaProfileYAML)),
+			explainModePlan,
+			false,
+		},
+		{
+			"PROFILE mode, no stats",
+			lo.Must(decodeQueryPlan(dcaYAML)),
+			explainModeProfile,
+			true,
+		},
+		{
+			"PROFILE mode, with stats",
+			lo.Must(decodeQueryPlan(dcaProfileYAML)),
+			explainModeProfile,
+			true,
+		},
+		{
+			"AUTO mode, no stats",
+			lo.Must(decodeQueryPlan(dcaYAML)),
+			explainModeAuto,
+			false,
+		},
+		{
+			"AUTO mode, with stats",
+			lo.Must(decodeQueryPlan(dcaProfileYAML)),
+			explainModeAuto,
+			true,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.desc, func(t *testing.T) {
+			got := shouldRenderWithStats(tcase.qp, tcase.parsedMode)
+			if got != tcase.want {
+				t.Errorf("shouldRenderWithStats got %v, but want %v", got, tcase.want)
+			}
+		})
+	}
+}

@@ -34,6 +34,10 @@ func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	return &QueryPlan{planNodes, parentMap}, nil
 }
 
+func (qp *QueryPlan) HasStats() bool {
+	return HasStats(qp.PlanNodes())
+}
+
 func (qp *QueryPlan) IsFunction(childLink *sppb.PlanNode_ChildLink) bool {
 	// Known predicates are Condition(Filter, Hash Join) or Seek Condition(FilterScan) or Residual Condition(FilterScan, Hash Join) or Split Range(Distributed Union).
 	// Agg(Aggregate) is a Function but not a predicate.
