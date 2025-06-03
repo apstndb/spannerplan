@@ -10,6 +10,8 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
 	"github.com/samber/lo"
+
+	"github.com/apstndb/spannerplan/stats"
 )
 
 type QueryPlan struct {
@@ -100,6 +102,8 @@ type option struct {
 	targetMetadataFormat  TargetMetadataFormat
 	knownFlagFormat       KnownFlagFormat
 	compact               bool
+	inlineStatsFunc       func(*sppb.PlanNode) []string
+	inlineStatsDefs       []StatsDef
 }
 
 type Option func(o *option)
@@ -114,6 +118,18 @@ const (
 	ExecutionMethodFormatAngle
 )
 
+// ParseExecutionMethodFormat parses string representation of ExecutionMethodFormat.
+func ParseExecutionMethodFormat(s string) (ExecutionMethodFormat, error) {
+	switch strings.ToUpper(s) {
+	case "RAW":
+		return ExecutionMethodFormatRaw, nil
+	case "ANGLE":
+		return ExecutionMethodFormatAngle, nil
+	default:
+		return ExecutionMethodFormatRaw, fmt.Errorf("invalid ExecutionMethodFormat, expect RAW or ANGLE: %s", s)
+	}
+}
+
 // TargetMetadataFormat controls how to render target metadata.
 // target metadata are scan_target, distribution_table, and table.
 type TargetMetadataFormat int64
@@ -125,6 +141,18 @@ const (
 	// TargetMetadataFormatOn prints target metadata as `on <target>`.
 	TargetMetadataFormatOn
 )
+
+// ParseTargetMetadataFormat parses string representation of TargetMetadataFormat.
+func ParseTargetMetadataFormat(s string) (TargetMetadataFormat, error) {
+	switch strings.ToUpper(s) {
+	case "RAW":
+		return TargetMetadataFormatRaw, nil
+	case "ON":
+		return TargetMetadataFormatOn, nil
+	default:
+		return TargetMetadataFormatRaw, fmt.Errorf("invalid TargetMetadataFormat, expect RAW or ON: %s", s)
+	}
+}
 
 type KnownFlagFormat int64
 type FullScanFormat = KnownFlagFormat
@@ -143,6 +171,18 @@ const (
 	FullScanFormatLabel = KnownFlagFormatLabel
 )
 
+// ParseKnownFlagFormat parses string representation of KnownFlagFormat.
+func ParseKnownFlagFormat(s string) (KnownFlagFormat, error) {
+	switch strings.ToUpper(s) {
+	case "RAW":
+		return KnownFlagFormatRaw, nil
+	case "LABEL":
+		return KnownFlagFormatLabel, nil
+	default:
+		return KnownFlagFormatRaw, fmt.Errorf("invalid KnownFlagFormat, expect RAW or LABEL: %s", s)
+	}
+}
+
 func WithExecutionMethodFormat(fmt ExecutionMethodFormat) Option {
 	return func(o *option) {
 		o.executionMethodFormat = fmt
@@ -158,6 +198,23 @@ func WithTargetMetadataFormat(fmt TargetMetadataFormat) Option {
 func WithKnownFlagFormat(fmt KnownFlagFormat) Option {
 	return func(o *option) {
 		o.knownFlagFormat = fmt
+	}
+}
+
+type StatsDef struct {
+	Key  string
+	Func func(stats *stats.ExecutionStats) string
+}
+
+func WithInlineStatsFunc(f func(*sppb.PlanNode) []string) Option {
+	return func(o *option) {
+		o.inlineStatsFunc = f
+	}
+}
+
+func WithInlineStats(defs ...StatsDef) Option {
+	return func(o *option) {
+		o.inlineStatsDefs = defs
 	}
 }
 
@@ -251,10 +308,31 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 		fields = append(fields, fmt.Sprintf("%s:%s%s", k, sep, v.GetStringValue()))
 	}
 
+	var inlineStats []string
+	if o.inlineStatsFunc != nil {
+		inlineStats = o.inlineStatsFunc(node)
+	}
+
+	if len(o.inlineStatsDefs) > 0 {
+		stats, err := stats.Extract(node, false)
+		if err != nil {
+			// ignore error
+		} else {
+			for _, def := range o.inlineStatsDefs {
+				v := def.Func(stats)
+				if v == "" {
+					continue
+				}
+
+				inlineStats = append(inlineStats, fmt.Sprintf("%v=%v", def.Key, v))
+			}
+		}
+	}
+
 	sort.Strings(labels)
 	sort.Strings(fields)
 
-	return joinIfNotEmpty(sep, operator, executionMethodPart, encloseIfNotEmpty("(", strings.Join(slices.Concat(labels, fields), ","+sep), ")"))
+	return joinIfNotEmpty(sep, operator, executionMethodPart, encloseIfNotEmpty("(", strings.Join(slices.Concat(labels, fields, inlineStats), ","+sep), ")"))
 }
 
 func encloseIfNotEmpty(open, input, close string) string {
