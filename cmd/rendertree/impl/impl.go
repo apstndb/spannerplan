@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -104,7 +105,16 @@ type columnRenderDef struct {
 }
 
 func (d columnRenderDef) shouldInline(inline bool) bool {
-	return d.Inline != inlineTypeNever && (inline || d.Inline == inlineTypeAlways)
+	switch d.Inline {
+	case inlineTypeAlways:
+		return true
+	case inlineTypeCan:
+		return inline
+	case inlineTypeUnspecified:
+		return inline && !slices.Contains([]string{"ID", "Operator"}, d.Name)
+	default:
+		return false
+	}
 }
 
 func templateMapFunc(tmplName, tmplText string) (func(row plantree.RowWithPredicates) (string, error), error) {
@@ -339,10 +349,7 @@ func run() error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	qp, err := spannerplan.New(qs.GetQueryPlan().GetPlanNodes())
-	if err != nil {
-		return err
-	}
+	planNodes := qs.GetQueryPlan().GetPlanNodes()
 
 	var renderDef tableRenderDef
 	if len(custom) > 0 {
@@ -360,27 +367,11 @@ func run() error {
 			return err
 		}
 	} else {
-		withStats := shouldRenderWithStats(qp, parsedMode)
+		withStats := shouldRenderWithStats(planNodes, parsedMode)
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
-	opts = append(opts,
-		plantree.WithQueryPlanOptions(
-			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inlineStats)),
-		))
-
-	rows, err := plantree.ProcessPlan(qp, opts...)
-	if err != nil {
-		return err
-	}
-
-	s, err := printResult(
-		tableRenderDef{
-			Columns: lo.Filter(renderDef.Columns, func(def columnRenderDef, index int) bool {
-				return !def.shouldInline(*inlineStats)
-			}),
-		},
-		rows, printMode)
+	s, err := renderTreeImpl(planNodes, renderDef, printMode, *disallowUnknownStats, *inlineStats, opts)
 	if err != nil {
 		return err
 	}
@@ -389,9 +380,39 @@ func run() error {
 	return err
 }
 
-func inlineStatsFuncFromTableRenderDef(disallowUnknownStats *bool, renderDef tableRenderDef, inlineStats *bool) func(node *sppb.PlanNode) []string {
+func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printMode PrintMode, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
+	opts = append(opts,
+		plantree.WithQueryPlanOptions(
+			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inline)),
+		))
+
+	qp, err := spannerplan.New(planNodes)
+	if err != nil {
+		return "", err
+	}
+
+	rows, err := plantree.ProcessPlan(qp, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	s, err := printResult(
+		tableRenderDef{
+			Columns: lo.Filter(renderDef.Columns, func(def columnRenderDef, index int) bool {
+				return !def.shouldInline(inline)
+			}),
+		},
+		rows, printMode)
+	if err != nil {
+		return "", err
+	}
+
+	return s, nil
+}
+
+func inlineStatsFuncFromTableRenderDef(disallowUnknownStats bool, renderDef tableRenderDef, inlineStats bool) func(node *sppb.PlanNode) []string {
 	return func(node *sppb.PlanNode) []string {
-		executionStats, err := stats.Extract(node, *disallowUnknownStats)
+		executionStats, err := stats.Extract(node, disallowUnknownStats)
 		if err != nil {
 			// ignore error message
 			return nil
@@ -401,7 +422,7 @@ func inlineStatsFuncFromTableRenderDef(disallowUnknownStats *bool, renderDef tab
 
 		var result []string
 		for _, def := range renderDef.Columns {
-			if def.shouldInline(*inlineStats) {
+			if !def.shouldInline(inlineStats) {
 				continue
 			}
 
@@ -419,14 +440,14 @@ func inlineStatsFuncFromTableRenderDef(disallowUnknownStats *bool, renderDef tab
 	}
 }
 
-func shouldRenderWithStats(qp *spannerplan.QueryPlan, parsedMode explainMode) bool {
+func shouldRenderWithStats(qp []*sppb.PlanNode, parsedMode explainMode) bool {
 	switch parsedMode {
 	case explainModePlan:
 		return false
 	case explainModeProfile:
 		return true
 	default:
-		return qp.HasStats()
+		return spannerplan.HasStats(qp)
 	}
 }
 
