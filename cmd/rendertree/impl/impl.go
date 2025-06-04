@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -83,12 +84,23 @@ func parseAlignment(s string) (tw.Align, error) {
 
 type inlineType string
 
+func (i *inlineType) UnmarshalJSON(b []byte) error {
+	inline, err := parseInlineType(string(b))
+	if err != nil {
+		return err
+	}
+	*i = inline
+	return nil
+}
+
 const (
 	inlineTypeUnspecified inlineType = ""
 	inlineTypeNever       inlineType = "NEVER"
 	inlineTypeAlways      inlineType = "ALWAYS"
 	inlineTypeCan         inlineType = "CAN"
 )
+
+var _ json.Unmarshaler = (*inlineType)(nil)
 
 type plainColumnRenderDef struct {
 	Template  string     `json:"template"`
@@ -142,6 +154,7 @@ var (
 		MapFunc: func(row plantree.RowWithPredicates) (string, error) {
 			return row.FormatID(), nil
 		},
+		Inline: inlineTypeNever,
 	}
 	operatorRenderDef = columnRenderDef{
 		Name:      "Operator",
@@ -149,6 +162,7 @@ var (
 		MapFunc: func(row plantree.RowWithPredicates) (string, error) {
 			return row.Text(), nil
 		},
+		Inline: inlineTypeNever,
 	}
 )
 
@@ -484,6 +498,7 @@ func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
 			MapFunc:   mapFunc,
 			Name:      def.Name,
 			Alignment: def.Alignment,
+			Inline:    def.Inline,
 		})
 	}
 	return tdef, nil
