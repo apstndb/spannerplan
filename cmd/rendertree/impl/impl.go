@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -85,11 +84,18 @@ func parseAlignment(s string) (tw.Align, error) {
 
 type inlineType string
 
-func (i *inlineType) UnmarshalJSON(b []byte) error {
-	inline, err := parseInlineType(string(b))
+func (i *inlineType) UnmarshalYAML(b []byte) error {
+	var s string
+	err := yaml.Unmarshal(b, &s)
 	if err != nil {
 		return err
 	}
+
+	inline, err := parseInlineType(s)
+	if err != nil {
+		return err
+	}
+
 	*i = inline
 	return nil
 }
@@ -101,7 +107,7 @@ const (
 	inlineTypeCan         inlineType = "CAN"
 )
 
-var _ json.Unmarshaler = (*inlineType)(nil)
+var _ yaml.BytesUnmarshaler = (*inlineType)(nil)
 
 type plainColumnRenderDef struct {
 	Template  string     `json:"template"`
