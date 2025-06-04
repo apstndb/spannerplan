@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"regexp"
 	"slices"
@@ -428,7 +429,7 @@ func inlineStatsFuncFromTableRenderDef(disallowUnknownStats bool, renderDef tabl
 	return func(node *sppb.PlanNode) []string {
 		executionStats, err := stats.Extract(node, disallowUnknownStats)
 		if err != nil {
-			// ignore error message
+			slog.Warn("failed to extract execution stats", "node_id", node.GetIndex(), "err", err)
 			return nil
 		}
 
@@ -442,8 +443,8 @@ func inlineStatsFuncFromTableRenderDef(disallowUnknownStats bool, renderDef tabl
 
 			v, err := def.MapFunc(row)
 			if err != nil {
-				// ignore error message
-				return nil
+				slog.Warn("failed to execute map function for inline stat", "node_id", node.GetIndex(), "name", def.Name, "err", err)
+				continue
 			}
 
 			if v != "" {
