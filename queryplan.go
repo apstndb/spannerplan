@@ -100,6 +100,7 @@ type option struct {
 	targetMetadataFormat  TargetMetadataFormat
 	knownFlagFormat       KnownFlagFormat
 	compact               bool
+	inlineStatsFunc       func(*sppb.PlanNode) []string
 }
 
 type Option func(o *option)
@@ -114,6 +115,18 @@ const (
 	ExecutionMethodFormatAngle
 )
 
+// ParseExecutionMethodFormat parses string representation of ExecutionMethodFormat.
+func ParseExecutionMethodFormat(s string) (ExecutionMethodFormat, error) {
+	switch strings.ToUpper(s) {
+	case "RAW":
+		return ExecutionMethodFormatRaw, nil
+	case "ANGLE":
+		return ExecutionMethodFormatAngle, nil
+	default:
+		return ExecutionMethodFormatRaw, fmt.Errorf("invalid ExecutionMethodFormat, expect RAW or ANGLE: %s", s)
+	}
+}
+
 // TargetMetadataFormat controls how to render target metadata.
 // target metadata are scan_target, distribution_table, and table.
 type TargetMetadataFormat int64
@@ -125,6 +138,18 @@ const (
 	// TargetMetadataFormatOn prints target metadata as `on <target>`.
 	TargetMetadataFormatOn
 )
+
+// ParseTargetMetadataFormat parses string representation of TargetMetadataFormat.
+func ParseTargetMetadataFormat(s string) (TargetMetadataFormat, error) {
+	switch strings.ToUpper(s) {
+	case "RAW":
+		return TargetMetadataFormatRaw, nil
+	case "ON":
+		return TargetMetadataFormatOn, nil
+	default:
+		return TargetMetadataFormatRaw, fmt.Errorf("invalid TargetMetadataFormat, expect RAW or ON: %s", s)
+	}
+}
 
 type KnownFlagFormat int64
 type FullScanFormat = KnownFlagFormat
@@ -143,6 +168,18 @@ const (
 	FullScanFormatLabel = KnownFlagFormatLabel
 )
 
+// ParseKnownFlagFormat parses string representation of KnownFlagFormat.
+func ParseKnownFlagFormat(s string) (KnownFlagFormat, error) {
+	switch strings.ToUpper(s) {
+	case "RAW":
+		return KnownFlagFormatRaw, nil
+	case "LABEL":
+		return KnownFlagFormatLabel, nil
+	default:
+		return KnownFlagFormatRaw, fmt.Errorf("invalid KnownFlagFormat, expect RAW or LABEL: %s", s)
+	}
+}
+
 func WithExecutionMethodFormat(fmt ExecutionMethodFormat) Option {
 	return func(o *option) {
 		o.executionMethodFormat = fmt
@@ -158,6 +195,12 @@ func WithTargetMetadataFormat(fmt TargetMetadataFormat) Option {
 func WithKnownFlagFormat(fmt KnownFlagFormat) Option {
 	return func(o *option) {
 		o.knownFlagFormat = fmt
+	}
+}
+
+func WithInlineStatsFunc(f func(*sppb.PlanNode) []string) Option {
+	return func(o *option) {
+		o.inlineStatsFunc = f
 	}
 }
 
@@ -251,10 +294,15 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 		fields = append(fields, fmt.Sprintf("%s:%s%s", k, sep, v.GetStringValue()))
 	}
 
+	var inlineStats []string
+	if o.inlineStatsFunc != nil {
+		inlineStats = o.inlineStatsFunc(node)
+	}
+
 	sort.Strings(labels)
 	sort.Strings(fields)
 
-	return joinIfNotEmpty(sep, operator, executionMethodPart, encloseIfNotEmpty("(", strings.Join(slices.Concat(labels, fields), ","+sep), ")"))
+	return joinIfNotEmpty(sep, operator, executionMethodPart, encloseIfNotEmpty("(", strings.Join(slices.Concat(labels, fields, inlineStats), ","+sep), ")"))
 }
 
 func encloseIfNotEmpty(open, input, close string) string {

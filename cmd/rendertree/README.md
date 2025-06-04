@@ -56,59 +56,119 @@ $ cat custom.yaml
 - name: Rows
   template: '{{.ExecutionStats.Rows.Total}}'
   alignment: RIGHT
+  inline: NEVER
 - name: Scanned
   template: '{{.ExecutionStats.ScannedRows.Total}}'
   alignment: RIGHT
+  inline: CAN
+- name: remote_calls
+  template: '{{.ExecutionStats.RemoteCalls.Total}}'
+  alignment: RIGHT
+  inline: ALWAYS
+```
 
-$ cat scan_profile.json | rendertree --mode=PROFILE --custom-file=custom.yaml
-+-----+-------------------------------------------------------+------+---------+
-| ID  | Operator                                              | Rows | Scanned |
-+-----+-------------------------------------------------------+------+---------+
-|   0 | Serialize Result                                      | 2960 |         |
-|   1 | +- Union All                                          | 2960 |         |
-|   2 |    +- Union Input                                     |      |         |
-|  *3 |    |  +- Distributed Union                            |   84 |         |
-|   4 |    |     +- Local Distributed Union                   |   84 |         |
-|  *5 |    |        +- FilterScan                             |   84 |         |
-|   6 |    |           +- Index Scan (Index: SongsBySongName) |   84 |   16942 |
-|  24 |    +- Union Input                                     |      |         |
-| *25 |       +- Distributed Union                            | 2876 |         |
-|  26 |          +- Local Distributed Union                   | 2876 |         |
-| *27 |             +- FilterScan                             | 2876 |         |
-|  28 |                +- Index Scan (Index: SongsBySongName) | 2876 |    2876 |
-+-----+-------------------------------------------------------+------+---------+
+`inline` field in the custom configuration and the `--inline-stats` command-line flag together control how execution statistics are rendered.
+Inline stats are particularly useful for displaying *sparse* statistics (those that only appear on a few operators) without adding many empty columns to the main table, thus improving readability.
+
+The following table shows how the `inline` field setting for a specific statistic interacts with the `--inline-stats` flag to determine its display location:
+
+| `inline`/`--inline-stats`                | true     | false    |
+|------------------------------------------|----------|----------|
+| unspecified (except `ID` and `Operator`) | inline   | in table |
+| `NEVER`                                  | in table | in table |
+| `CAN`                                    | inline   | in table |
+| `ALWAYS`                                 | inline   | inline   |
+
+In summary, the `--inline-stats` flag enables inline display for statistics marked as `CAN`, or for those whose `inline` property is unspecified (this applies to columns other than `ID` and `Operator`).
+`ALWAYS` forces inline display regardless of the `--inline-stats` flag, and `NEVER` always keeps the statistic in a separate table column.
+
+**Default Behavior for `ID` and `Operator`:**
+
+If the `inline` property for `ID` or `Operator` columns is not specified 
+(either by relying on the tool's built-in defaults or by defining them in a `custom.yaml` file without an `inline` field),
+they will always be displayed in the table (effectively behaving as if `inline: NEVER` was set).
+
+```
+$ rendertree --custom-file custom.example.yaml < profile.yaml
++-----+--------------------------------------------------------------------------+------+---------+
+| ID  | Operator                                                                 | Rows | scanned |
++-----+--------------------------------------------------------------------------+------+---------+
+|  *0 | Distributed Union on SongsBySongName <Row> (remote_calls=0)              | 3069 |         |
+|  *1 | +- Distributed Cross Apply <Row> (remote_calls=0)                        | 3069 |         |
+|   2 |    +- [Input] Create Batch <Row>                                         |      |         |
+|   3 |    |  +- Local Distributed Union <Row> (remote_calls=0)                  | 3069 |         |
+|   4 |    |     +- Compute Struct <Row>                                         | 3069 |         |
+|  *5 |    |        +- Filter Scan <Row> (seekable_key_size: 1)                  | 3069 |         |
+|  *6 |    |           +- Index Scan on SongsBySongName <Row> (scan_method: Row) | 3069 |   14212 |
+|  24 |    +- [Map] Serialize Result <Row>                                       | 3069 |         |
+|  25 |       +- Cross Apply <Row>                                               | 3069 |         |
+|  26 |          +- [Input] KeyRangeAccumulator <Row>                            |      |         |
+|  27 |          |  +- Batch Scan on $v2 <Row> (scan_method: Row)                |      |         |
+|  32 |          +- [Map] Local Distributed Union <Row> (remote_calls=0)         | 3069 |         |
+|  33 |             +- Filter Scan <Row> (seekable_key_size: 0)                  |      |         |
+| *34 |                +- Table Scan on Songs <Row> (scan_method: Row)           | 3069 |    3069 |
++-----+--------------------------------------------------------------------------+------+---------+
 Predicates(identified by ID):
-  3: Split Range: (STARTS_WITH($SongName, 'A') AND ($SongName LIKE 'A%z'))
-  5: Seek Condition: STARTS_WITH($SongName, 'A')
-     Residual Condition: ($SongName LIKE 'A%z')
- 25: Split Range: STARTS_WITH($SongName_1, 'Thi')
- 27: Seek Condition: STARTS_WITH($SongName_1, 'Thi')
+  0: Split Range: (STARTS_WITH($SongName, 'Th') AND ($SongName LIKE 'Th%e'))
+  1: Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId) AND ($TrackId' = $TrackId))
+  5: Residual Condition: ($SongName LIKE 'Th%e')
+  6: Seek Condition: STARTS_WITH($SongName, 'Th')
+ 34: Seek Condition: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId) AND ($TrackId' = $batched_TrackId))
 ```
 
-You can also use `--custom`.
+```
+$ rendertree --inline-stats --custom-file custom.example.yaml < profile.yaml
++-----+-----------------------------------------------------------------------------------------+------+
+| ID  | Operator                                                                                | Rows |
++-----+-----------------------------------------------------------------------------------------+------+
+|  *0 | Distributed Union on SongsBySongName <Row> (remote_calls=0)                             | 3069 |
+|  *1 | +- Distributed Cross Apply <Row> (remote_calls=0)                                       | 3069 |
+|   2 |    +- [Input] Create Batch <Row>                                                        |      |
+|   3 |    |  +- Local Distributed Union <Row> (remote_calls=0)                                 | 3069 |
+|   4 |    |     +- Compute Struct <Row>                                                        | 3069 |
+|  *5 |    |        +- Filter Scan <Row> (seekable_key_size: 1)                                 | 3069 |
+|  *6 |    |           +- Index Scan on SongsBySongName <Row> (scan_method: Row, scanned=14212) | 3069 |
+|  24 |    +- [Map] Serialize Result <Row>                                                      | 3069 |
+|  25 |       +- Cross Apply <Row>                                                              | 3069 |
+|  26 |          +- [Input] KeyRangeAccumulator <Row>                                           |      |
+|  27 |          |  +- Batch Scan on $v2 <Row> (scan_method: Row)                               |      |
+|  32 |          +- [Map] Local Distributed Union <Row> (remote_calls=0)                        | 3069 |
+|  33 |             +- Filter Scan <Row> (seekable_key_size: 0)                                 |      |
+| *34 |                +- Table Scan on Songs <Row> (scan_method: Row, scanned=3069)            | 3069 |
++-----+-----------------------------------------------------------------------------------------+------+
+Predicates(identified by ID):
+  0: Split Range: (STARTS_WITH($SongName, 'Th') AND ($SongName LIKE 'Th%e'))
+  1: Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId) AND ($TrackId' = $TrackId))
+  5: Residual Condition: ($SongName LIKE 'Th%e')
+  6: Seek Condition: STARTS_WITH($SongName, 'Th')
+ 34: Seek Condition: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId) AND ($TrackId' = $batched_TrackId))
+```
+
+You can also use `--custom=<name>:<template>[:<align>[:<inline_type>]]`.
 
 ```
-$ cat distributed_cross_apply_profile.yaml | rendertree --custom "ID:{{.FormatID}}:RIGHT,Operator:{{.Text}},CPU Time:{{.ExecutionStats.CpuTime | secsToS}},Remote Calls:{{.ExecutionStats.RemoteCalls}}" 
-+-----+-------------------------------------------------------------------------------------------+----------+--------------+
-| ID  | Operator                                                                                  | CPU Time | Remote Calls |
-+-----+-------------------------------------------------------------------------------------------+----------+--------------+
-|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                                             | 0.59 ms  | 0 calls      |
-|  *1 | +- Distributed Cross Apply <Row>                                                          | 0.57 ms  | 0 calls      |
-|   2 |    +- [Input] Create Batch <Row>                                                          |          |              |
-|   3 |    |  +- Local Distributed Union <Row>                                                    | 0.28 ms  | 0 calls      |
-|   4 |    |     +- Compute Struct <Row>                                                          | 0.27 ms  |              |
-|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full scan, scan_method: Automatic) | 0.26 ms  |              |
-|  11 |    +- [Map] Serialize Result <Row>                                                        | 0.22 ms  |              |
-|  12 |       +- Cross Apply <Row>                                                                | 0.2 ms   |              |
-|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Row)                            | 0.01 ms  |              |
-|  16 |          +- [Map] Local Distributed Union <Row>                                           | 0.19 ms  | 0 calls      |
-| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |          |              |
-|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      | 0.18 ms  |              |
-+-----+-------------------------------------------------------------------------------------------+----------+--------------+
+$ cat distributed_cross_apply_profile.yaml | rendertree --custom "ID:{{.FormatID}}:RIGHT,Operator:{{.Text}},CPU Time:{{.ExecutionStats.CpuTime | secsToS}},remote_calls:{{.ExecutionStats.RemoteCalls.Total}}::ALWAYS" 
++-----+-------------------------------------------------------------------------------------------+----------+
+| ID  | Operator                                                                                  | CPU Time |
++-----+-------------------------------------------------------------------------------------------+----------+
+|   0 | Distributed Union on AlbumsByAlbumTitle <Row> (remote_calls=0)                            | 0.59 ms  |
+|  *1 | +- Distributed Cross Apply <Row> (remote_calls=0)                                         | 0.57 ms  |
+|   2 |    +- [Input] Create Batch <Row>                                                          |          |
+|   3 |    |  +- Local Distributed Union <Row> (remote_calls=0)                                   | 0.28 ms  |
+|   4 |    |     +- Compute Struct <Row>                                                          | 0.27 ms  |
+|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full scan, scan_method: Automatic) | 0.26 ms  |
+|  11 |    +- [Map] Serialize Result <Row>                                                        | 0.22 ms  |
+|  12 |       +- Cross Apply <Row>                                                                | 0.2 ms   |
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Row)                            | 0.01 ms  |
+|  16 |          +- [Map] Local Distributed Union <Row> (remote_calls=0)                          | 0.19 ms  |
+| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |          |
+|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      | 0.18 ms  |
++-----+-------------------------------------------------------------------------------------------+----------+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
 ```
+
 ## Options for narrower width
 
 rendertree supports a compact format and wrapping for limited width environment.

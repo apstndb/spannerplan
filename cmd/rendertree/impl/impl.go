@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
 	"github.com/goccy/go-yaml"
 	"github.com/olekukonko/tablewriter"
@@ -19,6 +22,7 @@ import (
 
 	"github.com/apstndb/spannerplan"
 	"github.com/apstndb/spannerplan/plantree"
+	"github.com/apstndb/spannerplan/stats"
 )
 
 // Main is the entry point of this command.
@@ -78,16 +82,58 @@ func parseAlignment(s string) (tw.Align, error) {
 	}
 }
 
+type inlineType string
+
+func (i *inlineType) UnmarshalYAML(b []byte) error {
+	var s string
+	err := yaml.Unmarshal(b, &s)
+	if err != nil {
+		return err
+	}
+
+	inline, err := parseInlineType(s)
+	if err != nil {
+		return err
+	}
+
+	*i = inline
+	return nil
+}
+
+const (
+	inlineTypeUnspecified inlineType = ""
+	inlineTypeNever       inlineType = "NEVER"
+	inlineTypeAlways      inlineType = "ALWAYS"
+	inlineTypeCan         inlineType = "CAN"
+)
+
+var _ yaml.BytesUnmarshaler = (*inlineType)(nil)
+
 type plainColumnRenderDef struct {
-	Template  string   `json:"template"`
-	Name      string   `json:"name"`
-	Alignment tw.Align `json:"alignment"`
+	Template  string     `json:"template"`
+	Name      string     `json:"name"`
+	Alignment tw.Align   `json:"alignment"`
+	Inline    inlineType `json:"inline"`
 }
 
 type columnRenderDef struct {
 	MapFunc   func(row plantree.RowWithPredicates) (string, error)
 	Name      string
 	Alignment tw.Align
+	Inline    inlineType
+}
+
+func (d columnRenderDef) shouldInline(inline bool) bool {
+	switch d.Inline {
+	case inlineTypeAlways:
+		return true
+	case inlineTypeCan:
+		return inline
+	case inlineTypeUnspecified:
+		return inline && !slices.Contains([]string{"ID", "Operator"}, d.Name)
+	default:
+		return false
+	}
 }
 
 func templateMapFunc(tmplName, tmplText string) (func(row plantree.RowWithPredicates) (string, error), error) {
@@ -115,6 +161,7 @@ var (
 		MapFunc: func(row plantree.RowWithPredicates) (string, error) {
 			return row.FormatID(), nil
 		},
+		Inline: inlineTypeNever,
 	}
 	operatorRenderDef = columnRenderDef{
 		Name:      "Operator",
@@ -122,6 +169,7 @@ var (
 		MapFunc: func(row plantree.RowWithPredicates) (string, error) {
 			return row.Text(), nil
 		},
+		Inline: inlineTypeNever,
 	}
 )
 
@@ -231,6 +279,7 @@ func run() error {
 	fullscan := flag.String("full-scan", "", "Deprecated alias for --known-flag.")
 	knownFlag := flag.String("known-flag", "", "Format known flags: 'label' or 'raw' (default: label)")
 	compact := flag.Bool("compact", false, "Enable compact format")
+	inlineStats := flag.Bool("inline-stats", false, "Enable inline stats")
 	wrapWidth := flag.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 
 	var custom stringList
@@ -270,38 +319,38 @@ func run() error {
 		opts = append(opts, plantree.EnableCompact())
 	}
 
-	switch strings.ToUpper(*executionMethod) {
-	case "", "ANGLE":
-		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatAngle)))
-	case "RAW":
-		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatRaw)))
-	default:
-		fmt.Fprintf(os.Stderr, "Invalid value for -execution-method flag: %s.  Must be 'angle' or 'raw'.\n", *executionMethod)
-		flag.Usage()
-		os.Exit(1)
+	em := spannerplan.ExecutionMethodFormatAngle
+	if *executionMethod != "" {
+		em, err = spannerplan.ParseExecutionMethodFormat(*executionMethod)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid value for -execution-method flag: %v.\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
 	}
+	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithExecutionMethodFormat(em)))
 
-	switch strings.ToUpper(*targetMetadata) {
-	case "", "ON":
-		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatOn)))
-	case "RAW":
-		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatRaw)))
-	default:
-		fmt.Fprintf(os.Stderr, "Invalid value for -target-metadata flag: %s.  Must be 'on' or 'raw'.\n", *targetMetadata)
-		flag.Usage()
-		os.Exit(1)
+	tm := spannerplan.TargetMetadataFormatOn
+	if *targetMetadata != "" {
+		tm, err = spannerplan.ParseTargetMetadataFormat(*targetMetadata)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid value for -target-metadata flag: %v.\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
 	}
+	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(tm)))
 
-	switch strings.ToUpper(*knownFlag) {
-	case "", "LABEL":
-		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatLabel)))
-	case "RAW":
-		opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatRaw)))
-	default:
-		fmt.Fprintf(os.Stderr, "Invalid value for -known-flag flag: %s.  Must be 'label' or 'raw'.\n", *knownFlag)
-		flag.Usage()
-		os.Exit(1)
+	kf := spannerplan.KnownFlagFormatLabel
+	if *knownFlag != "" {
+		kf, err = spannerplan.ParseKnownFlagFormat(*knownFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid value for -known-flag flag: %v.\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
 	}
+	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithKnownFlagFormat(kf)))
 
 	if *wrapWidth > 0 {
 		opts = append(opts, plantree.WithWrapWidth(*wrapWidth))
@@ -312,7 +361,7 @@ func run() error {
 		return err
 	}
 
-	stats, _, err := spannerplan.ExtractQueryPlan(b)
+	qs, _, err := spannerplan.ExtractQueryPlan(b)
 	if err != nil {
 		var collapsedStr string
 		if len(b) > jsonSnippetLen {
@@ -321,15 +370,7 @@ func run() error {
 		return fmt.Errorf("invalid input at protoyaml.Unmarshal:\nerror: %w\ninput: %.*s%s", err, jsonSnippetLen, strings.TrimSpace(string(b)), collapsedStr)
 	}
 
-	qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
-	if err != nil {
-		return err
-	}
-
-	rows, err := plantree.ProcessPlan(qp, opts...)
-	if err != nil {
-		return err
-	}
+	planNodes := qs.GetQueryPlan().GetPlanNodes()
 
 	var renderDef tableRenderDef
 	if len(custom) > 0 {
@@ -347,11 +388,11 @@ func run() error {
 			return err
 		}
 	} else {
-		withStats := shouldRenderWithStats(qp, parsedMode)
+		withStats := shouldRenderWithStats(planNodes, parsedMode)
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
-	s, err := printResult(renderDef, rows, printMode)
+	s, err := renderTreeImpl(planNodes, renderDef, printMode, *disallowUnknownStats, *inlineStats, opts)
 	if err != nil {
 		return err
 	}
@@ -360,14 +401,74 @@ func run() error {
 	return err
 }
 
-func shouldRenderWithStats(qp *spannerplan.QueryPlan, parsedMode explainMode) bool {
+func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printMode PrintMode, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
+	opts = append(opts,
+		plantree.WithQueryPlanOptions(
+			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inline)),
+		))
+
+	qp, err := spannerplan.New(planNodes)
+	if err != nil {
+		return "", err
+	}
+
+	rows, err := plantree.ProcessPlan(qp, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	s, err := printResult(
+		tableRenderDef{
+			Columns: lo.Filter(renderDef.Columns, func(def columnRenderDef, index int) bool {
+				return !def.shouldInline(inline)
+			}),
+		},
+		rows, printMode)
+	if err != nil {
+		return "", err
+	}
+
+	return s, nil
+}
+
+func inlineStatsFuncFromTableRenderDef(disallowUnknownStats bool, renderDef tableRenderDef, inlineStats bool) func(node *sppb.PlanNode) []string {
+	return func(node *sppb.PlanNode) []string {
+		executionStats, err := stats.Extract(node, disallowUnknownStats)
+		if err != nil {
+			slog.Warn("failed to extract execution stats", "node_id", node.GetIndex(), "err", err)
+			return nil
+		}
+
+		row := plantree.RowWithPredicates{ExecutionStats: *executionStats}
+
+		var result []string
+		for _, def := range renderDef.Columns {
+			if !def.shouldInline(inlineStats) {
+				continue
+			}
+
+			v, err := def.MapFunc(row)
+			if err != nil {
+				slog.Warn("failed to execute map function for inline stat", "node_id", node.GetIndex(), "name", def.Name, "err", err)
+				continue
+			}
+
+			if v != "" {
+				result = append(result, fmt.Sprintf("%v=%v", def.Name, v))
+			}
+		}
+		return result
+	}
+}
+
+func shouldRenderWithStats(qp []*sppb.PlanNode, parsedMode explainMode) bool {
 	switch parsedMode {
 	case explainModePlan:
 		return false
 	case explainModeProfile:
 		return true
 	default:
-		return qp.HasStats()
+		return spannerplan.HasStats(qp)
 	}
 }
 
@@ -404,29 +505,49 @@ func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
 			MapFunc:   mapFunc,
 			Name:      def.Name,
 			Alignment: def.Alignment,
+			Inline:    def.Inline,
 		})
 	}
 	return tdef, nil
 }
 
+func parseInlineType(s string) (inlineType, error) {
+	switch i := inlineType(strings.ToUpper(s)); i {
+	case inlineTypeNever, inlineTypeCan, inlineTypeAlways:
+		return i, nil
+	default:
+		return "", fmt.Errorf("inlineType must be one of ALWAYS, CAN, NEVER, but: %v", s)
+	}
+}
+
 func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 	var columns []columnRenderDef
 	for _, s := range custom {
-		split := strings.SplitN(s, ":", 3)
+		split := strings.SplitN(s, ":", 4)
 
-		var align tw.Align
-		switch len(split) {
-		case 2:
-			align = tw.AlignNone
-		case 3:
-			alignStr := split[2]
-			var err error
-			align, err = parseAlignment(alignStr)
-			if err != nil {
-				return tableRenderDef{}, fmt.Errorf("failed to parseAlignment(): %w", err)
+		var err error
+		if len(split) < 2 || len(split) > 4 {
+			return tableRenderDef{}, fmt.Errorf(`invalid format: must be "<name>:<template>[:<alignment>[:<inline_type>]]", but: %v`, s)
+		}
+
+		inline := inlineTypeUnspecified
+		if len(split) == 4 {
+			if inlineStr := split[3]; inlineStr != "" {
+				inline, err = parseInlineType(inlineStr)
+				if err != nil {
+					return tableRenderDef{}, fmt.Errorf("failed on parse inline_type: %w", err)
+				}
 			}
-		default:
-			return tableRenderDef{}, fmt.Errorf(`invalid format: must be "<name>:<template>[:<alignment>]", but: %v`, s)
+		}
+
+		align := tw.AlignNone
+		if len(split) >= 3 {
+			if alignStr := split[2]; alignStr != "" {
+				align, err = parseAlignment(alignStr)
+				if err != nil {
+					return tableRenderDef{}, fmt.Errorf("failed on parse alignment: %w", err)
+				}
+			}
 		}
 
 		name, templateStr := split[0], split[1]
@@ -439,6 +560,7 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 			MapFunc:   mapFunc,
 			Name:      name,
 			Alignment: align,
+			Inline:    inline,
 		})
 	}
 	return tableRenderDef{Columns: columns}, nil

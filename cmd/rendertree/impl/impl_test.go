@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/MakeNowJust/heredoc/v2"
+	heredoc "github.com/MakeNowJust/heredoc/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/samber/lo"
@@ -51,15 +51,15 @@ func TestRenderTree(t *testing.T) {
 		desc      string
 		input     []byte
 		renderDef tableRenderDef
+		inline    bool
 		opts      []plantree.Option
 		want      string
 	}{
 		{
-			"PLAN",
-			dcaYAML,
-			withStatsToRenderDefMap[false],
-			nil,
-			heredoc.Doc(`
+			desc:      "PLAN",
+			input:     dcaYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			want: heredoc.Doc(`
 +-----+-------------------------------------------------------------------------------------------+
 | ID  | Operator                                                                                  |
 +-----+-------------------------------------------------------------------------------------------+
@@ -82,11 +82,11 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"compact PLAN",
-			dcaYAML,
-			withStatsToRenderDefMap[false],
-			sliceOf(plantree.EnableCompact()),
-			heredoc.Doc(`
+			desc:      "compact PLAN",
+			input:     dcaYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			opts:      sliceOf(plantree.EnableCompact()),
+			want: heredoc.Doc(`
 +-----+-----------------------------------------------------------------------------+
 | ID  | Operator                                                                    |
 +-----+-----------------------------------------------------------------------------+
@@ -109,11 +109,11 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"wrapped compact PLAN",
-			dcaYAML,
-			withStatsToRenderDefMap[false],
-			sliceOf(plantree.EnableCompact(), plantree.WithWrapWidth(40)),
-			heredoc.Doc(`
+			desc:      "wrapped compact PLAN",
+			input:     dcaYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			opts:      sliceOf(plantree.EnableCompact(), plantree.WithWrapWidth(40)),
+			want: heredoc.Doc(`
 +-----+------------------------------------------+
 | ID  | Operator                                 |
 +-----+------------------------------------------+
@@ -141,11 +141,11 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"wrapped PLAN",
-			dcaYAML,
-			withStatsToRenderDefMap[false],
-			sliceOf(plantree.WithWrapWidth(50)),
-			heredoc.Doc(`
+			desc:      "wrapped PLAN",
+			input:     dcaYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			opts:      sliceOf(plantree.WithWrapWidth(50)),
+			want: heredoc.Doc(`
 +-----+---------------------------------------------------+
 | ID  | Operator                                          |
 +-----+---------------------------------------------------+
@@ -174,11 +174,10 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"PROFILE",
-			dcaProfileYAML,
-			withStatsToRenderDefMap[true],
-			nil,
-			heredoc.Doc(`
+			desc:      "PROFILE",
+			input:     dcaProfileYAML,
+			renderDef: withStatsToRenderDefMap[true],
+			want: heredoc.Doc(`
 +-----+-------------------------------------------------------------------------------------------+------+-------+---------+
 | ID  | Operator                                                                                  | Rows | Exec. | Latency |
 +-----+-------------------------------------------------------------------------------------------+------+-------+---------+
@@ -201,9 +200,9 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"PROFILE with custom",
-			dcaProfileYAML,
-			lo.Must(customFileToTableRenderDef([]byte(
+			desc:  "PROFILE with custom",
+			input: dcaProfileYAML,
+			renderDef: lo.Must(customFileToTableRenderDef([]byte(
 				heredoc.Doc(`
 - name: ID
   template: '{{.FormatID}}'
@@ -221,8 +220,7 @@ Predicates(identified by ID):
   template: '{{.ExecutionStats.FilteredRows.Total}}'
   alignment: RIGHT
 `)))),
-			nil,
-			heredoc.Doc(`
+			want: heredoc.Doc(`
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
 | ID  | Operator                                                                                  | Rows | Scanned | Filtered |
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
@@ -245,17 +243,16 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"PROFILE with custom list",
-			dcaProfileYAML,
-			lo.Must(customListToTableRenderDef([]string{
+			desc:  "PROFILE with custom list",
+			input: dcaProfileYAML,
+			renderDef: lo.Must(customListToTableRenderDef([]string{
 				`ID:{{.FormatID}}:RIGHT`,
 				`Operator:{{.Text}}`,
 				`Rows:{{.ExecutionStats.Rows.Total}}:RIGHT`,
 				`Scanned:{{.ExecutionStats.ScannedRows.Total}}:RIGHT`,
 				`Filtered:{{.ExecutionStats.FilteredRows.Total}}:RIGHT`,
 			})),
-			nil,
-			heredoc.Doc(`
+			want: heredoc.Doc(`
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
 | ID  | Operator                                                                                  | Rows | Scanned | Filtered |
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
@@ -278,11 +275,49 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"DELETE PLAN",
-			deleteYAML,
-			withStatsToRenderDefMap[false],
-			nil,
-			heredoc.Doc(`
+			desc:  "PROFILE with custom list, inline",
+			input: dcaProfileYAML,
+			renderDef: lo.Must(customListToTableRenderDef([]string{
+				`ID:{{.FormatID}}:RIGHT:NEVER`,
+				`Operator:{{.Text}}::NEVER`,
+				`Rows:{{.ExecutionStats.Rows.Total}}:RIGHT:NEVER`,
+				`Scanned:{{.ExecutionStats.ScannedRows.Total}}:RIGHT`,
+				`Filtered:{{.ExecutionStats.FilteredRows.Total}}:RIGHT`,
+			})),
+			inline: true,
+			opts:   sliceOf(plantree.WithWrapWidth(60)),
+			want: heredoc.Doc(`
++-----+-------------------------------------------------------------+------+
+| ID  | Operator                                                    | Rows |
++-----+-------------------------------------------------------------+------+
+|   0 | Distributed Union on AlbumsByAlbumTitle <Row>               |   33 |
+|  *1 | +- Distributed Cross Apply <Row>                            |   33 |
+|   2 |    +- [Input] Create Batch <Row>                            |      |
+|   3 |    |  +- Local Distributed Union <Row>                      |    7 |
+|   4 |    |     +- Compute Struct <Row>                            |    7 |
+|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full |    7 |
+|     |    |            scan, scan_method: Automatic, Scanned=7, Fi |      |
+|     |    |           ltered=0)                                    |      |
+|  11 |    +- [Map] Serialize Result <Row>                          |   33 |
+|  12 |       +- Cross Apply <Row>                                  |   33 |
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: R |    7 |
+|     |          |  ow)                                             |      |
+|  16 |          +- [Map] Local Distributed Union <Row>             |   33 |
+| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)     |      |
+|  18 |                +- Index Scan on SongsBySongGenre <Row> (Ful |   33 |
+|     |                   l scan, scan_method: Row, Scanned=63, Fil |      |
+|     |                   tered=30)                                 |      |
++-----+-------------------------------------------------------------+------+
+Predicates(identified by ID):
+  1: Split Range: ($AlbumId = $AlbumId_1)
+ 17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+`),
+		},
+		{
+			desc:      "DELETE PLAN",
+			input:     deleteYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			want: heredoc.Doc(`
 +----+----------------------------------------------------------------------------------+
 | ID | Operator                                                                         |
 +----+----------------------------------------------------------------------------------+
@@ -295,15 +330,15 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			"DELETE PLAN traditional",
-			deleteYAML,
-			withStatsToRenderDefMap[false],
-			sliceOf(plantree.WithQueryPlanOptions(
+			desc:      "DELETE PLAN traditional",
+			input:     deleteYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			opts: sliceOf(plantree.WithQueryPlanOptions(
 				spannerplan.WithKnownFlagFormat(spannerplan.KnownFlagFormatRaw),
 				spannerplan.WithExecutionMethodFormat(spannerplan.ExecutionMethodFormatRaw),
 				spannerplan.WithTargetMetadataFormat(spannerplan.TargetMetadataFormatRaw),
 			)),
-			heredoc.Doc(`
+			want: heredoc.Doc(`
 +----+--------------------------------------------------------------------------------------------------------------+
 | ID | Operator                                                                                                     |
 +----+--------------------------------------------------------------------------------------------------------------+
@@ -332,17 +367,7 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			qp, err := spannerplan.New(stats.GetQueryPlan().GetPlanNodes())
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			rows, err := plantree.ProcessPlan(qp, opts...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			got, err := printResult(tcase.renderDef, rows, PrintPredicates)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintPredicates, true, tcase.inline, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -409,7 +434,7 @@ func TestShouldRenderWithStats(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.desc, func(t *testing.T) {
-			got := shouldRenderWithStats(tcase.qp, tcase.parsedMode)
+			got := shouldRenderWithStats(tcase.qp.PlanNodes(), tcase.parsedMode)
 			if got != tcase.want {
 				t.Errorf("shouldRenderWithStats got %v, but want %v", got, tcase.want)
 			}

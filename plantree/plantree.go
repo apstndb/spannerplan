@@ -1,7 +1,6 @@
 package plantree
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -180,8 +179,8 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			return item.ChildLink.GetType()
 		})
 
-		var executionStats stats.ExecutionStats
-		if err := jsonRoundtrip(node.GetExecutionStats(), &executionStats, o.disallowUnknownStats); err != nil {
+		executionStats, err := stats.Extract(node, o.disallowUnknownStats)
+		if err != nil {
 			return nil, err
 		}
 
@@ -191,7 +190,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			ChildLinks:     childLinks,
 			TreePart:       branchText,
 			NodeText:       nodeText,
-			ExecutionStats: executionStats,
+			ExecutionStats: *executionStats,
 		})
 	}
 	return result, nil
@@ -260,22 +259,6 @@ func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNo
 		if err := buildTree(qp, branch, child, level+1, opts); err != nil {
 			return fmt.Errorf("unexpected error: buildTree failed on link %v, err: %w", link, err)
 		}
-	}
-	return nil
-}
-
-func jsonRoundtrip(input interface{}, output interface{}, disallowUnknownFields bool) error {
-	b, err := json.Marshal(input)
-	if err != nil {
-		return err
-	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	if disallowUnknownFields {
-		dec.DisallowUnknownFields()
-	}
-	err = dec.Decode(output)
-	if err != nil {
-		return err
 	}
 	return nil
 }
