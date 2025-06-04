@@ -67,14 +67,21 @@ $ cat custom.yaml
   inline: ALWAYS
 ```
 
-`inline` field and `--inline-stats` flag controls inline stats rendering.
+`inline` field in the custom configuration and the `--inline-stats` command-line flag together control how execution statistics are rendered.
+Inline stats are particularly useful for displaying *sparse* statistics (those that only appear on a few operators) without adding many empty columns to the main table, thus improving readability.
 
-| `inline`/`--inline-stats`                | true     | false    |
-|------------------------------------------|----------|----------|
-| unspecified (except `ID` and `Operator`) | inline   | in table |
-| `NEVER`                                  | in table | in table |
-| `CAN`                                    | inline   | in table |
-| `ALWAYS`                                 | inline   | inline   |
+The following table shows how the `inline` field setting for a specific statistic interacts with the `--inline-stats` flag to determine its display location:
+
+| `inline`/`--inline-stats` | true     | false    |
+|---------------------------|----------|----------|
+| `NEVER`                   | in table | in table |
+| `CAN`      or unspecified | inline   | in table |
+| `ALWAYS`                  | inline   | inline   |
+
+In summary, the `--inline-stats` flag enables inline display for statistics marked as `CAN` or unspecified.
+`ALWAYS` forces inline display regardless of the flag, and `NEVER` always keeps them in a separate column.
+
+Note: `ID` and `Operator` columns are treated as `ALWAYS` if `inline` is not specified.
 
 ```
 $ rendertree --custom-file custom.example.yaml < profile.yaml
