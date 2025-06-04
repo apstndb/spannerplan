@@ -321,7 +321,7 @@ func run() error {
 	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(tm)))
 
 	kf := spannerplan.KnownFlagFormatLabel
-	if *targetMetadata != "" {
+	if *knownFlag != "" {
 		kf, err = spannerplan.ParseKnownFlagFormat(*knownFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid value for -known-flag flag: %v.\n", err)
