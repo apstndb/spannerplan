@@ -103,7 +103,6 @@ type option struct {
 	knownFlagFormat       KnownFlagFormat
 	compact               bool
 	inlineStatsFunc       func(*sppb.PlanNode) []string
-	inlineStatsDefs       []StatsDef
 }
 
 type Option func(o *option)
@@ -212,12 +211,6 @@ func WithInlineStatsFunc(f func(*sppb.PlanNode) []string) Option {
 	}
 }
 
-func WithInlineStats(defs ...StatsDef) Option {
-	return func(o *option) {
-		o.inlineStatsDefs = defs
-	}
-}
-
 // Deprecated: WithFullScanFormat is an alias of WithKnownFlagFormat.
 func WithFullScanFormat(fmt FullScanFormat) Option {
 	return WithKnownFlagFormat(fmt)
@@ -311,22 +304,6 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 	var inlineStats []string
 	if o.inlineStatsFunc != nil {
 		inlineStats = o.inlineStatsFunc(node)
-	}
-
-	if len(o.inlineStatsDefs) > 0 {
-		stats, err := stats.Extract(node, false)
-		if err != nil {
-			// ignore error
-		} else {
-			for _, def := range o.inlineStatsDefs {
-				v := def.Func(stats)
-				if v == "" {
-					continue
-				}
-
-				inlineStats = append(inlineStats, fmt.Sprintf("%v=%v", def.Key, v))
-			}
-		}
 	}
 
 	sort.Strings(labels)
