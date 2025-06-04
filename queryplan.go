@@ -10,8 +10,6 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
 	"github.com/samber/lo"
-
-	"github.com/apstndb/spannerplan/stats"
 )
 
 type QueryPlan struct {
@@ -198,11 +196,6 @@ func WithKnownFlagFormat(fmt KnownFlagFormat) Option {
 	return func(o *option) {
 		o.knownFlagFormat = fmt
 	}
-}
-
-type StatsDef struct {
-	Key  string
-	Func func(stats *stats.ExecutionStats) string
 }
 
 func WithInlineStatsFunc(f func(*sppb.PlanNode) []string) Option {
