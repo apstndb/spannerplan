@@ -101,6 +101,7 @@ type option struct {
 	knownFlagFormat       KnownFlagFormat
 	compact               bool
 	inlineStatsFunc       func(*sppb.PlanNode) []string
+	hideMetadata          bool
 }
 
 type Option func(o *option)
@@ -215,6 +216,14 @@ func EnableCompact() Option {
 	}
 }
 
+// HideMetadata hides all metadata and labels even if KnownFlagFormatLabel is set.
+// It is used by spannerplanviz.
+func HideMetadata() Option {
+	return func(o *option) {
+		o.hideMetadata = true
+	}
+}
+
 var (
 	knownBooleanFlagKeys = []string{"Full scan", "split_ranges_aligned"}
 	targetMetadataKeys   = []string{"scan_target", "distribution_table", "table"}
@@ -254,44 +263,46 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 
 	var labels []string
 	var fields []string
-	for k, v := range metadataFields {
-		if o.targetMetadataFormat != TargetMetadataFormatRaw && slices.Contains(targetMetadataKeys, k) {
-			continue
-		}
-
-		switch k {
-		case "call_type", "iterator_type": // Skip because it is displayed in node title
-			continue
-		case "scan_type": // Skip because it is combined with scan_target
-			continue
-		case "subquery_cluster_node": // Skip because it is useless
-			continue
-		case "scan_target":
-			if o.targetMetadataFormat != TargetMetadataFormatRaw {
+	if !o.hideMetadata {
+		for k, v := range metadataFields {
+			if o.targetMetadataFormat != TargetMetadataFormatRaw && slices.Contains(targetMetadataKeys, k) {
 				continue
 			}
 
-			fields = append(fields, fmt.Sprintf("%s: %s",
-				strings.TrimSuffix(metadataFields["scan_type"].GetStringValue(), "Scan"),
-				v.GetStringValue()))
-			continue
-		case "execution_method":
-			if o.executionMethodFormat != ExecutionMethodFormatRaw {
+			switch k {
+			case "call_type", "iterator_type": // Skip because it is displayed in node title
 				continue
-			}
-		case "distribution_table", "table":
-			if o.targetMetadataFormat != TargetMetadataFormatRaw {
+			case "scan_type": // Skip because it is combined with scan_target
 				continue
-			}
-		}
+			case "subquery_cluster_node": // Skip because it is useless
+				continue
+			case "scan_target":
+				if o.targetMetadataFormat != TargetMetadataFormatRaw {
+					continue
+				}
 
-		if o.knownFlagFormat != KnownFlagFormatRaw && slices.Contains(knownBooleanFlagKeys, k) {
-			if v.GetStringValue() == "true" {
-				labels = append(labels, k)
+				fields = append(fields, fmt.Sprintf("%s: %s",
+					strings.TrimSuffix(metadataFields["scan_type"].GetStringValue(), "Scan"),
+					v.GetStringValue()))
+				continue
+			case "execution_method":
+				if o.executionMethodFormat != ExecutionMethodFormatRaw {
+					continue
+				}
+			case "distribution_table", "table":
+				if o.targetMetadataFormat != TargetMetadataFormatRaw {
+					continue
+				}
 			}
-			continue
+
+			if o.knownFlagFormat != KnownFlagFormatRaw && slices.Contains(knownBooleanFlagKeys, k) {
+				if v.GetStringValue() == "true" {
+					labels = append(labels, k)
+				}
+				continue
+			}
+			fields = append(fields, fmt.Sprintf("%s:%s%s", k, sep, v.GetStringValue()))
 		}
-		fields = append(fields, fmt.Sprintf("%s:%s%s", k, sep, v.GetStringValue()))
 	}
 
 	var inlineStats []string
