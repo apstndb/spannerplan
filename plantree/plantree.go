@@ -196,22 +196,6 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	return result, nil
 }
 
-func getLinkType(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink) string {
-	var linkType string
-	if link.GetType() != "" {
-		linkType = link.GetType()
-
-		// Workaround to treat the first child of Apply as Input.
-		// This is necessary because it is more consistent with the official query plan operator docs.
-		// Note: Apply variants are Cross Apply, Anti Semi Apply, Semi Apply, Outer Apply, and their Distributed variants.
-	} else if parent := qp.GetParentNodeByChildLink(link); parent != nil &&
-		strings.HasSuffix(parent.GetDisplayName(), "Apply") &&
-		len(parent.GetChildLinks()) > 0 && parent.GetChildLinks()[0].GetChildIndex() == link.GetChildIndex() {
-		linkType = "Input"
-	}
-	return linkType
-}
-
 func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNode_ChildLink, level int, opts *options) error {
 	if !qp.IsVisible(link) {
 		// empty tree
@@ -223,12 +207,10 @@ func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNo
 		return fmt.Errorf("unexpected error: link can't be marshalled to JSON: %w", err)
 	}
 
-	node := qp.GetNodeByChildLink(link)
-	visibleChildLinks := qp.VisibleChildLinks(node)
-	linkType := getLinkType(qp, link)
 	sep := lo.Ternary(!opts.compact, " ", "")
 
-	// node := qp.GetNodeByIndex(link.GetChildIndex())
+	node := qp.GetNodeByChildLink(link)
+	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
 		nodeText = opts.wrapper.Wrap(nodeText, *opts.wrapWidth-level*(opts.indentSize+1)-opts.wrapper.StringWidth(sep))
@@ -243,8 +225,9 @@ func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNo
 	// Prefixed by tab and terminated by null character to ease to split
 	str := strings.Repeat("\n", newlineCount) + "\t" + string(nodeTextJson) + "\t" + string(b) + "\000"
 
-	var branch treeprint.Tree
+	visibleChildLinks := qp.VisibleChildLinks(node)
 
+	var branch treeprint.Tree
 	switch {
 	case node.GetIndex() == 0:
 		tree.SetValue(str)

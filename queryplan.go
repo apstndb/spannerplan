@@ -342,3 +342,20 @@ func HasStats(nodes []*sppb.PlanNode) bool {
 
 	return nodes[0].ExecutionStats != nil
 }
+
+func (qp *QueryPlan) GetLinkType(link *sppb.PlanNode_ChildLink) string {
+	if link.GetType() != "" {
+		return link.GetType()
+	}
+
+	// Workaround to treat the first child of Apply as Input.
+	// This is necessary because it is more consistent with the official query plan operator docs.
+	// Note: Apply variants are Cross Apply, Anti Semi Apply, Semi Apply, Outer Apply, and their Distributed variants.
+	if parent := qp.GetParentNodeByChildLink(link); parent != nil &&
+		strings.HasSuffix(parent.GetDisplayName(), "Apply") &&
+		len(parent.GetChildLinks()) > 0 && parent.GetChildLinks()[0].GetChildIndex() == link.GetChildIndex() {
+		return "Input"
+	}
+
+	return ""
+}
