@@ -2,6 +2,7 @@ package protoyaml
 
 import (
 	"encoding/json"
+	"slices"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -21,12 +22,10 @@ func Unmarshal(b []byte, result proto.Message) error {
 	return jsonpb.Unmarshal(j, result)
 }
 
-func Marshal(m proto.Message) ([]byte, error) {
-	j, err := protojson.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-	return jsonToYAML(j)
+func Marshal(m proto.Message, opts ...yaml.EncodeOption) ([]byte, error) {
+	opts = slices.Clone(opts)
+	opts = append(opts, yaml.UseJSONMarshaler())
+	return yaml.MarshalWithOptions(m, opts...)
 }
 
 func yamlToJSON(y []byte) ([]byte, error) {
@@ -36,13 +35,4 @@ func yamlToJSON(y []byte) ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(i)
-}
-
-func jsonToYAML(j []byte) ([]byte, error) {
-	var i interface{}
-	err := json.Unmarshal(j, &i)
-	if err != nil {
-		return nil, err
-	}
-	return yaml.Marshal(i)
 }
