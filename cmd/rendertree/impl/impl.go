@@ -577,9 +577,9 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 
 	// Some config can't be correctly configured by tablewriter.Option.
 	table.Configure(func(config *tablewriter.Config) {
-		config.Row.ColumnAligns = renderDef.ColumnAlignments()
+		config.Row.Alignment.PerColumn = renderDef.ColumnAlignments()
 		config.Row.Formatting.AutoWrap = tw.WrapNone
-		config.Header.Formatting.AutoFormat = false
+		config.Header.Formatting.AutoFormat = tw.Off
 	})
 
 	table.Header(renderDef.ColumnNames())
