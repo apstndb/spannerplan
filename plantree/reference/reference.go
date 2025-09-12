@@ -109,7 +109,8 @@ func renderPredicatesPart(rendered []plantree.RowWithPredicates) string {
 	}
 	maxIDLength := len(fmt.Sprint(maxID))
 
-	var predicates []string
+	var sb strings.Builder
+	_, _ = fmt.Fprintln(&sb, "Predicates(identified by ID):")
 	for _, row := range rendered {
 		for i, predicate := range row.Predicates {
 			var idPartStr string
@@ -119,26 +120,20 @@ func renderPredicatesPart(rendered []plantree.RowWithPredicates) string {
 
 			// +1 is for the colon after ID
 			prefix := runewidth.FillLeft(idPartStr, maxIDLength+1)
-			predicates = append(predicates, fmt.Sprintf("%s %s", prefix, predicate))
+			_, _ = fmt.Fprintf(&sb, " %s %s\n", prefix, predicate)
 		}
-	}
-
-	var sb strings.Builder
-	_, _ = fmt.Fprintln(&sb, "Predicates(identified by ID):")
-	for _, s := range predicates {
-		_, _ = fmt.Fprintln(&sb, " "+s)
 	}
 	return sb.String()
 }
 
 // getColumnAlignments returns the column alignment configuration based on whether stats are shown.
 func getColumnAlignments(withStats bool) []tw.Align {
-	base := []tw.Align{tw.AlignRight, tw.AlignLeft} // ID, Operator
 	if withStats {
-		// Add alignments for Rows, Exec., Total Latency
-		return append(base, tw.AlignRight, tw.AlignRight, tw.AlignLeft)
+		// ID, Operator, Rows, Exec., Total Latency
+		return []tw.Align{tw.AlignRight, tw.AlignLeft, tw.AlignRight, tw.AlignRight, tw.AlignLeft}
 	}
-	return base
+	// ID, Operator
+	return []tw.Align{tw.AlignRight, tw.AlignLeft}
 }
 
 // renderTablePart renders the main table showing the query plan tree structure.
@@ -154,9 +149,11 @@ func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (str
 		tablewriter.WithRowAlignmentConfig(tw.CellAlignment{PerColumn: getColumnAlignments(withStats)}),
 	)
 
-	header := []string{"ID", "Operator"}
+	var header []string
 	if withStats {
-		header = append(header, "Rows", "Exec.", "Total Latency")
+		header = []string{"ID", "Operator", "Rows", "Exec.", "Total Latency"}
+	} else {
+		header = []string{"ID", "Operator"}
 	}
 	table.Header(header)
 
