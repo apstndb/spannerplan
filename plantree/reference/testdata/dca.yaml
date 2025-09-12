@@ -1,0 +1,2225 @@
+metadata:
+    rowType:
+        fields:
+            - name: SingerId
+              type:
+                code: INT64
+            - name: AlbumId
+              type:
+                code: INT64
+            - name: AlbumTitle
+              type:
+                code: STRING
+            - name: MarketingBudget
+              type:
+                code: INT64
+    transaction:
+        readTimestamp: "2025-09-12T14:10:38.274833Z"
+    undeclaredParameters: {}
+rows:
+    - - "2"
+      - "5"
+      - Trackfringe
+      - "916353"
+    - - "3"
+      - "17"
+      - Tigergeode
+      - "540557"
+    - - "4"
+      - "26"
+      - Thieftime
+      - "926938"
+    - - "5"
+      - "22"
+      - Tigerolive
+      - "8557"
+    - - "5"
+      - "32"
+      - Tonguemaple
+      - "923379"
+    - - "7"
+      - "10"
+      - Takerdune
+      - "71878"
+    - - "9"
+      - "28"
+      - Terriergrave
+      - "831020"
+    - - "10"
+      - "27"
+      - Toucanpurple
+      - "887302"
+    - - "13"
+      - "26"
+      - Tongueplume
+      - "305478"
+    - - "18"
+      - "16"
+      - Talonnoble
+      - "188687"
+    - - "20"
+      - "26"
+      - Throatrattle
+      - "716513"
+    - - "23"
+      - "13"
+      - Trackspice
+      - "394369"
+    - - "27"
+      - "31"
+      - Thumbfortune
+      - "19546"
+    - - "30"
+      - "30"
+      - Tigerblaze
+      - "666787"
+    - - "32"
+      - "4"
+      - Terrierglaze
+      - "774044"
+    - - "34"
+      - "16"
+      - Tonguewave
+      - "253228"
+    - - "35"
+      - "7"
+      - Talonalpine
+      - "875226"
+    - - "36"
+      - "15"
+      - Thornscythe
+      - "651084"
+    - - "36"
+      - "16"
+      - Throatplume
+      - "330165"
+    - - "37"
+      - "3"
+      - Toothfate
+      - "904613"
+    - - "38"
+      - "14"
+      - Thumbspangle
+      - "531250"
+    - - "41"
+      - "22"
+      - Trackspeckle
+      - "697078"
+    - - "42"
+      - "28"
+      - Talonsprinkle
+      - "269314"
+    - - "43"
+      - "11"
+      - Terrierspangle
+      - "138243"
+    - - "48"
+      - "3"
+      - Tigerlake
+      - "515704"
+    - - "49"
+      - "5"
+      - Toechocolate
+      - "985883"
+    - - "51"
+      - "32"
+      - Twistershore
+      - "820172"
+    - - "53"
+      - "20"
+      - Thunderstripe
+      - "645735"
+    - - "54"
+      - "5"
+      - Traderlace
+      - "268651"
+    - - "54"
+      - "6"
+      - Toothwhite
+      - "752671"
+    - - "57"
+      - "15"
+      - Tracksapphire
+      - "79753"
+    - - "58"
+      - "13"
+      - Toeprairie
+      - "974738"
+    - - "61"
+      - "31"
+      - Turnergentle
+      - "389324"
+    - - "65"
+      - "20"
+      - Throatapple
+      - "877054"
+    - - "66"
+      - "5"
+      - Tradershore
+      - "811754"
+    - - "67"
+      - "9"
+      - Thornmire
+      - "720792"
+    - - "74"
+      - "26"
+      - Talonripple
+      - "858444"
+    - - "79"
+      - "9"
+      - Toucanbronze
+      - "899598"
+    - - "85"
+      - "12"
+      - Tigerfringe
+      - "808179"
+    - - "85"
+      - "15"
+      - Tailgrave
+      - "977669"
+    - - "85"
+      - "31"
+      - Throathorse
+      - "424417"
+    - - "87"
+      - "31"
+      - Terriertreasure
+      - "574766"
+    - - "88"
+      - "32"
+      - Trackprickle
+      - "493783"
+    - - "89"
+      - "27"
+      - Talonmirage
+      - "546944"
+    - - "90"
+      - "3"
+      - Tigershine
+      - "608398"
+    - - "90"
+      - "22"
+      - Tailorange
+      - "244737"
+    - - "91"
+      - "14"
+      - Terrierdune
+      - "666398"
+    - - "100"
+      - "32"
+      - Turnercoffee
+      - "945397"
+    - - "104"
+      - "14"
+      - Throatspangle
+      - "755141"
+    - - "105"
+      - "4"
+      - Tonguegrave
+      - "428281"
+    - - "110"
+      - "13"
+      - Thornfree
+      - "294606"
+    - - "110"
+      - "14"
+      - Thunderhoneysuckle
+      - "540120"
+    - - "113"
+      - "6"
+      - Touchhate
+      - "125636"
+    - - "113"
+      - "20"
+      - Thieftime
+      - "600059"
+    - - "115"
+      - "17"
+      - Terriercake
+      - "395875"
+    - - "115"
+      - "21"
+      - Turnercake
+      - "898123"
+    - - "117"
+      - "8"
+      - Throattree
+      - "698372"
+    - - "117"
+      - "16"
+      - Tonguealpine
+      - "603572"
+    - - "118"
+      - "10"
+      - Tigermirage
+      - "139176"
+    - - "121"
+      - "32"
+      - Tailpineapple
+      - "713598"
+    - - "124"
+      - "3"
+      - Toespangle
+      - "684975"
+    - - "127"
+      - "32"
+      - Tigerhate
+      - "667426"
+    - - "136"
+      - "11"
+      - Trackerlace
+      - "143501"
+    - - "140"
+      - "23"
+      - Thumbcake
+      - "405767"
+    - - "145"
+      - "29"
+      - Toesunrise
+      - "971347"
+    - - "153"
+      - "3"
+      - Toothbristle
+      - "189985"
+    - - "153"
+      - "27"
+      - Toucancurse
+      - "657142"
+    - - "154"
+      - "1"
+      - Takermire
+      - "180585"
+    - - "161"
+      - "6"
+      - Trackerbubble
+      - "137293"
+    - - "164"
+      - "32"
+      - Thiefsunrise
+      - "593763"
+    - - "167"
+      - "7"
+      - Twistershore
+      - "312974"
+    - - "179"
+      - "4"
+      - Tailrattle
+      - "60364"
+    - - "179"
+      - "14"
+      - Tracklime
+      - "578364"
+    - - "190"
+      - "10"
+      - Turnerplume
+      - "474366"
+    - - "191"
+      - "4"
+      - Turnerfate
+      - "389625"
+    - - "191"
+      - "12"
+      - Thiefpebble
+      - "666880"
+    - - "196"
+      - "24"
+      - Terrierrhinestone
+      - "657044"
+    - - "197"
+      - "25"
+      - Tailolive
+      - "936051"
+    - - "198"
+      - "25"
+      - Tigerplume
+      - "538923"
+    - - "212"
+      - "30"
+      - Terrierfierce
+      - "910238"
+    - - "215"
+      - "23"
+      - Throatshade
+      - "423896"
+    - - "220"
+      - "26"
+      - Tailwhite
+      - "144198"
+    - - "222"
+      - "30"
+      - Thundertree
+      - "108805"
+    - - "224"
+      - "19"
+      - Tradercute
+      - "688067"
+    - - "228"
+      - "10"
+      - Turneralpine
+      - "903969"
+    - - "233"
+      - "1"
+      - Toucancurse
+      - "80821"
+    - - "235"
+      - "15"
+      - Toesunrise
+      - "978796"
+    - - "235"
+      - "25"
+      - Terriermalachite
+      - "384421"
+    - - "240"
+      - "10"
+      - Trackersponge
+      - "497593"
+    - - "248"
+      - "18"
+      - Takerabalone
+      - "735246"
+    - - "262"
+      - "10"
+      - Tonguescythe
+      - "814430"
+    - - "264"
+      - "25"
+      - Twisterbone
+      - "917577"
+    - - "266"
+      - "9"
+      - Touchshade
+      - "929745"
+    - - "270"
+      - "29"
+      - Takersprinkle
+      - "744887"
+    - - "272"
+      - "15"
+      - Trackpebble
+      - "714827"
+    - - "274"
+      - "18"
+      - Trackerfate
+      - "396788"
+    - - "276"
+      - "28"
+      - Trackhurricane
+      - "697264"
+    - - "277"
+      - "30"
+      - Touchshade
+      - "361545"
+    - - "279"
+      - "30"
+      - Turnerrhinestone
+      - "297752"
+    - - "281"
+      - "16"
+      - Tonguealpine
+      - "630201"
+    - - "281"
+      - "23"
+      - Turnernoble
+      - "141295"
+    - - "282"
+      - "32"
+      - Toucanrogue
+      - "239834"
+    - - "284"
+      - "9"
+      - Tailjade
+      - "60681"
+    - - "284"
+      - "25"
+      - Twistersage
+      - "848961"
+    - - "285"
+      - "29"
+      - Takercute
+      - "164944"
+    - - "287"
+      - "15"
+      - Tongueagate
+      - "289657"
+    - - "288"
+      - "2"
+      - Thornaquamarine
+      - "576096"
+    - - "288"
+      - "19"
+      - Turnercoffee
+      - "894576"
+    - - "289"
+      - "15"
+      - Toepine
+      - "139594"
+    - - "291"
+      - "32"
+      - Talonsprinkle
+      - "334568"
+    - - "295"
+      - "24"
+      - Tailtree
+      - "623345"
+    - - "297"
+      - "4"
+      - Toothfire
+      - "992978"
+    - - "300"
+      - "4"
+      - Thumbcake
+      - "412565"
+    - - "312"
+      - "6"
+      - Touchsponge
+      - "760772"
+    - - "312"
+      - "16"
+      - Terriergrove
+      - "517864"
+    - - "313"
+      - "16"
+      - Thumbripple
+      - "805123"
+    - - "316"
+      - "32"
+      - Traderalpine
+      - "669013"
+    - - "319"
+      - "19"
+      - Talonrune
+      - "670409"
+    - - "319"
+      - "32"
+      - Tradermarble
+      - "324259"
+    - - "324"
+      - "7"
+      - Trackerprairie
+      - "106335"
+    - - "324"
+      - "11"
+      - Twisterwave
+      - "322387"
+    - - "324"
+      - "23"
+      - Toothblue
+      - "560236"
+    - - "324"
+      - "24"
+      - Touchplume
+      - "54174"
+    - - "326"
+      - "30"
+      - Thumbpuzzle
+      - "666581"
+    - - "333"
+      - "22"
+      - Toespangle
+      - "150322"
+    - - "340"
+      - "28"
+      - Toeolive
+      - "599514"
+    - - "345"
+      - "20"
+      - Thiefbattle
+      - "621011"
+    - - "347"
+      - "1"
+      - Traderbronze
+      - "281802"
+    - - "347"
+      - "22"
+      - Toealpine
+      - "111400"
+    - - "352"
+      - "3"
+      - Toeapple
+      - "51527"
+    - - "353"
+      - "5"
+      - Thiefspice
+      - "713091"
+    - - "353"
+      - "10"
+      - Traderfire
+      - "816335"
+    - - "355"
+      - "14"
+      - Terrierbramble
+      - "340300"
+    - - "368"
+      - "7"
+      - Twisterpickle
+      - "282727"
+    - - "370"
+      - "8"
+      - Thunderspangle
+      - "301677"
+    - - "371"
+      - "22"
+      - Tigerripple
+      - "882469"
+    - - "372"
+      - "21"
+      - Toucanpie
+      - "881282"
+    - - "375"
+      - "4"
+      - Throatpuddle
+      - "940665"
+    - - "376"
+      - "8"
+      - Trackergeode
+      - "345564"
+    - - "376"
+      - "32"
+      - Trackerfreckle
+      - "61393"
+    - - "378"
+      - "27"
+      - Toothfierce
+      - "16802"
+    - - "380"
+      - "6"
+      - Thornmesquite
+      - "969638"
+    - - "381"
+      - "31"
+      - Touchpineapple
+      - "84683"
+    - - "389"
+      - "32"
+      - Thumbflame
+      - "236115"
+    - - "390"
+      - "26"
+      - Throatnimble
+      - "903218"
+    - - "398"
+      - "29"
+      - Trackerfree
+      - "147704"
+    - - "406"
+      - "11"
+      - Toothtree
+      - "926845"
+    - - "411"
+      - "25"
+      - Tigeraquamarine
+      - "632769"
+    - - "412"
+      - "2"
+      - Toothprickle
+      - "206852"
+    - - "417"
+      - "24"
+      - Touchbrave
+      - "385500"
+    - - "417"
+      - "25"
+      - Tigerprickle
+      - "559143"
+    - - "420"
+      - "26"
+      - Twisteraquamarine
+      - "249686"
+    - - "431"
+      - "14"
+      - Turnerspangle
+      - "814909"
+    - - "432"
+      - "13"
+      - Toeblaze
+      - "167715"
+    - - "433"
+      - "22"
+      - Takertree
+      - "303232"
+    - - "433"
+      - "30"
+      - Tigerlime
+      - "544043"
+    - - "436"
+      - "11"
+      - Trackapple
+      - "500778"
+    - - "436"
+      - "22"
+      - Turneralpine
+      - "120588"
+    - - "439"
+      - "8"
+      - Terrierpurple
+      - "808403"
+    - - "439"
+      - "32"
+      - Toothgrave
+      - "876635"
+    - - "440"
+      - "8"
+      - Takermaple
+      - "390978"
+    - - "445"
+      - "25"
+      - Terrierbronze
+      - "504781"
+    - - "450"
+      - "4"
+      - Trackerfierce
+      - "506812"
+    - - "451"
+      - "23"
+      - Takerspangle
+      - "806416"
+    - - "455"
+      - "21"
+      - Trackermangrove
+      - "348236"
+    - - "461"
+      - "14"
+      - Throatspangle
+      - "369854"
+    - - "461"
+      - "24"
+      - Twisterbramble
+      - "754389"
+    - - "463"
+      - "7"
+      - Toothsolstice
+      - "617486"
+    - - "465"
+      - "31"
+      - Talonblue
+      - "790031"
+    - - "473"
+      - "2"
+      - Throatgrove
+      - "621183"
+    - - "475"
+      - "5"
+      - Toucanslime
+      - "847026"
+    - - "475"
+      - "31"
+      - Thornrose
+      - "730101"
+    - - "476"
+      - "1"
+      - Tailchocolate
+      - "246735"
+    - - "478"
+      - "8"
+      - Thiefpebble
+      - "747052"
+    - - "479"
+      - "14"
+      - Thornfreckle
+      - "539581"
+    - - "484"
+      - "19"
+      - Thorngeode
+      - "820384"
+    - - "487"
+      - "7"
+      - Tigerslime
+      - "717746"
+    - - "489"
+      - "32"
+      - Toescythe
+      - "408339"
+    - - "496"
+      - "8"
+      - Thumbpie
+      - "716983"
+    - - "499"
+      - "12"
+      - Takernettle
+      - "450252"
+    - - "500"
+      - "18"
+      - Twistercandle
+      - "556322"
+    - - "501"
+      - "5"
+      - Taloncandle
+      - "815389"
+    - - "501"
+      - "7"
+      - Toebramble
+      - "240474"
+    - - "507"
+      - "31"
+      - Tailrose
+      - "849539"
+    - - "512"
+      - "6"
+      - Tigerripple
+      - "124604"
+    - - "513"
+      - "30"
+      - Thundermarble
+      - "575014"
+    - - "514"
+      - "31"
+      - Toucangrave
+      - "976681"
+    - - "516"
+      - "17"
+      - Toothhate
+      - "826096"
+    - - "516"
+      - "32"
+      - Trackhate
+      - "41833"
+    - - "518"
+      - "14"
+      - Thumbpyrite
+      - "959660"
+    - - "520"
+      - "6"
+      - Tradermaple
+      - "260919"
+    - - "521"
+      - "13"
+      - Thundertree
+      - "769533"
+    - - "521"
+      - "32"
+      - Toothwhite
+      - "706437"
+    - - "524"
+      - "17"
+      - Throatpyrite
+      - "469628"
+    - - "525"
+      - "8"
+      - Toucanorange
+      - "755786"
+    - - "525"
+      - "9"
+      - Taildune
+      - "858065"
+    - - "529"
+      - "7"
+      - Thumborange
+      - "263380"
+    - - "530"
+      - "13"
+      - Touchripple
+      - "911889"
+    - - "533"
+      - "26"
+      - Twisterpurple
+      - "403651"
+    - - "534"
+      - "21"
+      - Toegranite
+      - "649607"
+    - - "535"
+      - "31"
+      - Trackpie
+      - "758512"
+    - - "543"
+      - "22"
+      - Toucanblaze
+      - "159311"
+    - - "548"
+      - "8"
+      - Tracktree
+      - "686004"
+    - - "549"
+      - "5"
+      - Throatpine
+      - "311839"
+    - - "549"
+      - "27"
+      - Thornpineapple
+      - "530442"
+    - - "552"
+      - "29"
+      - Toepyrite
+      - "76040"
+    - - "557"
+      - "16"
+      - Thundershade
+      - "83242"
+    - - "561"
+      - "3"
+      - Thiefprickle
+      - "853626"
+    - - "566"
+      - "12"
+      - Tigerscythe
+      - "351345"
+    - - "570"
+      - "10"
+      - Thumbcitrine
+      - "181738"
+    - - "571"
+      - "12"
+      - Thumbtreasure
+      - "306477"
+    - - "574"
+      - "13"
+      - Tailmaze
+      - "368260"
+    - - "576"
+      - "12"
+      - Throatripple
+      - "314430"
+    - - "577"
+      - "3"
+      - Tonguemesquite
+      - "868370"
+    - - "582"
+      - "5"
+      - Toothripple
+      - "565185"
+    - - "582"
+      - "30"
+      - Thunderbattle
+      - "668183"
+    - - "588"
+      - "3"
+      - Toeshore
+      - "214955"
+    - - "591"
+      - "21"
+      - Thiefshade
+      - "867938"
+    - - "595"
+      - "18"
+      - Touchlove
+      - "71484"
+    - - "596"
+      - "14"
+      - Turnerfortune
+      - "79577"
+    - - "596"
+      - "22"
+      - Toothagate
+      - "571983"
+    - - "597"
+      - "13"
+      - Takerstripe
+      - "594567"
+    - - "599"
+      - "30"
+      - Tigerlake
+      - "487338"
+    - - "603"
+      - "13"
+      - Turnervine
+      - "870008"
+    - - "605"
+      - "25"
+      - Touchorange
+      - "785246"
+    - - "606"
+      - "17"
+      - Talonshade
+      - "309911"
+    - - "607"
+      - "2"
+      - Talonripple
+      - "458000"
+    - - "607"
+      - "24"
+      - Tonguebrindle
+      - "657409"
+    - - "613"
+      - "8"
+      - Twisterdune
+      - "730628"
+    - - "618"
+      - "23"
+      - Throathoneysuckle
+      - "370849"
+    - - "620"
+      - "2"
+      - Thornazure
+      - "225075"
+    - - "621"
+      - "1"
+      - Twisterbristle
+      - "814949"
+    - - "622"
+      - "5"
+      - Toucannoble
+      - "802454"
+    - - "627"
+      - "27"
+      - Tailfate
+      - "988787"
+    - - "629"
+      - "9"
+      - Trackfree
+      - "921868"
+    - - "632"
+      - "26"
+      - Touchabalone
+      - "216487"
+    - - "638"
+      - "17"
+      - Thumbchrome
+      - "12355"
+    - - "639"
+      - "7"
+      - Thiefmarble
+      - "608671"
+    - - "639"
+      - "29"
+      - Trackfreckle
+      - "963297"
+    - - "642"
+      - "4"
+      - Tailagate
+      - "358208"
+    - - "646"
+      - "20"
+      - Terrierfreckle
+      - "14947"
+    - - "646"
+      - "30"
+      - Throatrhinestone
+      - "544042"
+    - - "650"
+      - "31"
+      - Touchfire
+      - "357936"
+    - - "653"
+      - "8"
+      - Trackfreckle
+      - "265004"
+    - - "654"
+      - "6"
+      - Turnerstone
+      - "699748"
+    - - "654"
+      - "10"
+      - Tailfortune
+      - "505942"
+    - - "655"
+      - "16"
+      - Terrierpine
+      - "489423"
+    - - "661"
+      - "30"
+      - Trackphase
+      - "987789"
+    - - "664"
+      - "23"
+      - Tigerpine
+      - "66676"
+    - - "668"
+      - "7"
+      - Trackstripe
+      - "287718"
+    - - "668"
+      - "22"
+      - Takercoffee
+      - "210642"
+    - - "668"
+      - "31"
+      - Thunderabalone
+      - "527883"
+    - - "669"
+      - "2"
+      - Thiefhoneysuckle
+      - "239409"
+    - - "669"
+      - "25"
+      - Throatolive
+      - "287202"
+    - - "670"
+      - "9"
+      - Toucantreasure
+      - "785256"
+    - - "671"
+      - "8"
+      - Tradermangrove
+      - "521866"
+    - - "671"
+      - "15"
+      - Turnercake
+      - "235060"
+    - - "672"
+      - "14"
+      - Toucanstripe
+      - "923212"
+    - - "679"
+      - "1"
+      - Twistermaze
+      - "304096"
+    - - "679"
+      - "21"
+      - Trackerscythe
+      - "234666"
+    - - "682"
+      - "14"
+      - Tailfreckle
+      - "768638"
+    - - "684"
+      - "30"
+      - Trackazure
+      - "833220"
+    - - "689"
+      - "1"
+      - Trackermaple
+      - "781651"
+    - - "690"
+      - "9"
+      - Trackerorange
+      - "333767"
+    - - "691"
+      - "7"
+      - Turnerbattle
+      - "462909"
+    - - "693"
+      - "29"
+      - Tradertree
+      - "236932"
+    - - "695"
+      - "16"
+      - Thieflie
+      - "947276"
+    - - "695"
+      - "30"
+      - Touchstone
+      - "21765"
+    - - "697"
+      - "4"
+      - Thumbnoble
+      - "658443"
+    - - "697"
+      - "11"
+      - Tonguesapphire
+      - "61575"
+    - - "703"
+      - "7"
+      - Toucanspangle
+      - "611907"
+    - - "705"
+      - "8"
+      - Throatpickle
+      - "166642"
+    - - "705"
+      - "14"
+      - Trackerbattle
+      - "845213"
+    - - "708"
+      - "18"
+      - Turnerfate
+      - "576768"
+    - - "711"
+      - "1"
+      - Takerpuddle
+      - "290905"
+    - - "712"
+      - "22"
+      - Trackersquare
+      - "885930"
+    - - "717"
+      - "2"
+      - Throatrogue
+      - "327816"
+    - - "717"
+      - "4"
+      - Toewave
+      - "793745"
+    - - "722"
+      - "15"
+      - Tailgrove
+      - "324333"
+    - - "723"
+      - "26"
+      - Toothwhite
+      - "595372"
+    - - "723"
+      - "32"
+      - Thundernoble
+      - "628376"
+    - - "726"
+      - "7"
+      - Tootholive
+      - "551989"
+    - - "727"
+      - "12"
+      - Twisterripple
+      - "298008"
+    - - "733"
+      - "23"
+      - Thieflie
+      - "362588"
+    - - "736"
+      - "18"
+      - Tailpuzzle
+      - "370468"
+    - - "742"
+      - "7"
+      - Toothdune
+      - "222504"
+    - - "750"
+      - "6"
+      - Toucanflame
+      - "869468"
+    - - "751"
+      - "2"
+      - Thieforange
+      - "64626"
+    - - "753"
+      - "20"
+      - Toothmire
+      - "269941"
+    - - "757"
+      - "10"
+      - Talonpickle
+      - "274060"
+    - - "758"
+      - "31"
+      - Traderpebble
+      - "940639"
+    - - "759"
+      - "16"
+      - Thumbcurse
+      - "411214"
+    - - "759"
+      - "23"
+      - Tailmalachite
+      - "99057"
+    - - "764"
+      - "32"
+      - Takercurse
+      - "496265"
+    - - "765"
+      - "3"
+      - Trackfreckle
+      - "428495"
+    - - "773"
+      - "8"
+      - Tailbristle
+      - "449947"
+    - - "774"
+      - "5"
+      - Trackgrove
+      - "256890"
+    - - "776"
+      - "31"
+      - Thumbhurricane
+      - "807660"
+    - - "781"
+      - "30"
+      - Thornjungle
+      - "184915"
+    - - "782"
+      - "29"
+      - Terriermaze
+      - "727746"
+    - - "784"
+      - "25"
+      - Toucanhorse
+      - "846015"
+    - - "787"
+      - "13"
+      - Thumbcitrine
+      - "164710"
+    - - "788"
+      - "3"
+      - Toothrose
+      - "407297"
+    - - "790"
+      - "28"
+      - Thumbslime
+      - "837363"
+    - - "796"
+      - "15"
+      - Toucanchrome
+      - "368442"
+    - - "798"
+      - "9"
+      - Tailpurple
+      - "929476"
+    - - "798"
+      - "20"
+      - Traderbone
+      - "450899"
+    - - "799"
+      - "19"
+      - Trackerrhinestone
+      - "227353"
+    - - "799"
+      - "29"
+      - Terrierbrindle
+      - "408594"
+    - - "804"
+      - "30"
+      - Touchalpine
+      - "718777"
+    - - "807"
+      - "26"
+      - Tailrune
+      - "151085"
+    - - "808"
+      - "6"
+      - Trackpale
+      - "58299"
+    - - "813"
+      - "17"
+      - Toebone
+      - "114844"
+    - - "825"
+      - "13"
+      - Turnersquare
+      - "167609"
+    - - "828"
+      - "26"
+      - Takerjungle
+      - "620346"
+    - - "832"
+      - "21"
+      - Trackernimble
+      - "521763"
+    - - "836"
+      - "16"
+      - Toepuddle
+      - "746058"
+    - - "837"
+      - "17"
+      - Toeripple
+      - "617968"
+    - - "837"
+      - "30"
+      - Turnerripple
+      - "44597"
+    - - "837"
+      - "32"
+      - Twistershade
+      - "172226"
+    - - "840"
+      - "6"
+      - Touchfate
+      - "540956"
+    - - "846"
+      - "4"
+      - Thornsage
+      - "946216"
+    - - "846"
+      - "7"
+      - Trackersponge
+      - "950560"
+    - - "846"
+      - "17"
+      - Takersponge
+      - "985970"
+    - - "846"
+      - "18"
+      - Talontreasure
+      - "840496"
+    - - "847"
+      - "15"
+      - Thornrose
+      - "295808"
+    - - "847"
+      - "20"
+      - Terrierprairie
+      - "983979"
+    - - "851"
+      - "4"
+      - Throathurricane
+      - "382292"
+    - - "851"
+      - "10"
+      - Toucanorange
+      - "201731"
+    - - "852"
+      - "16"
+      - Tracktree
+      - "328348"
+    - - "853"
+      - "5"
+      - Trackdune
+      - "656343"
+    - - "855"
+      - "3"
+      - Throatgrove
+      - "27735"
+    - - "856"
+      - "32"
+      - Toothrhinestone
+      - "171949"
+    - - "858"
+      - "18"
+      - Trackbrindle
+      - "671355"
+    - - "862"
+      - "19"
+      - Tradergranite
+      - "424988"
+    - - "863"
+      - "24"
+      - Toesprinkle
+      - "587927"
+    - - "864"
+      - "13"
+      - Talonstripe
+      - "953162"
+    - - "870"
+      - "25"
+      - Toechrome
+      - "17386"
+    - - "871"
+      - "27"
+      - Takerhorse
+      - "617070"
+    - - "873"
+      - "4"
+      - Trackerpebble
+      - "192893"
+    - - "873"
+      - "13"
+      - Thornazure
+      - "930350"
+    - - "875"
+      - "18"
+      - Takerscythe
+      - "915736"
+    - - "877"
+      - "6"
+      - Thundernettle
+      - "815735"
+    - - "879"
+      - "14"
+      - Tigerbrave
+      - "421949"
+    - - "888"
+      - "4"
+      - Talonsage
+      - "307569"
+    - - "895"
+      - "26"
+      - Tradermalachite
+      - "219786"
+    - - "898"
+      - "22"
+      - Trackvine
+      - "152030"
+    - - "899"
+      - "13"
+      - Touchbrindle
+      - "525573"
+    - - "903"
+      - "28"
+      - Takercake
+      - "177608"
+    - - "905"
+      - "28"
+      - Trackcute
+      - "591534"
+    - - "908"
+      - "16"
+      - Tailflame
+      - "532900"
+    - - "908"
+      - "31"
+      - Tailrattle
+      - "717928"
+    - - "911"
+      - "9"
+      - Trackspeckle
+      - "856433"
+    - - "912"
+      - "3"
+      - Terriergrove
+      - "545247"
+    - - "913"
+      - "27"
+      - Touchfate
+      - "861258"
+    - - "919"
+      - "7"
+      - Toucanprairie
+      - "581104"
+    - - "925"
+      - "29"
+      - Toelie
+      - "384511"
+    - - "926"
+      - "3"
+      - Tailsapphire
+      - "276421"
+    - - "932"
+      - "19"
+      - Talontide
+      - "307078"
+    - - "933"
+      - "16"
+      - Thumbsponge
+      - "939909"
+    - - "942"
+      - "30"
+      - Tailagate
+      - "751825"
+    - - "947"
+      - "4"
+      - Thumbdune
+      - "739547"
+    - - "948"
+      - "27"
+      - Thornprairie
+      - "898228"
+    - - "949"
+      - "3"
+      - Toucantime
+      - "420722"
+    - - "952"
+      - "31"
+      - Thiefwhite
+      - "778822"
+    - - "954"
+      - "5"
+      - Thorncitrine
+      - "238019"
+    - - "957"
+      - "8"
+      - Tonguelime
+      - "740191"
+    - - "957"
+      - "19"
+      - Thumbsponge
+      - "446840"
+    - - "959"
+      - "23"
+      - Tradershade
+      - "799871"
+    - - "959"
+      - "32"
+      - Thunderrune
+      - "421114"
+    - - "962"
+      - "3"
+      - Traderbramble
+      - "990639"
+    - - "963"
+      - "25"
+      - Toucanplume
+      - "845381"
+    - - "964"
+      - "18"
+      - Tongueplume
+      - "775028"
+    - - "968"
+      - "10"
+      - Thumborange
+      - "224158"
+    - - "970"
+      - "7"
+      - Trackeraquamarine
+      - "760114"
+    - - "972"
+      - "7"
+      - Toothbristle
+      - "319259"
+    - - "974"
+      - "24"
+      - Turneralpine
+      - "963456"
+    - - "976"
+      - "18"
+      - Trackerbristle
+      - "787056"
+    - - "977"
+      - "2"
+      - Tracktree
+      - "343469"
+    - - "977"
+      - "4"
+      - Trackerfate
+      - "221110"
+    - - "978"
+      - "5"
+      - Tigerplume
+      - "921272"
+    - - "987"
+      - "2"
+      - Terriermalachite
+      - "532866"
+    - - "987"
+      - "31"
+      - Tigerjade
+      - "291542"
+    - - "993"
+      - "15"
+      - Toucangrave
+      - "41670"
+    - - "995"
+      - "17"
+      - Trackershore
+      - "621545"
+    - - "1000"
+      - "29"
+      - Twisterdune
+      - "102240"
+stats:
+    queryPlan:
+        planNodes:
+            - childLinks:
+                - childIndex: 1
+                - childIndex: 54
+                  type: Split Range
+              displayName: Distributed Union
+              executionStats:
+                cpu_time:
+                    total: "9.74"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    execution_end_timestamp: "1757686238.295428"
+                    execution_start_timestamp: "1757686238.282827"
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "12.25"
+                    unit: msecs
+                remote_calls:
+                    total: "0"
+                    unit: calls
+                rows:
+                    total: "386"
+                    unit: rows
+              kind: RELATIONAL
+              metadata:
+                distribution_table: AlbumsByAlbumTitle
+                execution_method: Row
+                split_ranges_aligned: "false"
+                subquery_cluster_node: "1"
+            - childLinks:
+                - childIndex: 2
+                - childIndex: 22
+                  type: Map
+                - childIndex: 47
+                  type: Split Range
+              displayName: Distributed Cross Apply
+              executionStats:
+                Number of Batches:
+                    total: "1"
+                    unit: batches
+                cpu_time:
+                    total: "9.63"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    execution_end_timestamp: "1757686238.295421"
+                    execution_start_timestamp: "1757686238.282876"
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "12.14"
+                    unit: msecs
+                remote_calls:
+                    total: "0"
+                    unit: calls
+                rows:
+                    total: "386"
+                    unit: rows
+              index: 1
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                subquery_cluster_node: "22"
+            - childLinks:
+                - childIndex: 3
+                - childIndex: 21
+                  variable: v2.Batch
+              displayName: Create Batch
+              index: 2
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+            - childLinks:
+                - childIndex: 4
+              displayName: Distributed Union
+              executionStats:
+                cpu_time:
+                    total: "1.46"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "1.83"
+                    unit: msecs
+                remote_calls:
+                    total: "0"
+                    unit: calls
+                rows:
+                    total: "386"
+                    unit: rows
+              index: 3
+              kind: RELATIONAL
+              metadata:
+                call_type: Local
+                execution_method: Row
+                subquery_cluster_node: "4"
+            - childLinks:
+                - childIndex: 5
+                - childIndex: 18
+                  variable: v1.AlbumId
+                - childIndex: 19
+                  variable: v1.AlbumTitle
+                - childIndex: 20
+                  variable: v1.SingerId
+              displayName: Compute Struct
+              executionStats:
+                cpu_time:
+                    total: "1.42"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "1.79"
+                    unit: msecs
+                rows:
+                    total: "386"
+                    unit: rows
+              index: 4
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+            - childLinks:
+                - childIndex: 6
+                - childIndex: 17
+                  type: Residual Condition
+              displayName: Filter Scan
+              executionStats:
+                cpu_time:
+                    total: "1.12"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0 msecs
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "1.49"
+                    unit: msecs
+                rows:
+                    total: "386"
+                    unit: rows
+              index: 5
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                seekable_key_size: "1"
+            - childLinks:
+                - childIndex: 7
+                  variable: AlbumId
+                - childIndex: 8
+                  variable: AlbumTitle
+                - childIndex: 9
+                  variable: SingerId
+                - childIndex: 16
+                  type: Seek Condition
+              displayName: Scan
+              executionStats:
+                Seek Count:
+                    total: "1"
+                    unit: times
+                cpu_time:
+                    total: "1.06"
+                    unit: msecs
+                deleted_rows:
+                    total: "0"
+                    unit: rows
+                execution_summary:
+                    checkpoint_time: 0 msecs
+                    num_checkpoints: 1
+                    num_executions: "1"
+                filesystem_delay_seconds:
+                    total: "0.38"
+                    unit: msecs
+                filtered_rows:
+                    total: "1409"
+                    unit: rows
+                latency:
+                    total: "1.42"
+                    unit: msecs
+                rows:
+                    total: "386"
+                    unit: rows
+                scanned_rows:
+                    total: "1795"
+                    unit: rows
+              index: 6
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                scan_method: Row
+                scan_target: AlbumsByAlbumTitle
+                scan_type: IndexScan
+            - displayName: Reference
+              index: 7
+              kind: SCALAR
+              shortRepresentation:
+                description: AlbumId
+            - displayName: Reference
+              index: 8
+              kind: SCALAR
+              shortRepresentation:
+                description: AlbumTitle
+            - displayName: Reference
+              index: 9
+              kind: SCALAR
+              shortRepresentation:
+                description: SingerId
+            - childLinks:
+                - childIndex: 11
+                - childIndex: 12
+              displayName: Function
+              index: 10
+              kind: SCALAR
+              shortRepresentation:
+                description: STARTS_WITH($AlbumTitle, 'T')
+            - displayName: Reference
+              index: 11
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumTitle
+            - displayName: Constant
+              index: 12
+              kind: SCALAR
+              shortRepresentation:
+                description: '''T'''
+            - childLinks:
+                - childIndex: 14
+                - childIndex: 15
+              displayName: Function
+              index: 13
+              kind: SCALAR
+              shortRepresentation:
+                description: ($AlbumTitle LIKE 'T%e')
+            - displayName: Reference
+              index: 14
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumTitle
+            - displayName: Constant
+              index: 15
+              kind: SCALAR
+              shortRepresentation:
+                description: '''T%e'''
+            - childLinks:
+                - childIndex: 10
+              displayName: Function
+              index: 16
+              kind: SCALAR
+              shortRepresentation:
+                description: STARTS_WITH($AlbumTitle, 'T')
+            - childLinks:
+                - childIndex: 13
+              displayName: Function
+              index: 17
+              kind: SCALAR
+              shortRepresentation:
+                description: ($AlbumTitle LIKE 'T%e')
+            - displayName: Reference
+              index: 18
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumId
+            - displayName: Reference
+              index: 19
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumTitle
+            - displayName: Reference
+              index: 20
+              kind: SCALAR
+              shortRepresentation:
+                description: $SingerId
+            - displayName: Reference
+              index: 21
+              kind: SCALAR
+              shortRepresentation:
+                description: $v1
+            - childLinks:
+                - childIndex: 23
+                - childIndex: 43
+                - childIndex: 44
+                - childIndex: 45
+                - childIndex: 46
+              displayName: Serialize Result
+              executionStats:
+                cpu_time:
+                    total: "7.47"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    execution_end_timestamp: "1757686238.295420"
+                    execution_start_timestamp: "1757686238.285278"
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "9.62"
+                    unit: msecs
+                rows:
+                    total: "386"
+                    unit: rows
+              index: 22
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+            - childLinks:
+                - childIndex: 24
+                - childIndex: 29
+                  type: Map
+              displayName: Cross Apply
+              executionStats:
+                cpu_time:
+                    total: "7.3"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    num_checkpoints: 1
+                    num_executions: "1"
+                latency:
+                    total: "9.45"
+                    unit: msecs
+                rows:
+                    total: "386"
+                    unit: rows
+              index: 23
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+            - childLinks:
+                - childIndex: 25
+              displayName: KeyRangeAccumulator
+              executionStats:
+                cpu_time:
+                    total: "0.13"
+                    unit: msecs
+              index: 24
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+            - childLinks:
+                - childIndex: 26
+                  variable: batched_AlbumId
+                - childIndex: 27
+                  variable: batched_AlbumTitle
+                - childIndex: 28
+                  variable: batched_SingerId
+              displayName: Scan
+              index: 25
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                scan_method: Row
+                scan_target: $v2
+                scan_type: BatchScan
+            - displayName: Reference
+              index: 26
+              kind: SCALAR
+              shortRepresentation:
+                description: AlbumId
+            - displayName: Reference
+              index: 27
+              kind: SCALAR
+              shortRepresentation:
+                description: AlbumTitle
+            - displayName: Reference
+              index: 28
+              kind: SCALAR
+              shortRepresentation:
+                description: SingerId
+            - childLinks:
+                - childIndex: 30
+              displayName: Distributed Union
+              executionStats:
+                cpu_time:
+                    mean: "0.02"
+                    std_deviation: "0.02"
+                    total: "7.01"
+                    unit: msecs
+                execution_summary:
+                    checkpoint_time: 0.01 msecs
+                    num_checkpoints: 1
+                    num_executions: "386"
+                latency:
+                    mean: "0.02"
+                    std_deviation: "0.05"
+                    total: "9.16"
+                    unit: msecs
+                remote_calls:
+                    mean: "0"
+                    std_deviation: "0"
+                    total: "0"
+                    unit: calls
+                rows:
+                    mean: "1"
+                    std_deviation: "0"
+                    total: "386"
+                    unit: rows
+              index: 29
+              kind: RELATIONAL
+              metadata:
+                call_type: Local
+                execution_method: Row
+                subquery_cluster_node: "30"
+            - childLinks:
+                - childIndex: 31
+              displayName: Filter Scan
+              index: 30
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                seekable_key_size: "0"
+            - childLinks:
+                - childIndex: 32
+                  variable: MarketingBudget
+                - childIndex: 33
+                  variable: SingerId'
+                - childIndex: 34
+                  variable: AlbumId'
+                - childIndex: 42
+                  type: Seek Condition
+              displayName: Scan
+              executionStats:
+                cpu_time:
+                    mean: "0.02"
+                    std_deviation: "0.02"
+                    total: "6.81"
+                    unit: msecs
+                deleted_rows:
+                    total: "0"
+                    unit: rows
+                execution_summary:
+                    checkpoint_time: 0 msecs
+                    num_checkpoints: 1
+                    num_executions: "386"
+                filesystem_delay_seconds:
+                    total: "2.29"
+                    unit: msecs
+                filtered_rows:
+                    total: "0"
+                    unit: rows
+                latency:
+                    mean: "0.02"
+                    std_deviation: "0.05"
+                    total: "8.96"
+                    unit: msecs
+                rows:
+                    mean: "1"
+                    std_deviation: "0"
+                    total: "386"
+                    unit: rows
+                scanned_rows:
+                    total: "386"
+                    unit: rows
+              index: 31
+              kind: RELATIONAL
+              metadata:
+                execution_method: Row
+                scan_method: Row
+                scan_target: Albums
+                scan_type: TableScan
+            - displayName: Reference
+              index: 32
+              kind: SCALAR
+              shortRepresentation:
+                description: MarketingBudget
+            - displayName: Reference
+              index: 33
+              kind: SCALAR
+              shortRepresentation:
+                description: SingerId
+            - displayName: Reference
+              index: 34
+              kind: SCALAR
+              shortRepresentation:
+                description: AlbumId
+            - childLinks:
+                - childIndex: 36
+                - childIndex: 39
+              displayName: Function
+              index: 35
+              kind: SCALAR
+              shortRepresentation:
+                description: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId))
+            - childLinks:
+                - childIndex: 37
+                - childIndex: 38
+              displayName: Function
+              index: 36
+              kind: SCALAR
+              shortRepresentation:
+                description: ($SingerId' = $batched_SingerId)
+            - displayName: Reference
+              index: 37
+              kind: SCALAR
+              shortRepresentation:
+                description: $SingerId'
+            - displayName: Reference
+              index: 38
+              kind: SCALAR
+              shortRepresentation:
+                description: $batched_SingerId
+            - childLinks:
+                - childIndex: 40
+                - childIndex: 41
+              displayName: Function
+              index: 39
+              kind: SCALAR
+              shortRepresentation:
+                description: ($AlbumId' = $batched_AlbumId)
+            - displayName: Reference
+              index: 40
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumId'
+            - displayName: Reference
+              index: 41
+              kind: SCALAR
+              shortRepresentation:
+                description: $batched_AlbumId
+            - childLinks:
+                - childIndex: 35
+              displayName: Function
+              index: 42
+              kind: SCALAR
+              shortRepresentation:
+                description: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId))
+            - displayName: Reference
+              index: 43
+              kind: SCALAR
+              shortRepresentation:
+                description: $batched_SingerId
+            - displayName: Reference
+              index: 44
+              kind: SCALAR
+              shortRepresentation:
+                description: $batched_AlbumId
+            - displayName: Reference
+              index: 45
+              kind: SCALAR
+              shortRepresentation:
+                description: $batched_AlbumTitle
+            - displayName: Reference
+              index: 46
+              kind: SCALAR
+              shortRepresentation:
+                description: $MarketingBudget
+            - childLinks:
+                - childIndex: 48
+                - childIndex: 51
+              displayName: Function
+              index: 47
+              kind: SCALAR
+              shortRepresentation:
+                description: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId))
+            - childLinks:
+                - childIndex: 49
+                - childIndex: 50
+              displayName: Function
+              index: 48
+              kind: SCALAR
+              shortRepresentation:
+                description: ($SingerId' = $SingerId)
+            - displayName: Reference
+              index: 49
+              kind: SCALAR
+              shortRepresentation:
+                description: $SingerId'
+            - displayName: Reference
+              index: 50
+              kind: SCALAR
+              shortRepresentation:
+                description: $SingerId
+            - childLinks:
+                - childIndex: 52
+                - childIndex: 53
+              displayName: Function
+              index: 51
+              kind: SCALAR
+              shortRepresentation:
+                description: ($AlbumId' = $AlbumId)
+            - displayName: Reference
+              index: 52
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumId'
+            - displayName: Reference
+              index: 53
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumId
+            - childLinks:
+                - childIndex: 55
+                - childIndex: 58
+              displayName: Function
+              index: 54
+              kind: SCALAR
+              shortRepresentation:
+                description: (STARTS_WITH($AlbumTitle, 'T') AND ($AlbumTitle LIKE 'T%e'))
+            - childLinks:
+                - childIndex: 56
+                - childIndex: 57
+              displayName: Function
+              index: 55
+              kind: SCALAR
+              shortRepresentation:
+                description: STARTS_WITH($AlbumTitle, 'T')
+            - displayName: Reference
+              index: 56
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumTitle
+            - displayName: Constant
+              index: 57
+              kind: SCALAR
+              shortRepresentation:
+                description: '''T'''
+            - childLinks:
+                - childIndex: 59
+                - childIndex: 60
+              displayName: Function
+              index: 58
+              kind: SCALAR
+              shortRepresentation:
+                description: ($AlbumTitle LIKE 'T%e')
+            - displayName: Reference
+              index: 59
+              kind: SCALAR
+              shortRepresentation:
+                description: $AlbumTitle
+            - displayName: Constant
+              index: 60
+              kind: SCALAR
+              shortRepresentation:
+                description: '''T%e'''
+    queryStats:
+        bytes_returned: "9256"
+        cpu_time: 16.91 msecs
+        data_bytes_read: "10249037"
+        deleted_rows_scanned: "0"
+        elapsed_time: 20.36 msecs
+        filesystem_delay_seconds: 2.67 msecs
+        is_graph_query: "false"
+        locking_delay: 0 msecs
+        memory_peak_usage_bytes: "8215"
+        memory_usage_percentage: "0.003"
+        optimizer_statistics_package: auto_20250910_09_21_01UTC
+        optimizer_version: "8"
+        query_plan_creation_time: 5.35 msecs
+        query_text: SELECT * FROM Albums@{FORCE_INDEX=AlbumsByAlbumTitle} WHERE AlbumTitle LIKE 'T%e'
+        remote_server_calls: 0/0
+        rows_returned: "386"
+        rows_scanned: "2181"
+        runtime_creation_time: 0.94 msecs
+        server_queue_delay: 0.04 msecs
+        statistics_load_time: "0"
+        total_memory_peak_usage_byte: "8215"
