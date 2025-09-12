@@ -2,9 +2,12 @@ package reference
 
 import (
 	"os"
+	"strings"
 	"testing"
 
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/MakeNowJust/heredoc/v2"
+	queryplan "github.com/apstndb/spannerplan"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -18,7 +21,7 @@ func loadRealPlan(t *testing.T) string {
 	return string(b)
 }
 
-func Test_RenderASCIIImpl_withRealPlan_ALL_MODES_AND_FORMATS(t *testing.T) {
+func Test_RenderTreeTable_withRealPlan_ALL_MODES_AND_FORMATS(t *testing.T) {
 	input := loadRealPlan(t)
 	tests := []struct {
 		name   string
@@ -216,13 +219,160 @@ func Test_RenderASCIIImpl_withRealPlan_ALL_MODES_AND_FORMATS(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := renderASCIIImpl(input, tc.mode, tc.format, 0)
+			// Extract query plan from input
+			stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
 			if err != nil {
-				t.Fatalf("renderASCIIImpl returned error: %v", err)
+				t.Fatalf("Failed to extract query plan: %v", err)
+			}
+
+			mode, err := ParseRenderMode(tc.mode)
+			if err != nil {
+				t.Fatalf("Failed to parse render mode: %v", err)
+			}
+
+			format, err := ParseFormat(tc.format)
+			if err != nil {
+				t.Fatalf("Failed to parse format: %v", err)
+			}
+
+			planNodes := stats.GetQueryPlan().GetPlanNodes()
+			got, err := RenderTreeTable(planNodes, mode, format, 0)
+			if err != nil {
+				t.Fatalf("RenderTreeTable returned error: %v", err)
 			}
 
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestParseRenderMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    RenderMode
+		wantErr bool
+	}{
+		{"valid AUTO", "AUTO", RenderModeAuto, false},
+		{"valid auto lowercase", "auto", RenderModeAuto, false},
+		{"valid PLAN", "PLAN", RenderModePlan, false},
+		{"valid PROFILE", "PROFILE", RenderModeProfile, false},
+		{"valid mixed case", "pRoFiLe", RenderModeProfile, false},
+		{"invalid mode", "INVALID", "", true},
+		{"empty string", "", "", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseRenderMode(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, got nil", tc.input)
+				}
+				if !strings.Contains(err.Error(), "unknown render mode") {
+					t.Errorf("expected error message to contain 'unknown render mode', got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Errorf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestParseFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    Format
+		wantErr bool
+	}{
+		{"valid TRADITIONAL", "TRADITIONAL", FormatTraditional, false},
+		{"valid traditional lowercase", "traditional", FormatTraditional, false},
+		{"valid CURRENT", "CURRENT", FormatCurrent, false},
+		{"valid COMPACT", "COMPACT", FormatCompact, false},
+		{"valid mixed case", "CoMpAcT", FormatCompact, false},
+		{"invalid format", "INVALID", "", true},
+		{"empty string", "", "", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseFormat(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, got nil", tc.input)
+				}
+				if !strings.Contains(err.Error(), "unknown format") {
+					t.Errorf("expected error message to contain 'unknown format', got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Errorf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestRenderTreeTable_InvalidMode(t *testing.T) {
+	// Create minimal valid plan nodes
+	planNodes := []*sppb.PlanNode{{}}
+
+	// Test with an invalid RenderMode value (bypassing ParseRenderMode)
+	_, err := RenderTreeTable(planNodes, RenderMode("INVALID"), FormatCurrent, 0)
+	if err == nil {
+		t.Error("expected error for invalid render mode")
+	}
+	if !strings.Contains(err.Error(), "unknown render mode") {
+		t.Errorf("expected error message to contain 'unknown render mode', got: %v", err)
+	}
+}
+
+func TestRenderTreeTable_InputValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		planNodes []*sppb.PlanNode
+		wrapWidth int
+		wantErr   string
+	}{
+		{
+			name:      "empty planNodes",
+			planNodes: []*sppb.PlanNode{},
+			wrapWidth: 0,
+			wantErr:   "planNodes cannot be empty",
+		},
+		{
+			name:      "nil planNodes",
+			planNodes: nil,
+			wrapWidth: 0,
+			wantErr:   "planNodes cannot be empty",
+		},
+		{
+			name:      "negative wrapWidth",
+			planNodes: []*sppb.PlanNode{{}},
+			wrapWidth: -1,
+			wantErr:   "wrapWidth cannot be negative",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := RenderTreeTable(tc.planNodes, RenderModeAuto, FormatCurrent, tc.wrapWidth)
+			if err == nil {
+				t.Error("expected error but got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("expected error to contain %q, got: %v", tc.wantErr, err)
 			}
 		})
 	}

@@ -1,7 +1,8 @@
+// Package reference provides a reference implementation for rendering
+// Spanner query plans as ASCII tables with various formatting options.
 package reference
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -16,14 +17,20 @@ import (
 	"github.com/apstndb/spannerplan/plantree"
 )
 
+// RenderMode specifies how to render the query plan output.
 type RenderMode string
 
 const (
-	RenderModeAuto    RenderMode = "AUTO"
-	RenderModePlan    RenderMode = "PLAN"
+	// RenderModeAuto automatically determines whether to show statistics based on availability.
+	RenderModeAuto RenderMode = "AUTO"
+	// RenderModePlan shows only the query plan without statistics.
+	RenderModePlan RenderMode = "PLAN"
+	// RenderModeProfile shows the query plan with execution statistics.
 	RenderModeProfile RenderMode = "PROFILE"
 )
 
+// ParseRenderMode parses a string into a RenderMode.
+// Valid values are "AUTO", "PLAN", and "PROFILE" (case-insensitive).
 func ParseRenderMode(s string) (RenderMode, error) {
 	switch strings.ToUpper(s) {
 	case "AUTO":
@@ -37,7 +44,18 @@ func ParseRenderMode(s string) (RenderMode, error) {
 	}
 }
 
+// RenderTreeTable renders Spanner plan nodes as an ASCII table.
+// It supports different render modes (AUTO, PLAN, PROFILE) and formats (TRADITIONAL, CURRENT, COMPACT).
+// The wrapWidth parameter controls text wrapping (0 disables wrapping).
 func RenderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format, wrapWidth int) (string, error) {
+	// Validate input parameters
+	if len(planNodes) == 0 {
+		return "", fmt.Errorf("planNodes cannot be empty")
+	}
+	if wrapWidth < 0 {
+		return "", fmt.Errorf("wrapWidth cannot be negative: %d", wrapWidth)
+	}
+
 	var withStats bool
 	switch mode {
 	case RenderModeAuto:
@@ -50,7 +68,7 @@ func RenderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", fmt.Errorf("unknown render mode: %s", mode)
 	}
 
-	rendered, err := ProcessTree(planNodes, format, wrapWidth)
+	rendered, err := processTree(planNodes, format, wrapWidth)
 	if err != nil {
 		return "", err
 	}
@@ -60,22 +78,36 @@ func RenderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", err
 	}
 
-	predPart, err := renderPredicatesPart(rendered)
-	if err != nil {
-		return "", err
-	}
+	predPart := renderPredicatesPart(rendered)
 
 	return tablePart + predPart, nil
-
 }
 
-func renderPredicatesPart(rendered []plantree.RowWithPredicates) (string, error) {
-	var maxIDLength int
-	for _, row := range rendered {
-		if l := len(fmt.Sprint(row.ID)); l > maxIDLength {
-			maxIDLength = l
+// hasPredicates checks if any row contains predicates.
+func hasPredicates(rows []plantree.RowWithPredicates) bool {
+	for _, row := range rows {
+		if len(row.Predicates) > 0 {
+			return true
 		}
 	}
+	return false
+}
+
+// renderPredicatesPart formats predicates section for rows with associated predicates.
+func renderPredicatesPart(rendered []plantree.RowWithPredicates) string {
+	// Early return if no predicates exist
+	if !hasPredicates(rendered) {
+		return ""
+	}
+
+	// Find the maximum ID value first, then format it once to get the width
+	var maxID int32
+	for _, row := range rendered {
+		if row.ID > maxID {
+			maxID = row.ID
+		}
+	}
+	maxIDLength := len(fmt.Sprint(maxID))
 
 	var predicates []string
 	for _, row := range rendered {
@@ -85,21 +117,31 @@ func renderPredicatesPart(rendered []plantree.RowWithPredicates) (string, error)
 				idPartStr = fmt.Sprint(row.ID) + ":"
 			}
 
+			// +1 is for the colon after ID
 			prefix := runewidth.FillLeft(idPartStr, maxIDLength+1)
 			predicates = append(predicates, fmt.Sprintf("%s %s", prefix, predicate))
 		}
 	}
 
 	var sb strings.Builder
-	if len(predicates) > 0 {
-		fmt.Fprintln(&sb, "Predicates(identified by ID):")
-		for _, s := range predicates {
-			fmt.Fprintln(&sb, " "+s)
-		}
+	_, _ = fmt.Fprintln(&sb, "Predicates(identified by ID):")
+	for _, s := range predicates {
+		_, _ = fmt.Fprintln(&sb, " "+s)
 	}
-	return sb.String(), nil
+	return sb.String()
 }
 
+// getColumnAlignments returns the column alignment configuration based on whether stats are shown.
+func getColumnAlignments(withStats bool) []tw.Align {
+	base := []tw.Align{tw.AlignRight, tw.AlignLeft} // ID, Operator
+	if withStats {
+		// Add alignments for Rows, Exec., Total Latency
+		return append(base, tw.AlignRight, tw.AlignRight, tw.AlignLeft)
+	}
+	return base
+}
+
+// renderTablePart renders the main table showing the query plan tree structure.
 func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (string, error) {
 	var sb strings.Builder
 	table := tablewriter.NewTable(&sb,
@@ -109,16 +151,8 @@ func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (str
 		tablewriter.WithTrimSpace(tw.Off),
 		tablewriter.WithHeaderAutoFormat(tw.Off),
 		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignmentConfig(tw.CellAlignment{PerColumn: getColumnAlignments(withStats)}),
 	)
-	table.Configure(func(config *tablewriter.Config) {
-		config.Header.Formatting.AutoFormat = tw.Off
-		// Per-column alignment: ID right, Operator left, optional stats columns
-		if withStats {
-			config.Row.Alignment.PerColumn = []tw.Align{tw.AlignRight, tw.AlignLeft, tw.AlignRight, tw.AlignRight, tw.AlignLeft}
-		} else {
-			config.Row.Alignment.PerColumn = []tw.Align{tw.AlignRight, tw.AlignLeft}
-		}
-	})
 
 	header := []string{"ID", "Operator"}
 	if withStats {
@@ -133,187 +167,51 @@ func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (str
 		}
 
 		if err := table.Append(rowData); err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to append row %d: %w", n.ID, err)
 		}
 	}
 
 	if err := table.Render(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to render table: %w", err)
 	}
 	return sb.String(), nil
 }
 
-type params struct {
-	Input     string `json:"input"`
-	Mode      string `json:"mode"`
-	Format    string `json:"format"`
-	WrapWidth int    `json:"wrapWidth"`
-}
-
-// Response represents the structured response from WASM
-type Response struct {
-	Success bool   `json:"success"`
-	Result  string `json:"result,omitempty"`
-	Error   *Error `json:"error,omitempty"`
-}
-
-// Error represents detailed error information
-type Error struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
-}
-
-// Error types for better error handling
-const (
-	ErrorTypeParseError           = "PARSE_ERROR"
-	ErrorTypeInvalidSpannerFormat = "INVALID_SPANNER_FORMAT"
-	ErrorTypeRenderError          = "RENDER_ERROR"
-	ErrorTypeInvalidParameters    = "INVALID_PARAMETERS"
-)
-
-// Custom error types for better classification
-// These correspond to WasmErrorType constants in TypeScript
-
-// ParseError represents JSON/YAML parsing failures
-type ParseError struct {
-	msg string
-}
-
-func (e ParseError) Error() string {
-	return e.msg
-}
-
-// InvalidSpannerFormatError represents invalid Spanner query plan format or structure
-type InvalidSpannerFormatError struct {
-	msg string
-}
-
-func (e InvalidSpannerFormatError) Error() string {
-	return e.msg
-}
-
-// RenderError represents general rendering failures
-type RenderError struct {
-	msg string
-}
-
-func (e RenderError) Error() string {
-	return e.msg
-}
-
-// InvalidParametersError represents invalid function parameters
-type InvalidParametersError struct {
-	msg string
-}
-
-func (e InvalidParametersError) Error() string {
-	return e.msg
-}
-
-// classifyError determines the error type using errors.As for type-safe classification
-func classifyError(err error) string {
-	// Check for custom error types first
-	var parseErr ParseError
-	if errors.As(err, &parseErr) {
-		return ErrorTypeParseError
-	}
-
-	var spannerErr InvalidSpannerFormatError
-	if errors.As(err, &spannerErr) {
-		return ErrorTypeInvalidSpannerFormat
-	}
-
-	var renderErr RenderError
-	if errors.As(err, &renderErr) {
-		return ErrorTypeRenderError
-	}
-
-	var paramErr InvalidParametersError
-	if errors.As(err, &paramErr) {
-		return ErrorTypeInvalidParameters
-	}
-
-	// Default to render error for unknown error types
-	return ErrorTypeRenderError
-}
-
-// RenderASCII renders an ASCII table for the given Spanner plan input (JSON or YAML)
-// using the specified mode (AUTO|PLAN|PROFILE), format (TRADITIONAL|CURRENT|COMPACT),
-// and optional wrap width. It is a thin wrapper around the internal implementation
-// for use by tools.
-func RenderASCII(j string, modeStr string, formatStr string, wrapWidth int) (string, error) {
-	return renderASCIIImpl(j, modeStr, formatStr, wrapWidth)
-}
-
-// renderASCIIImpl implements the core rendering logic
-// Validates parameters, extracts query plan, and renders ASCII output
-func renderASCIIImpl(j string, modeStr string, formatStr string, wrapWidth int) (string, error) {
-	stats, _, err := queryplan.ExtractQueryPlan([]byte(j))
-	if err != nil {
-		// Wrap external parsing errors in our custom type
-		return "", ParseError{msg: fmt.Sprintf("Failed to extract query plan: %v", err)}
-	}
-
-	mode, err := ParseRenderMode(modeStr)
-	if err != nil {
-		return "", InvalidParametersError{msg: fmt.Sprintf("Invalid render mode: %v", err)}
-	}
-
-	format, err := ParseFormat(formatStr)
-	if err != nil {
-		return "", InvalidParametersError{msg: fmt.Sprintf("Invalid format type: %v", err)}
-	}
-
-	// Validate Spanner query plan structure
-	queryPlan := stats.GetQueryPlan()
-	if queryPlan == nil {
-		return "", InvalidSpannerFormatError{msg: "Query plan is missing from input"}
-	}
-
-	planNodes := queryPlan.GetPlanNodes()
-	if len(planNodes) == 0 {
-		return "", InvalidSpannerFormatError{msg: "Plan nodes are missing from query plan"}
-	}
-
-	s, err := RenderTreeTable(planNodes, mode, format, wrapWidth)
-	if err != nil {
-		return "", RenderError{msg: fmt.Sprintf("Failed to render tree table: %v", err)}
-	}
-	return s, nil
-}
-
+// Format specifies the formatting style for the query plan output.
 type Format string
 
 const (
-	formatTraditional Format = "TRADITIONAL"
-	formatCurrent     Format = "CURRENT"
-	formatCompact     Format = "COMPACT"
+	// FormatTraditional uses raw metadata format in node titles.
+	FormatTraditional Format = "TRADITIONAL"
+	// FormatCurrent uses modern formatting with labels and angle brackets.
+	FormatCurrent Format = "CURRENT"
+	// FormatCompact uses compact tree rendering with minimal spacing.
+	FormatCompact Format = "COMPACT"
 )
 
+// ParseFormat parses a string into a Format.
+// Valid values are "TRADITIONAL", "CURRENT", and "COMPACT" (case-insensitive).
 func ParseFormat(str string) (Format, error) {
 	switch strings.ToUpper(str) {
 	case "TRADITIONAL":
-		return formatTraditional, nil
+		return FormatTraditional, nil
 	case "CURRENT":
-		return formatCurrent, nil
+		return FormatCurrent, nil
 	case "COMPACT":
-		return formatCompact, nil
+		return FormatCompact, nil
 	default:
-		return "", fmt.Errorf("unknown Format: %s", str)
+		return "", fmt.Errorf("unknown format: %s", str)
 	}
-
 }
 
-func ProcessTree(planNodes []*sppb.PlanNode, format Format, wrapWidth int) ([]plantree.RowWithPredicates, error) {
+// processTree converts Spanner plan nodes into a structured tree representation.
+func processTree(planNodes []*sppb.PlanNode, format Format, wrapWidth int) ([]plantree.RowWithPredicates, error) {
 	qp, err := queryplan.New(planNodes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create query plan: %w", err)
 	}
 
-	var opts []plantree.Option
-	opts = append(opts, optsForFormat(format)...)
-
+	opts := optsForFormat(format)
 	if wrapWidth > 0 {
 		opts = append(opts, plantree.WithWrapWidth(wrapWidth))
 	}
@@ -321,6 +219,7 @@ func ProcessTree(planNodes []*sppb.PlanNode, format Format, wrapWidth int) ([]pl
 	return plantree.ProcessPlan(qp, opts...)
 }
 
+// optsForFormat returns the appropriate rendering options for the given format.
 func optsForFormat(format Format) []plantree.Option {
 	currentOpts := []plantree.Option{
 		plantree.WithQueryPlanOptions(
@@ -331,14 +230,15 @@ func optsForFormat(format Format) []plantree.Option {
 	}
 
 	switch format {
-	case formatTraditional:
+	case FormatTraditional:
 		return nil
-	case formatCurrent:
+	case FormatCurrent:
 		return currentOpts
-	case formatCompact:
+	case FormatCompact:
 		return slices.Concat(currentOpts,
 			[]plantree.Option{plantree.EnableCompact()})
 	default:
-		return nil
+		// This should never happen as Format is constrained by type
+		panic(fmt.Sprintf("unexpected format: %v", format))
 	}
 }
