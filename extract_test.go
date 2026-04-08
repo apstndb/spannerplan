@@ -167,7 +167,7 @@ stats:
 	for _, tt := range inputs {
 		b.Run(tt.name+"/legacy", func(b *testing.B) {
 			b.ReportAllocs()
-			for b.Loop() {
+			for i := 0; i < b.N; i++ {
 				if _, _, err := extractQueryPlanLegacy(tt.input); err != nil {
 					b.Fatal(err)
 				}
@@ -176,7 +176,7 @@ stats:
 
 		b.Run(tt.name+"/current", func(b *testing.B) {
 			b.ReportAllocs()
-			for b.Loop() {
+			for i := 0; i < b.N; i++ {
 				if _, _, err := ExtractQueryPlan(tt.input); err != nil {
 					b.Fatal(err)
 				}

@@ -15,7 +15,7 @@ var jsonpb = protojson.UnmarshalOptions{
 }
 
 func Unmarshal(b []byte, result proto.Message) error {
-	j, err := yamlToJSON(b)
+	j, err := YAMLToJSON(b)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,8 @@ func Marshal(m proto.Message, opts ...yaml.EncodeOption) ([]byte, error) {
 	return yaml.MarshalWithOptions(m, opts...)
 }
 
-func yamlToJSON(y []byte) ([]byte, error) {
+// YAMLToJSON converts YAML bytes into canonical JSON bytes for protojson.Unmarshal.
+func YAMLToJSON(y []byte) ([]byte, error) {
 	var i interface{}
 	err := yaml.Unmarshal(y, &i)
 	if err != nil {

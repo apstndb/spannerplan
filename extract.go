@@ -5,12 +5,13 @@ import (
 	"errors"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/goccy/go-yaml"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/apstndb/spannerplan/protoyaml"
 )
 
 func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) {
-	j, err := yamlToJSON(b)
+	j, err := protoyaml.YAMLToJSON(b)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -46,12 +47,4 @@ func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) 
 		return rs.GetStats(), rs.GetMetadata().GetRowType(), nil
 	}
 	return nil, nil, errors.New("unknown input format")
-}
-
-func yamlToJSON(y []byte) ([]byte, error) {
-	var i interface{}
-	if err := yaml.Unmarshal(y, &i); err != nil {
-		return nil, err
-	}
-	return json.Marshal(i)
 }
