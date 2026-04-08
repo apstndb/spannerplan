@@ -19,6 +19,12 @@ type QueryPlan struct {
 
 var ErrEmptyPlanNodes = errors.New("spannerplan: planNodes cannot be empty")
 
+// New constructs a QueryPlan from sppb.QueryPlan.PlanNodes.
+//
+// The input must be the original PlanNodes slice from Cloud Spanner's
+// sppb.QueryPlan. This function assumes each PlanNode.Index matches its
+// position in the slice, as documented by the Spanner protobuf contract.
+// Arbitrary or reordered PlanNode slices are not supported.
 func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	if len(planNodes) == 0 {
 		return nil, ErrEmptyPlanNodes
