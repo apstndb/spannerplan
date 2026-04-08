@@ -18,16 +18,28 @@ type QueryPlan struct {
 }
 
 var ErrEmptyPlanNodes = errors.New("spannerplan: planNodes cannot be empty")
+var ErrNilPlanNode = errors.New("spannerplan: planNode cannot be nil")
+var ErrPlanNodeIndexMismatch = errors.New("spannerplan: planNode index must match slice position")
 
 // New constructs a QueryPlan from sppb.QueryPlan.PlanNodes.
 //
 // The input must be the original PlanNodes slice from Cloud Spanner's
 // sppb.QueryPlan. This function assumes each PlanNode.Index matches its
 // position in the slice, as documented by the Spanner protobuf contract.
-// Arbitrary or reordered PlanNode slices are not supported.
+// Arbitrary or reordered PlanNode slices are not supported and will return
+// an error.
 func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	if len(planNodes) == 0 {
 		return nil, ErrEmptyPlanNodes
+	}
+
+	for i, planNode := range planNodes {
+		if planNode == nil {
+			return nil, fmt.Errorf("%w: at slice position %d", ErrNilPlanNode, i)
+		}
+		if planNode.GetIndex() != int32(i) {
+			return nil, fmt.Errorf("%w: at slice position %d has index %d", ErrPlanNodeIndexMismatch, i, planNode.GetIndex())
+		}
 	}
 
 	parentMap := make(map[int32]int32)
