@@ -20,6 +20,8 @@ type QueryPlan struct {
 var ErrEmptyPlanNodes = errors.New("spannerplan: planNodes cannot be empty")
 var ErrNilPlanNode = errors.New("spannerplan: planNode cannot be nil")
 var ErrPlanNodeIndexMismatch = errors.New("spannerplan: planNode index must match slice position")
+var ErrNilChildLink = errors.New("spannerplan: childLink cannot be nil")
+var ErrChildLinkIndexOutOfRange = errors.New("spannerplan: childLink childIndex out of range")
 
 // New constructs a QueryPlan from sppb.QueryPlan.PlanNodes.
 //
@@ -38,14 +40,21 @@ func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 			return nil, fmt.Errorf("%w: at slice position %d", ErrNilPlanNode, i)
 		}
 		if planNode.GetIndex() != int32(i) {
-			return nil, fmt.Errorf("%w: at slice position %d has index %d", ErrPlanNodeIndexMismatch, i, planNode.GetIndex())
+			return nil, fmt.Errorf("%w: at slice position %d expected index %d, got %d", ErrPlanNodeIndexMismatch, i, i, planNode.GetIndex())
 		}
 	}
 
 	parentMap := make(map[int32]int32)
 	for _, planNode := range planNodes {
-		for _, childLink := range planNode.GetChildLinks() {
-			parentMap[childLink.GetChildIndex()] = planNode.GetIndex()
+		for j, childLink := range planNode.GetChildLinks() {
+			if childLink == nil {
+				return nil, fmt.Errorf("%w: parent node %d childLinks[%d]", ErrNilChildLink, planNode.GetIndex(), j)
+			}
+			childIndex := childLink.GetChildIndex()
+			if childIndex < 0 || childIndex >= int32(len(planNodes)) {
+				return nil, fmt.Errorf("%w: parent node %d childLinks[%d] has childIndex %d, len(planNodes)=%d", ErrChildLinkIndexOutOfRange, planNode.GetIndex(), j, childIndex, len(planNodes))
+			}
+			parentMap[childIndex] = planNode.GetIndex()
 		}
 	}
 
