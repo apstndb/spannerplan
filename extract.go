@@ -10,6 +10,8 @@ import (
 	"github.com/apstndb/spannerplan/protoyaml"
 )
 
+var extractQueryPlanUnmarshalOptions = protojson.UnmarshalOptions{DiscardUnknown: true}
+
 func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) {
 	j, err := protoyaml.YAMLToJSON(b)
 	if err != nil {
@@ -25,23 +27,21 @@ func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) 
 		return nil, nil, err
 	}
 
-	unmarshalOptions := protojson.UnmarshalOptions{DiscardUnknown: true}
-
 	if len(topLevel.QueryPlan) != 0 {
 		var rss sppb.ResultSetStats
-		if err := unmarshalOptions.Unmarshal(j, &rss); err != nil {
+		if err := extractQueryPlanUnmarshalOptions.Unmarshal(j, &rss); err != nil {
 			return nil, nil, err
 		}
 		return &rss, nil, nil
 	} else if len(topLevel.PlanNodes) != 0 {
 		var qp sppb.QueryPlan
-		if err := unmarshalOptions.Unmarshal(j, &qp); err != nil {
+		if err := extractQueryPlanUnmarshalOptions.Unmarshal(j, &qp); err != nil {
 			return nil, nil, err
 		}
 		return &sppb.ResultSetStats{QueryPlan: &qp}, nil, nil
 	} else if len(topLevel.Stats) != 0 {
 		var rs sppb.ResultSet
-		if err := unmarshalOptions.Unmarshal(j, &rs); err != nil {
+		if err := extractQueryPlanUnmarshalOptions.Unmarshal(j, &rs); err != nil {
 			return nil, nil, err
 		}
 		return rs.GetStats(), rs.GetMetadata().GetRowType(), nil
