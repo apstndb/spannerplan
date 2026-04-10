@@ -5,12 +5,9 @@ import (
 	"errors"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/apstndb/spannerplan/protoyaml"
 )
-
-var extractQueryPlanUnmarshalOptions = protojson.UnmarshalOptions{DiscardUnknown: true}
 
 func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) {
 	j, err := protoyaml.YAMLToJSON(b)
@@ -29,19 +26,19 @@ func ExtractQueryPlan(b []byte) (*sppb.ResultSetStats, *sppb.StructType, error) 
 
 	if len(topLevel.QueryPlan) != 0 {
 		var rss sppb.ResultSetStats
-		if err := extractQueryPlanUnmarshalOptions.Unmarshal(j, &rss); err != nil {
+		if err := protoyaml.UnmarshalJSON(j, &rss); err != nil {
 			return nil, nil, err
 		}
 		return &rss, nil, nil
 	} else if len(topLevel.PlanNodes) != 0 {
 		var qp sppb.QueryPlan
-		if err := extractQueryPlanUnmarshalOptions.Unmarshal(j, &qp); err != nil {
+		if err := protoyaml.UnmarshalJSON(j, &qp); err != nil {
 			return nil, nil, err
 		}
 		return &sppb.ResultSetStats{QueryPlan: &qp}, nil, nil
 	} else if len(topLevel.Stats) != 0 {
 		var rs sppb.ResultSet
-		if err := extractQueryPlanUnmarshalOptions.Unmarshal(j, &rs); err != nil {
+		if err := protoyaml.UnmarshalJSON(j, &rs); err != nil {
 			return nil, nil, err
 		}
 		return rs.GetStats(), rs.GetMetadata().GetRowType(), nil
