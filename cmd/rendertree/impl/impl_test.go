@@ -450,19 +450,43 @@ func TestRun_UsageErrors(t *testing.T) {
 		name        string
 		args        []string
 		wantErrText string
-		wantStderr  string
+		postCheck   func(t *testing.T, stderr string, err error)
 	}{
 		{
 			name:        "invalid mode",
 			args:        []string{"-mode", "broken"},
 			wantErrText: "invalid input: broken",
-			wantStderr:  "Invalid value for -mode flag:",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "Invalid value for -mode flag:") {
+					t.Fatalf("stderr = %q, want invalid mode message", stderr)
+				}
+			},
+		},
+		{
+			name:        "unknown flag",
+			args:        []string{"-unknown"},
+			wantErrText: "flag provided but not defined: -unknown",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "flag provided but not defined: -unknown") {
+					t.Fatalf("stderr = %q, want unknown flag message", stderr)
+				}
+				if !strings.Contains(stderr, "Usage of rendertree:") {
+					t.Fatalf("stderr = %q, want usage output", stderr)
+				}
+			},
 		},
 		{
 			name:        "full-scan and known-flag are mutually exclusive",
 			args:        []string{"-full-scan", "raw", "-known-flag", "label"},
 			wantErrText: "full-scan and known-flag are mutually exclusive",
-			wantStderr:  "--full-scan and --known-flag are mutually exclusive.",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "--full-scan and --known-flag are mutually exclusive.") {
+					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
+				}
+			},
 		},
 	}
 
@@ -483,8 +507,8 @@ func TestRun_UsageErrors(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.wantErrText) {
 				t.Fatalf("run() error = %q, want substring %q", err.Error(), tt.wantErrText)
 			}
-			if !strings.Contains(stderr.String(), tt.wantStderr) {
-				t.Fatalf("stderr = %q, want substring %q", stderr.String(), tt.wantStderr)
+			if tt.postCheck != nil {
+				tt.postCheck(t, stderr.String(), err)
 			}
 			if stdout.Len() != 0 {
 				t.Fatalf("stdout = %q, want empty", stdout.String())
