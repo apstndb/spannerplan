@@ -480,10 +480,10 @@ func TestRun_UsageErrors(t *testing.T) {
 		{
 			name:        "full-scan and known-flag are mutually exclusive",
 			args:        []string{"-full-scan", "raw", "-known-flag", "label"},
-			wantErrText: "full-scan and known-flag are mutually exclusive",
+			wantErrText: "--full-scan and --known-flag are mutually exclusive",
 			postCheck: func(t *testing.T, stderr string, err error) {
 				t.Helper()
-				if !strings.Contains(stderr, "--full-scan and --known-flag are mutually exclusive.") {
+				if !strings.Contains(stderr, "--full-scan and --known-flag are mutually exclusive") {
 					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
 				}
 			},
@@ -525,7 +525,7 @@ func TestRun_DeprecatedFullScanAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
-	if !strings.Contains(stderr.String(), "--full-scan is deprecated. you must migrate to --known-flag.") {
+	if !strings.Contains(stderr.String(), "--full-scan is deprecated. You must migrate to --known-flag.") {
 		t.Fatalf("stderr = %q, want deprecation warning", stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "Apply Mutations on MutationTest <Row>") {

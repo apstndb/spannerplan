@@ -32,7 +32,7 @@ func Main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		var usageErr *usageError
 		if errors.As(err, &usageErr) {
-			os.Exit(1)
+			os.Exit(2)
 		}
 		log.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flagSet := flag.NewFlagSet("rendertree", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
 
-	customFile := flagSet.String("custom-file", "", "")
+	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printModeStr := flagSet.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
@@ -303,7 +303,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 
 	var custom stringList
-	flagSet.Var(&custom, "custom", "")
+	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT] form")
 	if err := flagSet.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -313,12 +313,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	if *fullscan != "" {
 		if *knownFlag != "" {
-			_, _ = fmt.Fprintln(stderr, "--full-scan and --known-flag are mutually exclusive.")
+			const msg = "--full-scan and --known-flag are mutually exclusive"
+			_, _ = fmt.Fprintln(stderr, msg)
 			flagSet.Usage()
-			return &usageError{err: errors.New("full-scan and known-flag are mutually exclusive")}
+			return &usageError{err: errors.New(msg)}
 		}
 
-		_, _ = fmt.Fprintln(stderr, "--full-scan is deprecated. you must migrate to --known-flag.")
+		_, _ = fmt.Fprintln(stderr, "--full-scan is deprecated. You must migrate to --known-flag.")
 
 		*knownFlag = *fullscan
 	}
@@ -370,7 +371,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if *knownFlag != "" {
 		kf, err = spannerplan.ParseKnownFlagFormat(*knownFlag)
 		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "Invalid value for -known-flag flag: %v.\n", err)
+			_, _ = fmt.Fprintf(stderr, "Invalid value for -known-flag: %v.\n", err)
 			flagSet.Usage()
 			return &usageError{err: err}
 		}
