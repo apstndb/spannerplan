@@ -305,6 +305,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	var custom stringList
 	flagSet.Var(&custom, "custom", "")
 	if err := flagSet.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return &usageError{err: err}
 	}
 

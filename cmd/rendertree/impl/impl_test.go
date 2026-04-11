@@ -508,3 +508,19 @@ func TestRun_DeprecatedFullScanAlias(t *testing.T) {
 		t.Fatalf("stdout = %q, want rendered table output", stdout.String())
 	}
 }
+
+func TestRun_HelpReturnsNil(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run() error = %v, want nil", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "-mode") {
+		t.Fatalf("stderr = %q, want usage output", stderr.String())
+	}
+}
