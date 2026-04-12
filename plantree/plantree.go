@@ -138,6 +138,19 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	return result, nil
 }
 
+// maxTreePrefixWidth returns a conservative width for the tree prefix on the first line of a
+// node at depth level (the root built at level 0 has no prefix). It matches the segment and
+// edge widths produced by treerender for ASCII tree drawing.
+func maxTreePrefixWidth(style treerender.Style, level int) int {
+	if level <= 0 {
+		return 0
+	}
+	segWide := max(len(style.EdgeLink)+style.IndentSize, style.IndentSize+1)
+	ancestorWide := (level - 1) * segWide
+	edgeWide := max(len(style.EdgeMid), len(style.EdgeEnd)) + len(style.EdgeSeparator)
+	return ancestorWide + edgeWide
+}
+
 func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, level int, opts *options) (*renderedNode, error) {
 	if !qp.IsVisible(link) {
 		return nil, nil
@@ -149,7 +162,11 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
-		nodeText = opts.wrapper.Wrap(nodeText, *opts.wrapWidth-level*(opts.style.IndentSize+1)-opts.wrapper.StringWidth(sep))
+		budget := *opts.wrapWidth - maxTreePrefixWidth(opts.style, level)
+		if budget < 1 {
+			budget = 1
+		}
+		nodeText = opts.wrapper.Wrap(nodeText, budget)
 	}
 
 	var predicates []string

@@ -1,6 +1,9 @@
 package treerender
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 type Node struct {
 	Text     string
@@ -52,7 +55,7 @@ func Render(root *Node, style Style) []Row {
 			NodeText: node.Text,
 		})
 
-		childAncestors := slicesClone(ancestorHasNext)
+		childAncestors := slices.Clone(ancestorHasNext)
 		if !isRoot {
 			childAncestors = append(childAncestors, !isLast)
 		}
@@ -107,14 +110,4 @@ func segment(hasNext bool, style Style) string {
 		return style.EdgeLink + strings.Repeat(" ", style.IndentSize)
 	}
 	return strings.Repeat(" ", style.IndentSize+1)
-}
-
-func slicesClone(items []bool) []bool {
-	if len(items) == 0 {
-		return nil
-	}
-
-	out := make([]bool, len(items))
-	copy(out, items)
-	return out
 }
