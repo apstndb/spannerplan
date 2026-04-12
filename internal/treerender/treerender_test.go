@@ -24,6 +24,23 @@ func sampleTree() *Node {
 	}
 }
 
+func TestRenderTree_MatchesRender(t *testing.T) {
+	style := DefaultStyle()
+	tree := sampleTree()
+	gotRender := Render(tree, style)
+	gotTree := RenderTree(tree, style, func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
+	if diff := cmp.Diff(gotRender, gotTree); diff != "" {
+		t.Fatalf("RenderTree vs Render (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTree_NilRoot(t *testing.T) {
+	var root *Node
+	if got := RenderTree(root, DefaultStyle(), func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children }); got != nil {
+		t.Fatalf("RenderTree(nil) = %#v, want nil", got)
+	}
+}
+
 func TestRender_DefaultStyle(t *testing.T) {
 	got := Render(sampleTree(), DefaultStyle())
 	want := []Row{

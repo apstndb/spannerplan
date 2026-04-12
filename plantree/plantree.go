@@ -116,7 +116,10 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 		return nil, nil
 	}
 
-	renderRows := treerender.Render(toRenderNode(root), o.style)
+	renderRows := treerender.RenderTree(root, o.style,
+		func(n *renderedNode) string { return n.NodeText },
+		func(n *renderedNode) []*renderedNode { return n.Children },
+	)
 	nodes := collectPreorder(root)
 	if len(renderRows) != len(nodes) {
 		return nil, fmt.Errorf("unexpected rendered row count: got=%d want=%d", len(renderRows), len(nodes))
@@ -217,21 +220,6 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		}
 	}
 	return rendered, nil
-}
-
-func toRenderNode(root *renderedNode) *treerender.Node {
-	if root == nil {
-		return nil
-	}
-
-	node := &treerender.Node{
-		Text:     root.NodeText,
-		Children: make([]*treerender.Node, 0, len(root.Children)),
-	}
-	for _, child := range root.Children {
-		node.Children = append(node.Children, toRenderNode(child))
-	}
-	return node
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {
