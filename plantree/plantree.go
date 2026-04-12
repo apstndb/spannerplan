@@ -104,6 +104,9 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	for _, opt := range opts {
 		opt(&o)
 	}
+	if o.wrapper == nil {
+		o.wrapper = defaultWrapCondition
+	}
 
 	root, err := buildRenderedTree(qp, nil, 0, &o)
 	if err != nil {
@@ -152,6 +155,17 @@ func maxTreePrefixWidth(style treerender.Style, level int) int {
 	return ancestorWide + edgeWide
 }
 
+func trimWrappedLinesRight(s string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " \t")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, level int, opts *options) (*renderedNode, error) {
 	if !qp.IsVisible(link) {
 		return nil, nil
@@ -167,7 +181,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		if budget < 1 {
 			budget = 1
 		}
-		nodeText = opts.wrapper.Wrap(nodeText, budget)
+		nodeText = trimWrappedLinesRight(opts.wrapper.Wrap(nodeText, budget))
 	}
 
 	var predicates []string

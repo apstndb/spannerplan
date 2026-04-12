@@ -97,7 +97,7 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 		0: {
 			ID:       0,
 			TreePart: "\n",
-			NodeText: "Distributed Union on AlbumsByAlbumTitle \n<Row>",
+			NodeText: "Distributed Union on AlbumsByAlbumTitle\n<Row>",
 		},
 		5: {
 			ID:       5,
@@ -107,7 +107,7 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 		24: {
 			ID:       24,
 			TreePart: "         +- \n         |  ",
-			NodeText: "[Input] KeyRangeAccumulator \n<Row>",
+			NodeText: "[Input] KeyRangeAccumulator\n<Row>",
 		},
 	}
 
@@ -123,6 +123,20 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 		if id != 0 && got.Text() == got.NodeText {
 			t.Fatalf("wrapped row %d Text() = NodeText, want tree prefix contribution", id)
 		}
+	}
+}
+
+func nilWrapperOption() Option {
+	return func(o *options) {
+		o.wrapper = nil
+	}
+}
+
+func TestProcessPlan_NilWrapperFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	opts := append(currentOptions(), nilWrapperOption(), WithWrapWidth(40))
+	if _, err := ProcessPlan(decodeDCAPlan(t), opts...); err != nil {
+		t.Fatalf("ProcessPlan() error = %v", err)
 	}
 }
 
