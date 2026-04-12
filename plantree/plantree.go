@@ -143,6 +143,9 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if err != nil {
 		return nil, fmt.Errorf("failed to build rendered tree: %w", err)
 	}
+	if root == nil {
+		return nil, nil
+	}
 
 	tree := newTreeprintTree(root)
 	renderedLines := splitRenderedLines(tree.StringWithOptions(o.treeprintOptions...))
@@ -264,10 +267,18 @@ func appendTreeprintChildren(parent treeprint.Tree, children []*renderedNode) {
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {
-	nodes := []*renderedNode{root}
-	for _, child := range root.Children {
-		nodes = append(nodes, collectPreorder(child)...)
+	var nodes []*renderedNode
+	var walk func(*renderedNode)
+	walk = func(n *renderedNode) {
+		if n == nil {
+			return
+		}
+		nodes = append(nodes, n)
+		for _, child := range n.Children {
+			walk(child)
+		}
 	}
+	walk(root)
 	return nodes
 }
 

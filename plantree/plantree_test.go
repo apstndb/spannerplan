@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"testing"
 
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/treeprint"
 	"github.com/google/go-cmp/cmp"
 
@@ -151,5 +152,24 @@ func TestProcessPlan_WithTreeprintOptions(t *testing.T) {
 		if got := rowByID(t, rows, id).TreePart; got != want {
 			t.Fatalf("row %d TreePart = %q, want %q", id, got, want)
 		}
+	}
+}
+
+func TestProcessPlan_InvisibleRootReturnsEmpty(t *testing.T) {
+	qp, err := spannerplan.New([]*sppb.PlanNode{{
+		Index:       0,
+		DisplayName: "Scalar Root",
+		Kind:        sppb.PlanNode_SCALAR,
+	}})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	rows, err := ProcessPlan(qp)
+	if err != nil {
+		t.Fatalf("ProcessPlan() error = %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("ProcessPlan() rows = %v, want empty", rows)
 	}
 }
