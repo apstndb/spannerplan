@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -28,9 +29,25 @@ import (
 // Main is the entry point of this command.
 // It is also used by github.com/apstndb/spannerplanviz/cmd/rendertree
 func Main() {
-	if err := run(); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+		var usageErr *usageError
+		if errors.As(err, &usageErr) {
+			os.Exit(2)
+		}
 		log.Fatal(err)
 	}
+}
+
+type usageError struct {
+	err error
+}
+
+func (e *usageError) Error() string {
+	return e.err.Error()
+}
+
+func (e *usageError) Unwrap() error {
+	return e.err
 }
 
 type tableRenderDef struct {
@@ -269,45 +286,56 @@ func parseExplainMode(s string) (explainMode, error) {
 	}
 }
 
-func run() error {
-	customFile := flag.String("custom-file", "", "")
-	mode := flag.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
-	printModeStr := flag.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
-	disallowUnknownStats := flag.Bool("disallow-unknown-stats", false, "error on unknown stats field")
-	executionMethod := flag.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
-	targetMetadata := flag.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
-	fullscan := flag.String("full-scan", "", "Deprecated alias for --known-flag.")
-	knownFlag := flag.String("known-flag", "", "Format known flags: 'label' or 'raw' (default: label)")
-	compact := flag.Bool("compact", false, "Enable compact format")
-	inlineStats := flag.Bool("inline-stats", false, "Enable inline stats")
-	wrapWidth := flag.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	flagSet := flag.NewFlagSet("rendertree", flag.ContinueOnError)
+	flagSet.SetOutput(stderr)
+
+	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file")
+	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
+	printModeStr := flagSet.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
+	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
+	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
+	targetMetadata := flagSet.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
+	fullscan := flagSet.String("full-scan", "", "Deprecated alias for --known-flag.")
+	knownFlag := flagSet.String("known-flag", "", "Format known flags: 'label' or 'raw' (default: label)")
+	compact := flagSet.Bool("compact", false, "Enable compact format")
+	inlineStats := flagSet.Bool("inline-stats", false, "Enable inline stats")
+	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 
 	var custom stringList
-	flag.Var(&custom, "custom", "")
-	flag.Parse()
+	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT] form")
+	if err := flagSet.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return &usageError{err: err}
+	}
 
 	if *fullscan != "" {
 		if *knownFlag != "" {
-			fmt.Fprintln(os.Stderr, "--full-scan and --known-flag are mutually exclusive.")
-			flag.Usage()
-			os.Exit(1)
+			const msg = "--full-scan and --known-flag are mutually exclusive"
+			_, _ = fmt.Fprintln(stderr, msg)
+			flagSet.Usage()
+			return &usageError{err: errors.New(msg)}
 		}
 
-		fmt.Fprintln(os.Stderr, "--full-scan is deprecated. you must migrate to --known-flag.")
+		_, _ = fmt.Fprintln(stderr, "--full-scan is deprecated. You must migrate to --known-flag.")
 
 		*knownFlag = *fullscan
 	}
 
 	printMode, err := parsePrintMode(*printModeStr)
 	if err != nil {
-		return err
+		_, _ = fmt.Fprintf(stderr, "Invalid value for -print flag: %v\n", err)
+		flagSet.Usage()
+		return &usageError{err: err}
 	}
 
 	parsedMode, err := parseExplainMode(*mode)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid value for -mode flag: %v\n", err)
-		flag.Usage()
-		os.Exit(1)
+		_, _ = fmt.Fprintf(stderr, "Invalid value for -mode flag: %v\n", err)
+		flagSet.Usage()
+		return &usageError{err: err}
 	}
 
 	var opts []plantree.Option
@@ -323,9 +351,9 @@ func run() error {
 	if *executionMethod != "" {
 		em, err = spannerplan.ParseExecutionMethodFormat(*executionMethod)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid value for -execution-method flag: %v.\n", err)
-			flag.Usage()
-			os.Exit(1)
+			_, _ = fmt.Fprintf(stderr, "Invalid value for -execution-method flag: %v.\n", err)
+			flagSet.Usage()
+			return &usageError{err: err}
 		}
 	}
 	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithExecutionMethodFormat(em)))
@@ -334,9 +362,9 @@ func run() error {
 	if *targetMetadata != "" {
 		tm, err = spannerplan.ParseTargetMetadataFormat(*targetMetadata)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid value for -target-metadata flag: %v.\n", err)
-			flag.Usage()
-			os.Exit(1)
+			_, _ = fmt.Fprintf(stderr, "Invalid value for -target-metadata flag: %v.\n", err)
+			flagSet.Usage()
+			return &usageError{err: err}
 		}
 	}
 	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithTargetMetadataFormat(tm)))
@@ -345,9 +373,9 @@ func run() error {
 	if *knownFlag != "" {
 		kf, err = spannerplan.ParseKnownFlagFormat(*knownFlag)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid value for -known-flag flag: %v.\n", err)
-			flag.Usage()
-			os.Exit(1)
+			_, _ = fmt.Fprintf(stderr, "Invalid value for -known-flag: %v.\n", err)
+			flagSet.Usage()
+			return &usageError{err: err}
 		}
 	}
 	opts = append(opts, plantree.WithQueryPlanOptions(spannerplan.WithKnownFlagFormat(kf)))
@@ -356,7 +384,7 @@ func run() error {
 		opts = append(opts, plantree.WithWrapWidth(*wrapWidth))
 	}
 
-	b, err := io.ReadAll(os.Stdin)
+	b, err := io.ReadAll(stdin)
 	if err != nil {
 		return err
 	}
@@ -397,7 +425,7 @@ func run() error {
 		return err
 	}
 
-	_, err = os.Stdout.WriteString(s)
+	_, err = io.WriteString(stdout, s)
 	return err
 }
 

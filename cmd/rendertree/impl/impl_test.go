@@ -1,7 +1,10 @@
 package impl
 
 import (
+	"bytes"
 	_ "embed"
+	"errors"
+	"strings"
 	"testing"
 
 	heredoc "github.com/MakeNowJust/heredoc/v2"
@@ -439,5 +442,123 @@ func TestShouldRenderWithStats(t *testing.T) {
 				t.Errorf("shouldRenderWithStats got %v, but want %v", got, tcase.want)
 			}
 		})
+	}
+}
+
+func TestRun_UsageErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantErrText string
+		postCheck   func(t *testing.T, stderr string, err error)
+	}{
+		{
+			name:        "invalid mode",
+			args:        []string{"-mode", "broken"},
+			wantErrText: "invalid input: broken",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "Invalid value for -mode flag:") {
+					t.Fatalf("stderr = %q, want invalid mode message", stderr)
+				}
+			},
+		},
+		{
+			name:        "invalid print",
+			args:        []string{"-print", "broken"},
+			wantErrText: "unknown PrintMode: broken",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "Invalid value for -print flag:") {
+					t.Fatalf("stderr = %q, want invalid print message", stderr)
+				}
+				if !strings.Contains(stderr, "Usage of rendertree:") {
+					t.Fatalf("stderr = %q, want usage output", stderr)
+				}
+			},
+		},
+		{
+			name:        "unknown flag",
+			args:        []string{"-unknown"},
+			wantErrText: "flag provided but not defined: -unknown",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "flag provided but not defined: -unknown") {
+					t.Fatalf("stderr = %q, want unknown flag message", stderr)
+				}
+				if !strings.Contains(stderr, "Usage of rendertree:") {
+					t.Fatalf("stderr = %q, want usage output", stderr)
+				}
+			},
+		},
+		{
+			name:        "full-scan and known-flag are mutually exclusive",
+			args:        []string{"-full-scan", "raw", "-known-flag", "label"},
+			wantErrText: "--full-scan and --known-flag are mutually exclusive",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "--full-scan and --known-flag are mutually exclusive") {
+					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := run(tt.args, strings.NewReader(""), &stdout, &stderr)
+			if err == nil {
+				t.Fatal("run() error = nil, want non-nil")
+			}
+
+			var usageErr *usageError
+			if !errors.As(err, &usageErr) {
+				t.Fatalf("run() error = %T, want *usageError", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantErrText) {
+				t.Fatalf("run() error = %q, want substring %q", err.Error(), tt.wantErrText)
+			}
+			if tt.postCheck != nil {
+				tt.postCheck(t, stderr.String(), err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+		})
+	}
+}
+
+func TestRun_DeprecatedFullScanAlias(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := run([]string{"-full-scan", "label", "-mode", "plan"}, bytes.NewReader(deleteYAML), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if !strings.Contains(stderr.String(), "--full-scan is deprecated. You must migrate to --known-flag.") {
+		t.Fatalf("stderr = %q, want deprecation warning", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Apply Mutations on MutationTest <Row>") {
+		t.Fatalf("stdout = %q, want rendered table output", stdout.String())
+	}
+}
+
+func TestRun_HelpReturnsNil(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := run([]string{"-h"}, strings.NewReader(""), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run() error = %v, want nil", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "-mode") {
+		t.Fatalf("stderr = %q, want usage output", stderr.String())
 	}
 }
