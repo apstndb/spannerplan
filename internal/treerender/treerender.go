@@ -109,5 +109,5 @@ func segment(hasNext bool, style Style) string {
 	if hasNext {
 		return style.EdgeLink + strings.Repeat(" ", style.IndentSize)
 	}
-	return strings.Repeat(" ", style.IndentSize+1)
+	return strings.Repeat(" ", style.IndentSize+len(style.EdgeLink))
 }

@@ -145,7 +145,8 @@ func maxTreePrefixWidth(style treerender.Style, level int) int {
 	if level <= 0 {
 		return 0
 	}
-	segWide := max(len(style.EdgeLink)+style.IndentSize, style.IndentSize+1)
+	// Matches treerender.segment width for both branches (hasNext / !hasNext).
+	segWide := len(style.EdgeLink) + style.IndentSize
 	ancestorWide := (level - 1) * segWide
 	edgeWide := max(len(style.EdgeMid), len(style.EdgeEnd)) + len(style.EdgeSeparator)
 	return ancestorWide + edgeWide
