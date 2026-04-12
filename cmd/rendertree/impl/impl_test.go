@@ -464,6 +464,20 @@ func TestRun_UsageErrors(t *testing.T) {
 			},
 		},
 		{
+			name:        "invalid print",
+			args:        []string{"-print", "broken"},
+			wantErrText: "unknown PrintMode: broken",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "Invalid value for -print flag:") {
+					t.Fatalf("stderr = %q, want invalid print message", stderr)
+				}
+				if !strings.Contains(stderr, "Usage of rendertree:") {
+					t.Fatalf("stderr = %q, want usage output", stderr)
+				}
+			},
+		},
+		{
 			name:        "unknown flag",
 			args:        []string{"-unknown"},
 			wantErrText: "flag provided but not defined: -unknown",

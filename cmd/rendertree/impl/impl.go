@@ -326,7 +326,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	printMode, err := parsePrintMode(*printModeStr)
 	if err != nil {
-		return err
+		_, _ = fmt.Fprintf(stderr, "Invalid value for -print flag: %v\n", err)
+		flagSet.Usage()
+		return &usageError{err: err}
 	}
 
 	parsedMode, err := parseExplainMode(*mode)
