@@ -1,7 +1,6 @@
 package plantree
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,6 +23,23 @@ type RowWithPredicates struct {
 	Keys           map[string][]string
 	ExecutionStats stats.ExecutionStats
 	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
+}
+
+type renderedNode struct {
+	ID             int32
+	NodeText       string
+	Predicates     []string
+	ExecutionStats stats.ExecutionStats
+	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
+	Children       []*renderedNode
+}
+
+func (n *renderedNode) String() string {
+	return n.NodeText
+}
+
+func (n *renderedNode) lineCount() int {
+	return len(strings.Split(n.NodeText, "\n"))
 }
 
 func (r RowWithPredicates) Text() string {
@@ -123,88 +139,50 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 		o.wrapper = runewidth.NewCondition()
 	}
 
-	tree := treeprint.New()
-
-	if err := buildTree(qp, tree, nil, 0, &o); err != nil {
-		return nil, fmt.Errorf("failed on buildTree, err: %w", err)
+	root, err := buildRenderedTree(qp, nil, 0, &o)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build rendered tree: %w", err)
 	}
 
+	tree := newTreeprintTree(root)
+	renderedLines := splitRenderedLines(tree.StringWithOptions(o.treeprintOptions...))
+	nodes := collectPreorder(root)
+
 	var result []RowWithPredicates
-	for _, line := range strings.Split(tree.StringWithOptions(o.treeprintOptions...), "\000\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
+	result = make([]RowWithPredicates, 0, len(nodes))
+	cursor := 0
+	for _, node := range nodes {
+		lineCount := node.lineCount()
+		if cursor+lineCount > len(renderedLines) {
+			return nil, fmt.Errorf("unexpected rendered tree line count: cursor=%d, need=%d, total=%d", cursor, lineCount, len(renderedLines))
 		}
 
-		split := strings.Split(line, "\t")
-
-		if len(split) != 3 {
-			// Handle the case where the separator is not found
-			return nil, fmt.Errorf("unexpected format, tree line = %q", line)
-		}
-
-		branchText := strings.TrimPrefix(split[0], "\n")
-		nodeTextJson := split[1]
-		var nodeText string
-		if err := json.Unmarshal([]byte(nodeTextJson), &nodeText); err != nil {
-			return nil, fmt.Errorf("unexpected JSON unmarshal error, tree line = %q", line)
-		}
-
-		protojsonText := split[2]
-
-		var link sppb.PlanNode_ChildLink
-		if err := json.Unmarshal([]byte(protojsonText), &link); err != nil {
-			return nil, fmt.Errorf("unexpected JSON unmarshal error, tree line = %q", line)
-		}
-
-		node := qp.GetNodeByIndex(link.GetChildIndex())
-
-		var predicates []string
-		for _, cl := range node.GetChildLinks() {
-			if !qp.IsPredicate(cl) {
-				continue
-			}
-
-			predicates = append(predicates, fmt.Sprintf("%s: %s",
-				cl.GetType(),
-				qp.GetNodeByChildLink(cl).GetShortRepresentation().GetDescription()))
-		}
-
-		resolvedChildLinks := lox.MapWithoutIndex(node.GetChildLinks(), qp.ResolveChildLink)
-
-		scalarChildLinks := lox.FilterWithoutIndex(resolvedChildLinks, func(item *spannerplan.ResolvedChildLink) bool {
-			return item.Child.GetKind() == sppb.PlanNode_SCALAR
-		})
-
-		childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
-			return item.ChildLink.GetType()
-		})
-
-		executionStats, err := stats.Extract(node, o.disallowUnknownStats)
+		treePart, err := deriveTreePart(renderedLines[cursor:cursor+lineCount], node.NodeText)
 		if err != nil {
 			return nil, err
 		}
+		cursor += lineCount
 
 		result = append(result, RowWithPredicates{
-			ID:             node.GetIndex(),
-			Predicates:     predicates,
-			ChildLinks:     childLinks,
-			TreePart:       branchText,
-			NodeText:       nodeText,
-			ExecutionStats: *executionStats,
+			ID:             node.ID,
+			Predicates:     node.Predicates,
+			ChildLinks:     node.ChildLinks,
+			TreePart:       treePart,
+			NodeText:       node.NodeText,
+			ExecutionStats: node.ExecutionStats,
 		})
 	}
+
+	if cursor != len(renderedLines) {
+		return nil, fmt.Errorf("unexpected rendered tree line count: consumed=%d, total=%d", cursor, len(renderedLines))
+	}
+
 	return result, nil
 }
 
-func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNode_ChildLink, level int, opts *options) error {
+func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, level int, opts *options) (*renderedNode, error) {
 	if !qp.IsVisible(link) {
-		// empty tree
-		return nil
-	}
-
-	b, err := json.Marshal(link)
-	if err != nil {
-		return fmt.Errorf("unexpected error: link can't be marshalled to JSON: %w", err)
+		return nil, nil
 	}
 
 	sep := lo.Ternary(!opts.compact, " ", "")
@@ -216,32 +194,103 @@ func buildTree(qp *spannerplan.QueryPlan, tree treeprint.Tree, link *sppb.PlanNo
 		nodeText = opts.wrapper.Wrap(nodeText, *opts.wrapWidth-level*(opts.indentSize+1)-opts.wrapper.StringWidth(sep))
 	}
 
-	newlineCount := strings.Count(nodeText, "\n")
-	nodeTextJson, err := json.Marshal(nodeText)
-	if err != nil {
-		return fmt.Errorf("unexpected error: nodeText can't be marshalled to JSON: %w", err)
+	var predicates []string
+	for _, cl := range node.GetChildLinks() {
+		if !qp.IsPredicate(cl) {
+			continue
+		}
+
+		predicates = append(predicates, fmt.Sprintf("%s: %s",
+			cl.GetType(),
+			qp.GetNodeByChildLink(cl).GetShortRepresentation().GetDescription()))
 	}
 
-	// Prefixed by tab and terminated by null character to ease to split
-	str := strings.Repeat("\n", newlineCount) + "\t" + string(nodeTextJson) + "\t" + string(b) + "\000"
+	resolvedChildLinks := lox.MapWithoutIndex(node.GetChildLinks(), qp.ResolveChildLink)
+
+	scalarChildLinks := lox.FilterWithoutIndex(resolvedChildLinks, func(item *spannerplan.ResolvedChildLink) bool {
+		return item.Child.GetKind() == sppb.PlanNode_SCALAR
+	})
+
+	childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
+		return item.ChildLink.GetType()
+	})
+
+	executionStats, err := stats.Extract(node, opts.disallowUnknownStats)
+	if err != nil {
+		return nil, err
+	}
 
 	visibleChildLinks := qp.VisibleChildLinks(node)
-
-	var branch treeprint.Tree
-	switch {
-	case node.GetIndex() == 0:
-		tree.SetValue(str)
-		branch = tree
-	case len(visibleChildLinks) > 0:
-		branch = tree.AddBranch(str)
-	default:
-		branch = tree.AddNode(str)
+	rendered := &renderedNode{
+		ID:             node.GetIndex(),
+		NodeText:       nodeText,
+		Predicates:     predicates,
+		ExecutionStats: *executionStats,
+		ChildLinks:     childLinks,
 	}
 
 	for _, child := range visibleChildLinks {
-		if err := buildTree(qp, branch, child, level+1, opts); err != nil {
-			return fmt.Errorf("unexpected error: buildTree failed on link %v, err: %w", link, err)
+		renderedChild, err := buildRenderedTree(qp, child, level+1, opts)
+		if err != nil {
+			return nil, fmt.Errorf("buildRenderedTree failed on link %v: %w", link, err)
+		}
+		if renderedChild != nil {
+			rendered.Children = append(rendered.Children, renderedChild)
 		}
 	}
-	return nil
+	return rendered, nil
+}
+
+func newTreeprintTree(root *renderedNode) treeprint.Tree {
+	tree := treeprint.New()
+	tree.SetValue(root)
+	appendTreeprintChildren(tree, root.Children)
+	return tree
+}
+
+func appendTreeprintChildren(parent treeprint.Tree, children []*renderedNode) {
+	for _, child := range children {
+		var branch treeprint.Tree
+		if len(child.Children) > 0 {
+			branch = parent.AddBranch(child)
+		} else {
+			branch = parent.AddNode(child)
+		}
+
+		if len(child.Children) > 0 {
+			appendTreeprintChildren(branch, child.Children)
+		}
+	}
+}
+
+func collectPreorder(root *renderedNode) []*renderedNode {
+	nodes := []*renderedNode{root}
+	for _, child := range root.Children {
+		nodes = append(nodes, collectPreorder(child)...)
+	}
+	return nodes
+}
+
+func splitRenderedLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+}
+
+func deriveTreePart(renderedLines []string, nodeText string) (string, error) {
+	nodeLines := strings.Split(nodeText, "\n")
+	if len(renderedLines) != len(nodeLines) {
+		return "", fmt.Errorf("unexpected rendered node line count: got=%d want=%d", len(renderedLines), len(nodeLines))
+	}
+
+	treeLines := make([]string, len(renderedLines))
+	for i, line := range renderedLines {
+		if !strings.HasSuffix(line, nodeLines[i]) {
+			return "", fmt.Errorf("unexpected rendered tree line %q for node line %q", line, nodeLines[i])
+		}
+		treeLines[i] = strings.TrimSuffix(line, nodeLines[i])
+	}
+
+	return strings.Join(treeLines, "\n"), nil
 }
