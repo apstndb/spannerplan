@@ -39,7 +39,7 @@ func (n *renderedNode) String() string {
 }
 
 func (n *renderedNode) lineCount() int {
-	return len(strings.Split(n.NodeText, "\n"))
+	return strings.Count(n.NodeText, "\n") + 1
 }
 
 func (r RowWithPredicates) Text() string {
@@ -136,7 +136,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	}
 
 	if o.wrapper == nil {
-		o.wrapper = runewidth.NewCondition()
+		o.wrapper = runewidth.DefaultCondition
 	}
 
 	root, err := buildRenderedTree(qp, nil, 0, &o)
@@ -235,7 +235,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	for _, child := range visibleChildLinks {
 		renderedChild, err := buildRenderedTree(qp, child, level+1, opts)
 		if err != nil {
-			return nil, fmt.Errorf("buildRenderedTree failed on link %v: %w", link, err)
+			return nil, fmt.Errorf("buildRenderedTree failed on child link %v: %w", child, err)
 		}
 		if renderedChild != nil {
 			rendered.Children = append(rendered.Children, renderedChild)
