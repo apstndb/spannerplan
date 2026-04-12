@@ -54,6 +54,24 @@ func TestRender_CompactStyle(t *testing.T) {
 	}
 }
 
+func TestMaxPrefixWidthForDepth_DefaultStyle(t *testing.T) {
+	style := DefaultStyle()
+	tests := []struct {
+		depth int
+		want  int
+	}{
+		{0, 0},
+		{1, 3}, // "+- "
+		{2, 6}, // "   +- "
+		{3, 9}, // "   |  +- "
+	}
+	for _, tc := range tests {
+		if got := MaxPrefixWidthForDepth(style, tc.depth); got != tc.want {
+			t.Fatalf("MaxPrefixWidthForDepth(DefaultStyle(), %d) = %d, want %d", tc.depth, got, tc.want)
+		}
+	}
+}
+
 func TestRender_CustomStyle(t *testing.T) {
 	style := Style{
 		EdgeLink:      "..",

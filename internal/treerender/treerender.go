@@ -111,3 +111,16 @@ func segment(hasNext bool, style Style) string {
 	}
 	return strings.Repeat(" ", style.IndentSize+len(style.EdgeLink))
 }
+
+// MaxPrefixWidthForDepth returns the maximum display width of the tree prefix on the first line
+// of a node at the given depth. Depth is 0 for the root, 1 for its direct children, and so on.
+// It stays in sync with segment/edge rendering used by [Render].
+func MaxPrefixWidthForDepth(style Style, depth int) int {
+	if depth <= 0 {
+		return 0
+	}
+	segWide := len(style.EdgeLink) + style.IndentSize
+	ancestorWide := (depth - 1) * segWide
+	edgeWide := max(len(style.EdgeMid), len(style.EdgeEnd)) + len(style.EdgeSeparator)
+	return ancestorWide + edgeWide
+}
