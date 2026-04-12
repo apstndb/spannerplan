@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/apstndb/treeprint"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/apstndb/spannerplan"
@@ -127,15 +126,8 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 	}
 }
 
-func TestProcessPlan_WithTreeprintOptions(t *testing.T) {
-	opts := append(currentOptions(),
-		WithTreeprintOptions(
-			treeprint.WithEdgeTypeMid("=>"),
-			treeprint.WithEdgeTypeEnd("=>"),
-			treeprint.WithEdgeTypeLink(".."),
-			treeprint.WithEdgeSeparator(""),
-		),
-	)
+func TestProcessPlan_CompactFormatting(t *testing.T) {
+	opts := append(currentOptions(), EnableCompact())
 	rows, err := ProcessPlan(decodeDCAPlan(t), opts...)
 	if err != nil {
 		t.Fatalf("ProcessPlan() error = %v", err)
@@ -143,9 +135,9 @@ func TestProcessPlan_WithTreeprintOptions(t *testing.T) {
 
 	tests := map[int32]string{
 		0: "",
-		1: "=>",
-		2: "   =>",
-		3: "   ..  =>",
+		1: "+",
+		2: " +",
+		3: " |+",
 	}
 
 	for id, want := range tests {

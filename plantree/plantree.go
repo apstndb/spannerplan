@@ -6,14 +6,16 @@ import (
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/go-tabwrap"
 	"github.com/apstndb/lox"
-	"github.com/apstndb/treeprint"
-	"github.com/mattn/go-runewidth"
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spannerplan"
+	"github.com/apstndb/spannerplan/internal/treerender"
 	"github.com/apstndb/spannerplan/stats"
 )
+
+var defaultWrapCondition = tabwrap.NewCondition()
 
 type RowWithPredicates struct {
 	ID             int32
@@ -32,10 +34,6 @@ type renderedNode struct {
 	ExecutionStats stats.ExecutionStats
 	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
 	Children       []*renderedNode
-}
-
-func (n *renderedNode) String() string {
-	return n.NodeText
 }
 
 func (n *renderedNode) lineCount() int {
@@ -63,11 +61,10 @@ func (r RowWithPredicates) FormatID() string {
 type options struct {
 	disallowUnknownStats bool
 	queryplanOptions     []spannerplan.Option
-	treeprintOptions     []treeprint.Option
+	style                treerender.Style
 	compact              bool
-	indentSize           int
 	wrapWidth            *int
-	wrapper              *runewidth.Condition
+	wrapper              *tabwrap.Condition
 }
 
 type Option func(*options)
@@ -84,59 +81,28 @@ func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 	}
 }
 
-func WithTreeprintOptions(opts ...treeprint.Option) Option {
-	return func(o *options) {
-		o.treeprintOptions = append(o.treeprintOptions, opts...)
-	}
-}
-
 func WithWrapWidth(width int) Option {
 	return func(o *options) {
 		o.wrapWidth = &width
 	}
 }
 
-func WithWrapper(wrapper *runewidth.Condition) Option {
-	return func(o *options) {
-		o.wrapper = wrapper
-	}
-}
-
 // EnableCompact enables compact node title mode.
 func EnableCompact() Option {
 	return func(o *options) {
-		o.indentSize = 0
 		o.compact = true
+		o.style = treerender.CompactStyle()
 		o.queryplanOptions = append(o.queryplanOptions, spannerplan.EnableCompact())
-		o.treeprintOptions = append(
-			o.treeprintOptions,
-			treeprint.WithEdgeTypeLink("|"),
-			treeprint.WithEdgeTypeMid("+"),
-			treeprint.WithEdgeTypeEnd("+"),
-			treeprint.WithIndentSize(0),
-			treeprint.WithEdgeSeparator(""),
-		)
 	}
 }
 
 func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredicates, err error) {
 	o := options{
-		indentSize: 2,
-		// default values to be override
-		treeprintOptions: []treeprint.Option{
-			treeprint.WithEdgeTypeLink("|"),
-			treeprint.WithEdgeTypeMid("+-"),
-			treeprint.WithEdgeTypeEnd("+-"),
-			treeprint.WithIndentSize(2),
-			treeprint.WithEdgeSeparator(" "),
-		},
+		style:   treerender.DefaultStyle(),
+		wrapper: defaultWrapCondition,
 	}
 	for _, opt := range opts {
 		opt(&o)
-	}
-
-	if o.wrapper == nil {
-		o.wrapper = runewidth.DefaultCondition
 	}
 
 	root, err := buildRenderedTree(qp, nil, 0, &o)
@@ -147,37 +113,26 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 		return nil, nil
 	}
 
-	tree := newTreeprintTree(root)
-	renderedLines := splitRenderedLines(tree.StringWithOptions(o.treeprintOptions...))
+	renderRows := treerender.Render(toRenderNode(root), o.style)
 	nodes := collectPreorder(root)
+	if len(renderRows) != len(nodes) {
+		return nil, fmt.Errorf("unexpected rendered row count: got=%d want=%d", len(renderRows), len(nodes))
+	}
 
-	var result []RowWithPredicates
-	result = make([]RowWithPredicates, 0, len(nodes))
-	cursor := 0
-	for _, node := range nodes {
-		lineCount := node.lineCount()
-		if cursor+lineCount > len(renderedLines) {
-			return nil, fmt.Errorf("unexpected rendered tree line count: cursor=%d, need=%d, total=%d", cursor, lineCount, len(renderedLines))
+	result := make([]RowWithPredicates, 0, len(nodes))
+	for i, node := range nodes {
+		row := renderRows[i]
+		if strings.Count(row.NodeText, "\n")+1 != node.lineCount() {
+			return nil, fmt.Errorf("unexpected rendered node line count for node %d", node.ID)
 		}
-
-		treePart, err := deriveTreePart(renderedLines[cursor:cursor+lineCount], node.NodeText)
-		if err != nil {
-			return nil, err
-		}
-		cursor += lineCount
-
 		result = append(result, RowWithPredicates{
 			ID:             node.ID,
 			Predicates:     node.Predicates,
 			ChildLinks:     node.ChildLinks,
-			TreePart:       treePart,
-			NodeText:       node.NodeText,
+			TreePart:       row.TreePart,
+			NodeText:       row.NodeText,
 			ExecutionStats: node.ExecutionStats,
 		})
-	}
-
-	if cursor != len(renderedLines) {
-		return nil, fmt.Errorf("unexpected rendered tree line count: consumed=%d, total=%d", cursor, len(renderedLines))
 	}
 
 	return result, nil
@@ -194,7 +149,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
-		nodeText = opts.wrapper.Wrap(nodeText, *opts.wrapWidth-level*(opts.indentSize+1)-opts.wrapper.StringWidth(sep))
+		nodeText = opts.wrapper.Wrap(nodeText, *opts.wrapWidth-level*(opts.style.IndentSize+1)-opts.wrapper.StringWidth(sep))
 	}
 
 	var predicates []string
@@ -244,26 +199,19 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	return rendered, nil
 }
 
-func newTreeprintTree(root *renderedNode) treeprint.Tree {
-	tree := treeprint.New()
-	tree.SetValue(root)
-	appendTreeprintChildren(tree, root.Children)
-	return tree
-}
-
-func appendTreeprintChildren(parent treeprint.Tree, children []*renderedNode) {
-	for _, child := range children {
-		var branch treeprint.Tree
-		if len(child.Children) > 0 {
-			branch = parent.AddBranch(child)
-		} else {
-			branch = parent.AddNode(child)
-		}
-
-		if len(child.Children) > 0 {
-			appendTreeprintChildren(branch, child.Children)
-		}
+func toRenderNode(root *renderedNode) *treerender.Node {
+	if root == nil {
+		return nil
 	}
+
+	node := &treerender.Node{
+		Text:     root.NodeText,
+		Children: make([]*treerender.Node, 0, len(root.Children)),
+	}
+	for _, child := range root.Children {
+		node.Children = append(node.Children, toRenderNode(child))
+	}
+	return node
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {
@@ -280,28 +228,4 @@ func collectPreorder(root *renderedNode) []*renderedNode {
 	}
 	walk(root)
 	return nodes
-}
-
-func splitRenderedLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
-}
-
-func deriveTreePart(renderedLines []string, nodeText string) (string, error) {
-	nodeLines := strings.Split(nodeText, "\n")
-	if len(renderedLines) != len(nodeLines) {
-		return "", fmt.Errorf("unexpected rendered node line count: got=%d want=%d", len(renderedLines), len(nodeLines))
-	}
-
-	treeLines := make([]string, len(renderedLines))
-	for i, line := range renderedLines {
-		if !strings.HasSuffix(line, nodeLines[i]) {
-			return "", fmt.Errorf("unexpected rendered tree line %q for node line %q", line, nodeLines[i])
-		}
-		treeLines[i] = strings.TrimSuffix(line, nodeLines[i])
-	}
-
-	return strings.Join(treeLines, "\n"), nil
 }
