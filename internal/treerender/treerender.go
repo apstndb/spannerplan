@@ -105,11 +105,16 @@ func continuationSegment(isLast bool, style Style) string {
 	return segment(!isLast, style)
 }
 
+func nonNegativeIndent(style Style) int {
+	return max(0, style.IndentSize)
+}
+
 func segment(hasNext bool, style Style) string {
+	ind := nonNegativeIndent(style)
 	if hasNext {
-		return style.EdgeLink + strings.Repeat(" ", style.IndentSize)
+		return style.EdgeLink + strings.Repeat(" ", ind)
 	}
-	return strings.Repeat(" ", style.IndentSize+len(style.EdgeLink))
+	return strings.Repeat(" ", ind+len(style.EdgeLink))
 }
 
 // MaxPrefixWidthForDepth returns the width of the tree prefix on the first line of a node at the
@@ -120,7 +125,8 @@ func MaxPrefixWidthForDepth(style Style, depth int) int {
 	if depth <= 0 {
 		return 0
 	}
-	segWide := len(style.EdgeLink) + style.IndentSize
+	ind := nonNegativeIndent(style)
+	segWide := len(style.EdgeLink) + ind
 	ancestorWide := (depth - 1) * segWide
 	edgeWide := max(len(style.EdgeMid), len(style.EdgeEnd)) + len(style.EdgeSeparator)
 	return ancestorWide + edgeWide

@@ -54,6 +54,12 @@ func TestRender_CompactStyle(t *testing.T) {
 	}
 }
 
+func TestRender_NegativeIndentDoesNotPanic(t *testing.T) {
+	style := DefaultStyle()
+	style.IndentSize = -1
+	_ = Render(sampleTree(), style)
+}
+
 func TestMaxPrefixWidthForDepth_DefaultStyle(t *testing.T) {
 	style := DefaultStyle()
 	tests := []struct {
