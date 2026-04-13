@@ -90,6 +90,9 @@ func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildre
 	var rows []Row
 	var walk func(node *T, ancestorPrefix string, isLast, isRoot bool)
 	walk = func(node *T, ancestorPrefix string, isLast, isRoot bool) {
+		if node == nil {
+			return
+		}
 		text := getText(node)
 		rows = append(rows, Row{
 			TreePart: strings.Join(prefixLinesFromAncestor(ancestorPrefix, text, isLast, isRoot, sw), "\n"),
@@ -101,8 +104,14 @@ func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildre
 			next = ancestorPrefix + sw.segment(!isLast)
 		}
 		children := getChildren(node)
-		for i, child := range children {
-			walk(child, next, i == len(children)-1, false)
+		var nonNil []*T
+		for _, child := range children {
+			if child != nil {
+				nonNil = append(nonNil, child)
+			}
+		}
+		for i, child := range nonNil {
+			walk(child, next, i == len(nonNil)-1, false)
 		}
 	}
 

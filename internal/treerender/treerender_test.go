@@ -49,6 +49,24 @@ func TestRenderTree_NilRoot(t *testing.T) {
 	}
 }
 
+func TestRenderTree_SkipsNilChildPointers(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "only"},
+			nil,
+		},
+	}
+	want := RenderTree(&Node{
+		Text:     "root",
+		Children: []*Node{{Text: "only"}},
+	}, DefaultStyle(), func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
+	got := RenderTree(root, DefaultStyle(), func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("nil child should be ignored (-want +got):\n%s", diff)
+	}
+}
+
 func TestRender_DefaultStyle(t *testing.T) {
 	got := Render(sampleTree(), DefaultStyle())
 	want := defaultStyleSampleExpectedRows()
