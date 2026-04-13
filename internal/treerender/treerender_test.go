@@ -24,13 +24,21 @@ func sampleTree() *Node {
 	}
 }
 
-func TestRenderTree_MatchesRender(t *testing.T) {
-	style := DefaultStyle()
-	tree := sampleTree()
-	gotRender := Render(tree, style)
-	gotTree := RenderTree(tree, style, func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
-	if diff := cmp.Diff(gotRender, gotTree); diff != "" {
-		t.Fatalf("RenderTree vs Render (-want +got):\n%s", diff)
+func defaultStyleSampleExpectedRows() []Row {
+	return []Row{
+		{TreePart: "", NodeText: "root"},
+		{TreePart: "+- \n|  ", NodeText: "left\ncont"},
+		{TreePart: "|  +- ", NodeText: "leaf-a"},
+		{TreePart: "|  +- ", NodeText: "leaf-b"},
+		{TreePart: "+- ", NodeText: "right"},
+	}
+}
+
+func TestRenderTree_DefaultStyle(t *testing.T) {
+	got := RenderTree(sampleTree(), DefaultStyle(), func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
+	want := defaultStyleSampleExpectedRows()
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTree() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -43,14 +51,7 @@ func TestRenderTree_NilRoot(t *testing.T) {
 
 func TestRender_DefaultStyle(t *testing.T) {
 	got := Render(sampleTree(), DefaultStyle())
-	want := []Row{
-		{TreePart: "", NodeText: "root"},
-		{TreePart: "+- \n|  ", NodeText: "left\ncont"},
-		{TreePart: "|  +- ", NodeText: "leaf-a"},
-		{TreePart: "|  +- ", NodeText: "leaf-b"},
-		{TreePart: "+- ", NodeText: "right"},
-	}
-
+	want := defaultStyleSampleExpectedRows()
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Render() mismatch (-want +got):\n%s", diff)
 	}
