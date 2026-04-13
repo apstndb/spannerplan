@@ -135,9 +135,8 @@ func edgeForRow(isLast bool, style Style) string {
 	return style.EdgeMid
 }
 
-// MaxPrefixWidthForDepth returns a conservative wrap budget column count for any rendered line of a
-// node at the given depth: the maximum of the first-line prefix width and continuation-line prefix
-// width (for multi-line titles), using the same strings as [RenderTree].
+// MaxPrefixWidthForDepth returns the maximum display width of the prefix added by [RenderTree]
+// for a node at the given depth. This includes the tree edges and the separator.
 func MaxPrefixWidthForDepth(style Style, depth int) int {
 	if depth <= 0 {
 		return 0
