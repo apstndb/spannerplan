@@ -97,17 +97,17 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 		0: {
 			ID:       0,
 			TreePart: "\n",
-			NodeText: "Distributed Union on AlbumsByAlbumTitle\n <Row>",
+			NodeText: "Distributed Union on AlbumsByAlbumTitle \n<Row>",
 		},
 		5: {
 			ID:       5,
 			TreePart: "   |        +- \n   |           ",
-			NodeText: "Filter Scan <Row> (seeka\nble_key_size: 1)",
+			NodeText: "Filter Scan <Row> (seekab\nle_key_size: 1)",
 		},
 		24: {
 			ID:       24,
 			TreePart: "         +- \n         |  ",
-			NodeText: "[Input] KeyRangeAccumulator\n <Row>",
+			NodeText: "[Input] KeyRangeAccumulator \n<Row>",
 		},
 	}
 

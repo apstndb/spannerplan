@@ -135,16 +135,35 @@ func edgeForRow(isLast bool, style Style) string {
 	return style.EdgeMid
 }
 
-// MaxPrefixWidthForDepth returns the maximum display width of the prefix added by [RenderTree]
-// for a node at the given depth. This includes the tree edges and the separator.
-func MaxPrefixWidthForDepth(style Style, depth int) int {
+// PrefixMetrics caches grapheme-aware display widths for a [Style] so callers that need
+// prefix width at many depths (e.g. plantree wrapping) avoid recomputing [tabwrap.StringWidth]
+// on every node.
+type PrefixMetrics struct {
+	sw styleWidths
+}
+
+// NewPrefixMetrics precomputes widths for style once; use [PrefixMetrics.MaxWidthForDepth] per level.
+func NewPrefixMetrics(style Style) PrefixMetrics {
+	return PrefixMetrics{sw: newStyleWidths(style)}
+}
+
+// MaxWidthForDepth returns the maximum display width of the prefix added by [RenderTree] for a node
+// at the given depth. This includes the tree edges and the separator after the edge.
+func (p PrefixMetrics) MaxWidthForDepth(depth int) int {
 	if depth <= 0 {
 		return 0
 	}
-	sw := newStyleWidths(style)
+	sw := p.sw
 	segWide := sw.wLink + sw.indent
 	ancestorWide := (depth - 1) * segWide
 	firstLine := ancestorWide + max(sw.wMid, sw.wEnd) + sw.wSep
 	contLine := ancestorWide + segWide
 	return max(firstLine, contLine)
+}
+
+// MaxPrefixWidthForDepth returns the maximum display width of the prefix added by [RenderTree]
+// for a node at the given depth. This includes the tree edges and the separator.
+// For hot paths, prefer [NewPrefixMetrics] and [PrefixMetrics.MaxWidthForDepth].
+func MaxPrefixWidthForDepth(style Style, depth int) int {
+	return NewPrefixMetrics(style).MaxWidthForDepth(depth)
 }

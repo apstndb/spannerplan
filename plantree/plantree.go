@@ -62,6 +62,7 @@ type options struct {
 	disallowUnknownStats bool
 	queryplanOptions     []spannerplan.Option
 	style                treerender.Style
+	prefixMetrics        treerender.PrefixMetrics
 	compact              bool
 	wrapWidth            *int
 	wrapper              *tabwrap.Condition
@@ -107,6 +108,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapper == nil {
 		o.wrapper = defaultWrapCondition
 	}
+	o.prefixMetrics = treerender.NewPrefixMetrics(o.style)
 
 	root, err := buildRenderedTree(qp, nil, 0, &o)
 	if err != nil {
@@ -157,7 +159,9 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
-		budget := *opts.wrapWidth - treerender.MaxPrefixWidthForDepth(opts.style, level) - opts.wrapper.StringWidth(sep)
+		// Prefix width matches RenderTree (includes EdgeSeparator). Do not subtract sep again:
+		// it is either absent from nodeText (empty linkType) or already inside the wrapped string.
+		budget := *opts.wrapWidth - opts.prefixMetrics.MaxWidthForDepth(level)
 		if budget < 1 {
 			budget = 1
 		}
