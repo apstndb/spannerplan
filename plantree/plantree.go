@@ -157,7 +157,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
-		budget := *opts.wrapWidth - level*(opts.style.IndentSize+1) - opts.wrapper.StringWidth(sep)
+		budget := *opts.wrapWidth - treerender.MaxPrefixWidthForDepth(opts.style, level) - opts.wrapper.StringWidth(sep)
 		if budget < 1 {
 			budget = 1
 		}
