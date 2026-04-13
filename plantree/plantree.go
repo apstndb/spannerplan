@@ -82,6 +82,8 @@ func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 	}
 }
 
+// WithWrapWidth sets the maximum line width for node title text after the tree prefix.
+// Values less than or equal to 0 disable wrapping (consistent with the rendertree CLI default of 0).
 func WithWrapWidth(width int) Option {
 	return func(o *options) {
 		o.wrapWidth = &width
@@ -107,6 +109,9 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	}
 	if o.wrapper == nil {
 		o.wrapper = defaultWrapCondition
+	}
+	if o.wrapWidth != nil && *o.wrapWidth < 0 {
+		return nil, fmt.Errorf("wrap width cannot be negative: %d", *o.wrapWidth)
 	}
 	o.prefixMetrics = treerender.NewPrefixMetrics(o.style)
 
@@ -158,7 +163,8 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	node := qp.GetNodeByChildLink(link)
 	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
-	if opts.wrapWidth != nil {
+	// Only wrap when width is set and positive; 0 matches CLI/reference "no wrapping".
+	if opts.wrapWidth != nil && *opts.wrapWidth > 0 {
 		// Prefix width matches RenderTree (includes EdgeSeparator). Do not subtract sep again:
 		// it is either absent from nodeText (empty linkType) or already inside the wrapped string.
 		budget := *opts.wrapWidth - opts.prefixMetrics.MaxWidthForDepth(level)

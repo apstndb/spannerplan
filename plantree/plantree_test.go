@@ -152,6 +152,39 @@ func TestProcessPlan_TinyWrapWidthDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestProcessPlan_WrapWidthZeroDisablesWrapping(t *testing.T) {
+	t.Parallel()
+	plan := decodeDCAPlan(t)
+	base, err := ProcessPlan(plan, currentOptions()...)
+	if err != nil {
+		t.Fatalf("ProcessPlan() error = %v", err)
+	}
+	withZero, err := ProcessPlan(plan, append(currentOptions(), WithWrapWidth(0))...)
+	if err != nil {
+		t.Fatalf("ProcessPlan(WithWrapWidth(0)) error = %v", err)
+	}
+	if len(base) != len(withZero) {
+		t.Fatalf("row count: base=%d WithWrapWidth(0)=%d", len(base), len(withZero))
+	}
+	for i := range base {
+		if base[i].ID != withZero[i].ID {
+			t.Fatalf("row %d ID: base=%d zero=%d", i, base[i].ID, withZero[i].ID)
+		}
+		if base[i].TreePart != withZero[i].TreePart || base[i].NodeText != withZero[i].NodeText {
+			t.Fatalf("row %d (id=%d): wrap 0 should match no-wrap TreePart/NodeText\nbase: TreePart=%q NodeText=%q\nzero: TreePart=%q NodeText=%q",
+				i, base[i].ID, base[i].TreePart, base[i].NodeText, withZero[i].TreePart, withZero[i].NodeText)
+		}
+	}
+}
+
+func TestProcessPlan_NegativeWrapWidthErrors(t *testing.T) {
+	t.Parallel()
+	_, err := ProcessPlan(decodeDCAPlan(t), append(currentOptions(), WithWrapWidth(-1))...)
+	if err == nil {
+		t.Fatal("ProcessPlan(WithWrapWidth(-1)) error = nil, want non-nil")
+	}
+}
+
 func TestProcessPlan_CompactFormatting(t *testing.T) {
 	opts := append(currentOptions(), EnableCompact())
 	rows, err := ProcessPlan(decodeDCAPlan(t), opts...)
