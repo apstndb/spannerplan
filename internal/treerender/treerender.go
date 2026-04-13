@@ -1,7 +1,6 @@
 package treerender
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/apstndb/go-tabwrap"
@@ -44,6 +43,38 @@ func CompactStyle() Style {
 	}
 }
 
+// styleWidths holds display widths and indent for a [Style], computed once per render.
+type styleWidths struct {
+	style  Style
+	indent int
+	wLink  int
+	wMid   int
+	wEnd   int
+	wSep   int
+}
+
+func newStyleWidths(style Style) styleWidths {
+	return styleWidths{
+		style:  style,
+		indent: max(0, style.IndentSize),
+		wLink:  tabwrap.StringWidth(style.EdgeLink),
+		wMid:   tabwrap.StringWidth(style.EdgeMid),
+		wEnd:   tabwrap.StringWidth(style.EdgeEnd),
+		wSep:   tabwrap.StringWidth(style.EdgeSeparator),
+	}
+}
+
+func (sw styleWidths) segment(hasNext bool) string {
+	if hasNext {
+		return sw.style.EdgeLink + strings.Repeat(" ", sw.indent)
+	}
+	return strings.Repeat(" ", sw.indent+sw.wLink)
+}
+
+func (sw styleWidths) continuationSegment(isLast bool) string {
+	return sw.segment(!isLast)
+}
+
 // Render renders a [Node] tree. It is equivalent to [RenderTree] on the same structure.
 func Render(root *Node, style Style) []Row {
 	return RenderTree(root, style, func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
@@ -55,53 +86,46 @@ func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildre
 		return nil
 	}
 
+	sw := newStyleWidths(style)
 	var rows []Row
-	var walk func(node *T, ancestorHasNext []bool, isLast, isRoot bool)
-	walk = func(node *T, ancestorHasNext []bool, isLast, isRoot bool) {
+	var walk func(node *T, ancestorPrefix string, isLast, isRoot bool)
+	walk = func(node *T, ancestorPrefix string, isLast, isRoot bool) {
 		text := getText(node)
 		rows = append(rows, Row{
-			TreePart: strings.Join(prefixLines(text, ancestorHasNext, isLast, isRoot, style), "\n"),
+			TreePart: strings.Join(prefixLinesFromAncestor(ancestorPrefix, text, isLast, isRoot, sw), "\n"),
 			NodeText: text,
 		})
 
-		childAncestors := slices.Clone(ancestorHasNext)
+		next := ancestorPrefix
 		if !isRoot {
-			childAncestors = append(childAncestors, !isLast)
+			next = ancestorPrefix + sw.segment(!isLast)
 		}
 		children := getChildren(node)
 		for i, child := range children {
-			walk(child, childAncestors, i == len(children)-1, false)
+			walk(child, next, i == len(children)-1, false)
 		}
 	}
 
-	walk(root, nil, true, true)
+	walk(root, "", true, true)
 	return rows
 }
 
-func prefixLines(text string, ancestorHasNext []bool, isLast, isRoot bool, style Style) []string {
+func prefixLinesFromAncestor(ancestorPrefix, text string, isLast, isRoot bool, sw styleWidths) []string {
 	lines := strings.Split(text, "\n")
 	prefixes := make([]string, len(lines))
 	if isRoot {
 		return prefixes
 	}
 
-	ancestorPrefix := renderAncestorPrefix(ancestorHasNext, style)
-	prefixes[0] = ancestorPrefix + edgeForRow(isLast, style) + style.EdgeSeparator
+	edge := edgeForRow(isLast, sw.style)
+	prefixes[0] = ancestorPrefix + edge + sw.style.EdgeSeparator
 
-	continuation := ancestorPrefix + continuationSegment(isLast, style)
+	cont := ancestorPrefix + sw.continuationSegment(isLast)
 	for i := 1; i < len(prefixes); i++ {
-		prefixes[i] = continuation
+		prefixes[i] = cont
 	}
 
 	return prefixes
-}
-
-func renderAncestorPrefix(ancestorHasNext []bool, style Style) string {
-	var sb strings.Builder
-	for _, hasNext := range ancestorHasNext {
-		sb.WriteString(segment(hasNext, style))
-	}
-	return sb.String()
 }
 
 func edgeForRow(isLast bool, style Style) string {
@@ -111,34 +135,17 @@ func edgeForRow(isLast bool, style Style) string {
 	return style.EdgeMid
 }
 
-func continuationSegment(isLast bool, style Style) string {
-	return segment(!isLast, style)
-}
-
-func nonNegativeIndent(style Style) int {
-	return max(0, style.IndentSize)
-}
-
-func segment(hasNext bool, style Style) string {
-	ind := nonNegativeIndent(style)
-	wLink := tabwrap.StringWidth(style.EdgeLink)
-	if hasNext {
-		return style.EdgeLink + strings.Repeat(" ", ind)
-	}
-	return strings.Repeat(" ", ind+wLink)
-}
-
-// MaxPrefixWidthForDepth returns the width of the tree prefix on the first line of a node at the
-// given depth, measured in terminal display columns (grapheme-aware via [tabwrap.StringWidth]).
-// Depth is 0 for the root, 1 for its direct children, and so on. It matches [segment] and edge
-// strings used by [RenderTree].
+// MaxPrefixWidthForDepth returns a conservative wrap budget column count for any rendered line of a
+// node at the given depth: the maximum of the first-line prefix width and continuation-line prefix
+// width (for multi-line titles), using the same strings as [RenderTree].
 func MaxPrefixWidthForDepth(style Style, depth int) int {
 	if depth <= 0 {
 		return 0
 	}
-	ind := nonNegativeIndent(style)
-	segWide := tabwrap.StringWidth(style.EdgeLink) + ind
+	sw := newStyleWidths(style)
+	segWide := sw.wLink + sw.indent
 	ancestorWide := (depth - 1) * segWide
-	edgeWide := max(tabwrap.StringWidth(style.EdgeMid), tabwrap.StringWidth(style.EdgeEnd)) + tabwrap.StringWidth(style.EdgeSeparator)
-	return ancestorWide + edgeWide
+	firstLine := ancestorWide + max(sw.wMid, sw.wEnd) + sw.wSep
+	contLine := ancestorWide + segWide
+	return max(firstLine, contLine)
 }

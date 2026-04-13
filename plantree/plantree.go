@@ -147,14 +147,35 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 }
 
 func trimWrappedLinesRight(s string) string {
-	if s == "" {
+	if len(s) == 0 {
 		return s
 	}
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " \t")
+	var b strings.Builder
+	b.Grow(len(s))
+	start := 0
+	for {
+		rel := strings.IndexByte(s[start:], '\n')
+		var line string
+		if rel < 0 {
+			line = s[start:]
+		} else {
+			line = s[start : start+rel]
+		}
+		for len(line) > 0 {
+			c := line[len(line)-1]
+			if c != ' ' && c != '\t' {
+				break
+			}
+			line = line[:len(line)-1]
+		}
+		b.WriteString(line)
+		if rel < 0 {
+			break
+		}
+		b.WriteByte('\n')
+		start += rel + 1
 	}
-	return strings.Join(lines, "\n")
+	return b.String()
 }
 
 func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, level int, opts *options) (*renderedNode, error) {
