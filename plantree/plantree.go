@@ -146,38 +146,6 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	return result, nil
 }
 
-func trimWrappedLinesRight(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	start := 0
-	for {
-		rel := strings.IndexByte(s[start:], '\n')
-		var line string
-		if rel < 0 {
-			line = s[start:]
-		} else {
-			line = s[start : start+rel]
-		}
-		for len(line) > 0 {
-			c := line[len(line)-1]
-			if c != ' ' && c != '\t' {
-				break
-			}
-			line = line[:len(line)-1]
-		}
-		b.WriteString(line)
-		if rel < 0 {
-			break
-		}
-		b.WriteByte('\n')
-		start += rel + 1
-	}
-	return b.String()
-}
-
 func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, level int, opts *options) (*renderedNode, error) {
 	if !qp.IsVisible(link) {
 		return nil, nil
@@ -189,11 +157,11 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	linkType := qp.GetLinkType(link)
 	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 	if opts.wrapWidth != nil {
-		budget := *opts.wrapWidth - treerender.MaxPrefixWidthForDepth(opts.style, level)
+		budget := *opts.wrapWidth - level*(opts.style.IndentSize+1) - opts.wrapper.StringWidth(sep)
 		if budget < 1 {
 			budget = 1
 		}
-		nodeText = trimWrappedLinesRight(opts.wrapper.Wrap(nodeText, budget))
+		nodeText = opts.wrapper.Wrap(nodeText, budget)
 	}
 
 	var predicates []string

@@ -149,28 +149,28 @@ Predicates(identified by ID):
 			renderDef: withStatsToRenderDefMap[false],
 			opts:      sliceOf(plantree.WithWrapWidth(50)),
 			want: heredoc.Doc(`
-+-----+----------------------------------------------------+
-| ID  | Operator                                           |
-+-----+----------------------------------------------------+
-|   0 | Distributed Union on AlbumsByAlbumTitle <Row>      |
-|  *1 | +- Distributed Cross Apply <Row>                   |
-|   2 |    +- [Input] Create Batch <Row>                   |
-|   3 |    |  +- Local Distributed Union <Row>             |
-|   4 |    |     +- Compute Struct <Row>                   |
-|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <R |
-|     |    |           ow> (Full scan, scan_method: Automa |
-|     |    |           tic)                                |
-|  11 |    +- [Map] Serialize Result <Row>                 |
-|  12 |       +- Cross Apply <Row>                         |
-|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_ |
-|     |          |  method: Row)                           |
-|  16 |          +- [Map] Local Distributed Union <Row>    |
-| *17 |             +- Filter Scan <Row> (seekable_key_siz |
-|     |                e: 0)                               |
-|  18 |                +- Index Scan on SongsBySongGenre < |
-|     |                   Row> (Full scan, scan_method: Ro |
-|     |                   w)                               |
-+-----+----------------------------------------------------+
++-----+---------------------------------------------------+
+| ID  | Operator                                          |
++-----+---------------------------------------------------+
+|   0 | Distributed Union on AlbumsByAlbumTitle <Row>     |
+|  *1 | +- Distributed Cross Apply <Row>                  |
+|   2 |    +- [Input] Create Batch <Row>                  |
+|   3 |    |  +- Local Distributed Union <Row>            |
+|   4 |    |     +- Compute Struct <Row>                  |
+|   5 |    |        +- Index Scan on AlbumsByAlbumTitle < |
+|     |    |           Row> (Full scan, scan_method: Auto |
+|     |    |           matic)                             |
+|  11 |    +- [Map] Serialize Result <Row>                |
+|  12 |       +- Cross Apply <Row>                        |
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan |
+|     |          |  _method: Row)                         |
+|  16 |          +- [Map] Local Distributed Union <Row>   |
+| *17 |             +- Filter Scan <Row> (seekable_key_si |
+|     |                ze: 0)                             |
+|  18 |                +- Index Scan on SongsBySongGenre  |
+|     |                   <Row> (Full scan, scan_method:  |
+|     |                   Row)                            |
++-----+---------------------------------------------------+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -290,27 +290,27 @@ Predicates(identified by ID):
 			inline: true,
 			opts:   sliceOf(plantree.WithWrapWidth(60)),
 			want: heredoc.Doc(`
-+-----+--------------------------------------------------------------+------+
-| ID  | Operator                                                     | Rows |
-+-----+--------------------------------------------------------------+------+
-|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                |   33 |
-|  *1 | +- Distributed Cross Apply <Row>                             |   33 |
-|   2 |    +- [Input] Create Batch <Row>                             |      |
-|   3 |    |  +- Local Distributed Union <Row>                       |    7 |
-|   4 |    |     +- Compute Struct <Row>                             |    7 |
-|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full  |    7 |
-|     |    |           scan, scan_method: Automatic, Scanned=7, Filt |      |
-|     |    |           ered=0)                                       |      |
-|  11 |    +- [Map] Serialize Result <Row>                           |   33 |
-|  12 |       +- Cross Apply <Row>                                   |   33 |
-|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Ro |    7 |
-|     |          |  w)                                               |      |
-|  16 |          +- [Map] Local Distributed Union <Row>              |   33 |
-| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)      |      |
-|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full |   33 |
-|     |                    scan, scan_method: Row, Scanned=63, Filte |      |
-|     |                   red=30)                                    |      |
-+-----+--------------------------------------------------------------+------+
++-----+-------------------------------------------------------------+------+
+| ID  | Operator                                                    | Rows |
++-----+-------------------------------------------------------------+------+
+|   0 | Distributed Union on AlbumsByAlbumTitle <Row>               |   33 |
+|  *1 | +- Distributed Cross Apply <Row>                            |   33 |
+|   2 |    +- [Input] Create Batch <Row>                            |      |
+|   3 |    |  +- Local Distributed Union <Row>                      |    7 |
+|   4 |    |     +- Compute Struct <Row>                            |    7 |
+|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full |    7 |
+|     |    |            scan, scan_method: Automatic, Scanned=7, Fi |      |
+|     |    |           ltered=0)                                    |      |
+|  11 |    +- [Map] Serialize Result <Row>                          |   33 |
+|  12 |       +- Cross Apply <Row>                                  |   33 |
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: R |    7 |
+|     |          |  ow)                                             |      |
+|  16 |          +- [Map] Local Distributed Union <Row>             |   33 |
+| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)     |      |
+|  18 |                +- Index Scan on SongsBySongGenre <Row> (Ful |   33 |
+|     |                   l scan, scan_method: Row, Scanned=63, Fil |      |
+|     |                   tered=30)                                 |      |
++-----+-------------------------------------------------------------+------+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)

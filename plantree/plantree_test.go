@@ -97,17 +97,17 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 		0: {
 			ID:       0,
 			TreePart: "\n",
-			NodeText: "Distributed Union on AlbumsByAlbumTitle\n<Row>",
+			NodeText: "Distributed Union on AlbumsByAlbumTitle\n <Row>",
 		},
 		5: {
 			ID:       5,
 			TreePart: "   |        +- \n   |           ",
-			NodeText: "Filter Scan <Row> (seekab\nle_key_size: 1)",
+			NodeText: "Filter Scan <Row> (seeka\nble_key_size: 1)",
 		},
 		24: {
 			ID:       24,
 			TreePart: "         +- \n         |  ",
-			NodeText: "[Input] KeyRangeAccumulator\n<Row>",
+			NodeText: "[Input] KeyRangeAccumulator\n <Row>",
 		},
 	}
 
@@ -137,6 +137,18 @@ func TestProcessPlan_NilWrapperFallsBackToDefault(t *testing.T) {
 	opts := append(currentOptions(), nilWrapperOption(), WithWrapWidth(40))
 	if _, err := ProcessPlan(decodeDCAPlan(t), opts...); err != nil {
 		t.Fatalf("ProcessPlan() error = %v", err)
+	}
+}
+
+func TestProcessPlan_TinyWrapWidthDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	rows, err := ProcessPlan(decodeDCAPlan(t), append(currentOptions(), WithWrapWidth(1))...)
+	if err != nil {
+		t.Fatalf("ProcessPlan() error = %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("ProcessPlan() rows = %v, want non-empty", rows)
 	}
 }
 
