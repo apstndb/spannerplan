@@ -45,30 +45,36 @@ func CompactStyle() Style {
 
 // styleWidths holds display widths and indent for a [Style], computed once per render.
 type styleWidths struct {
-	style  Style
-	indent int
-	wLink  int
-	wMid   int
-	wEnd   int
-	wSep   int
+	style      Style
+	indent     int
+	wLink      int
+	wMid       int
+	wEnd       int
+	wSep       int
+	segHasNext string
+	segNoNext  string
 }
 
 func newStyleWidths(style Style) styleWidths {
+	indent := max(0, style.IndentSize)
+	wLink := tabwrap.StringWidth(style.EdgeLink)
 	return styleWidths{
-		style:  style,
-		indent: max(0, style.IndentSize),
-		wLink:  tabwrap.StringWidth(style.EdgeLink),
-		wMid:   tabwrap.StringWidth(style.EdgeMid),
-		wEnd:   tabwrap.StringWidth(style.EdgeEnd),
-		wSep:   tabwrap.StringWidth(style.EdgeSeparator),
+		style:      style,
+		indent:     indent,
+		wLink:      wLink,
+		wMid:       tabwrap.StringWidth(style.EdgeMid),
+		wEnd:       tabwrap.StringWidth(style.EdgeEnd),
+		wSep:       tabwrap.StringWidth(style.EdgeSeparator),
+		segHasNext: style.EdgeLink + strings.Repeat(" ", indent),
+		segNoNext:  strings.Repeat(" ", indent+wLink),
 	}
 }
 
 func (sw styleWidths) segment(hasNext bool) string {
 	if hasNext {
-		return sw.style.EdgeLink + strings.Repeat(" ", sw.indent)
+		return sw.segHasNext
 	}
-	return strings.Repeat(" ", sw.indent+sw.wLink)
+	return sw.segNoNext
 }
 
 func (sw styleWidths) continuationSegment(isLast bool) string {
@@ -104,14 +110,18 @@ func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildre
 			next = ancestorPrefix + sw.segment(!isLast)
 		}
 		children := getChildren(node)
-		var nonNil []*T
-		for _, child := range children {
-			if child != nil {
-				nonNil = append(nonNil, child)
+		lastIdx := -1
+		for i := len(children) - 1; i >= 0; i-- {
+			if children[i] != nil {
+				lastIdx = i
+				break
 			}
 		}
-		for i, child := range nonNil {
-			walk(child, next, i == len(nonNil)-1, false)
+		for i, child := range children {
+			if child == nil {
+				continue
+			}
+			walk(child, next, i == lastIdx, false)
 		}
 	}
 
