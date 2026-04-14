@@ -83,7 +83,8 @@ func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 }
 
 // WithWrapWidth sets the maximum line width for node title text after the tree prefix.
-// Values less than or equal to 0 disable wrapping (consistent with the rendertree CLI default of 0).
+// A value of 0 disables wrapping (consistent with the rendertree CLI default of 0).
+// Negative values make [ProcessPlan] return an error.
 func WithWrapWidth(width int) Option {
 	return func(o *options) {
 		o.wrapWidth = &width
@@ -171,7 +172,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		if budget < 1 {
 			budget = 1
 		}
-		nodeText = opts.wrapper.Wrap(nodeText, budget)
+		nodeText = trimWrappedLinesRight(opts.wrapper.Wrap(nodeText, budget))
 	}
 
 	var predicates []string
@@ -219,6 +220,19 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		}
 	}
 	return rendered, nil
+}
+
+// trimWrappedLinesRight removes trailing spaces and tabs at each line break from tabwrap output
+// so wrapped node text is stable for diffs and terminal display.
+func trimWrappedLinesRight(s string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " \t")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {
