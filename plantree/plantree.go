@@ -15,7 +15,13 @@ import (
 	"github.com/apstndb/spannerplan/stats"
 )
 
-var defaultWrapCondition = tabwrap.NewCondition()
+var defaultWrapCondition = newDefaultWrapCondition()
+
+func newDefaultWrapCondition() *tabwrap.Condition {
+	c := tabwrap.NewCondition()
+	c.TrimTrailingSpace = true // go-tabwrap v0.1.3+: stable diffs / CLI output
+	return c
+}
 
 type RowWithPredicates struct {
 	ID             int32
@@ -172,7 +178,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		if budget < 1 {
 			budget = 1
 		}
-		nodeText = trimWrappedLinesRight(opts.wrapper.Wrap(nodeText, budget))
+		nodeText = opts.wrapper.Wrap(nodeText, budget)
 	}
 
 	var predicates []string
@@ -220,19 +226,6 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		}
 	}
 	return rendered, nil
-}
-
-// trimWrappedLinesRight removes trailing spaces and tabs at each line break from tabwrap output
-// so wrapped node text is stable for diffs and terminal display.
-func trimWrappedLinesRight(s string) string {
-	if s == "" {
-		return s
-	}
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " \t")
-	}
-	return strings.Join(lines, "\n")
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {
