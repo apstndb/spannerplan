@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/mattn/go-runewidth"
+	"github.com/apstndb/go-tabwrap"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/renderer"
 	"github.com/olekukonko/tablewriter/tw"
@@ -119,7 +119,7 @@ func renderPredicatesPart(rendered []plantree.RowWithPredicates) string {
 			}
 
 			// +1 is for the colon after ID
-			prefix := runewidth.FillLeft(idPartStr, maxIDLength+1)
+			prefix := tabwrap.FillLeft(idPartStr, maxIDLength+1)
 			_, _ = fmt.Fprintf(&sb, " %s %s\n", prefix, predicate)
 		}
 	}
