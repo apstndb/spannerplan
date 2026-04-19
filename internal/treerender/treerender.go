@@ -12,7 +12,8 @@ type Node struct {
 }
 
 type Row struct {
-	TreePart string
+	// TreePart holds one tree-prefix string per line of NodeText (same length as strings.Split(NodeText, "\n")).
+	TreePart []string
 	NodeText string
 }
 
@@ -101,7 +102,7 @@ func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildre
 		}
 		text := getText(node)
 		rows = append(rows, Row{
-			TreePart: strings.Join(prefixLinesFromAncestor(ancestorPrefix, text, isLast, isRoot, sw), "\n"),
+			TreePart: prefixLinesFromAncestor(ancestorPrefix, text, isLast, isRoot, sw),
 			NodeText: text,
 		})
 

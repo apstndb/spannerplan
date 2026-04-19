@@ -25,7 +25,7 @@ func newDefaultWrapCondition() *tabwrap.Condition {
 
 type RowWithPredicates struct {
 	ID             int32
-	TreePart       string
+	TreePart       []string // one tree-prefix string per line of NodeText
 	NodeText       string
 	Predicates     []string
 	Keys           map[string][]string
@@ -47,12 +47,11 @@ func (n *renderedNode) lineCount() int {
 }
 
 func (r RowWithPredicates) Text() string {
-	treeLines := strings.Split(r.TreePart, "\n")
 	nodeLines := strings.Split(r.NodeText, "\n")
 	var sb strings.Builder
 	for i, line := range nodeLines {
-		if len(treeLines) > i {
-			sb.WriteString(strings.TrimSuffix(treeLines[i], "\n"))
+		if i < len(r.TreePart) {
+			sb.WriteString(strings.TrimSuffix(r.TreePart[i], "\n"))
 		}
 		sb.WriteString(line)
 		sb.WriteRune('\n')
@@ -88,7 +87,8 @@ func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 	}
 }
 
-// WithWrapWidth sets the maximum line width for node title text after the tree prefix.
+// WithWrapWidth sets the maximum total rendered line width, including the tree prefix.
+// Node title text is wrapped to the remaining width after accounting for the tree prefix.
 // A value of 0 disables wrapping (consistent with the rendertree CLI default of 0).
 // Negative values make [ProcessPlan] return an error.
 func WithWrapWidth(width int) Option {
