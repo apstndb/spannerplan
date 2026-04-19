@@ -24,7 +24,10 @@ func newDefaultWrapCondition() *tabwrap.Condition {
 }
 
 type RowWithPredicates struct {
-	ID             int32
+	ID int32
+	// TreePart stores the ASCII tree prefix as newline-joined lines (one per line of NodeText).
+	// Prefer [RowWithPredicates.TreePartString] or [RowWithPredicates.TreePartLines] instead of
+	// reading this field directly, so callers stay decoupled if the storage shape changes.
 	TreePart       string
 	NodeText       string
 	Predicates     []string
@@ -47,7 +50,7 @@ func (n *renderedNode) lineCount() int {
 }
 
 func (r RowWithPredicates) Text() string {
-	treeLines := strings.Split(r.TreePart, "\n")
+	treeLines := r.TreePartLines()
 	nodeLines := strings.Split(r.NodeText, "\n")
 	var sb strings.Builder
 	for i, line := range nodeLines {
@@ -60,10 +63,15 @@ func (r RowWithPredicates) Text() string {
 	return strings.TrimSuffix(sb.String(), "\n")
 }
 
-// TreePartLines returns the tree prefix as one string per line of [RowWithPredicates.NodeText]
-// (equivalent to strings.Split(r.TreePart, "\n") when the prefix has the expected shape).
+// TreePartString returns the full tree-prefix string (newline-separated lines), matching the
+// historical field encoding. Use this when you need a single string; use [RowWithPredicates.TreePartLines] for per-line access.
+func (r RowWithPredicates) TreePartString() string {
+	return r.TreePart
+}
+
+// TreePartLines returns the tree prefix as one string per line of [RowWithPredicates.NodeText].
 func (r RowWithPredicates) TreePartLines() []string {
-	return strings.Split(r.TreePart, "\n")
+	return strings.Split(r.TreePartString(), "\n")
 }
 
 func (r RowWithPredicates) FormatID() string {

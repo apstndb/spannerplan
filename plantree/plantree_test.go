@@ -77,7 +77,7 @@ func TestProcessPlan_CurrentFormatting(t *testing.T) {
 		got := rowByID(t, rows, id)
 		if diff := cmp.Diff(want, RowWithPredicates{
 			ID:         got.ID,
-			TreePart:   got.TreePart,
+			TreePart:   got.TreePartString(),
 			NodeText:   got.NodeText,
 			Predicates: got.Predicates,
 		}); diff != "" {
@@ -115,7 +115,7 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 		got := rowByID(t, rows, id)
 		if diff := cmp.Diff(want, RowWithPredicates{
 			ID:       got.ID,
-			TreePart: got.TreePart,
+			TreePart: got.TreePartString(),
 			NodeText: got.NodeText,
 		}); diff != "" {
 			t.Fatalf("wrapped row %d mismatch (-want +got):\n%s", id, diff)
@@ -170,7 +170,7 @@ func TestProcessPlan_WrapWidthZeroDisablesWrapping(t *testing.T) {
 		if base[i].ID != withZero[i].ID {
 			t.Fatalf("row %d ID: base=%d zero=%d", i, base[i].ID, withZero[i].ID)
 		}
-		if diff := cmp.Diff(base[i].TreePart, withZero[i].TreePart); diff != "" {
+		if diff := cmp.Diff(base[i].TreePartString(), withZero[i].TreePartString()); diff != "" {
 			t.Fatalf("row %d (id=%d) TreePart mismatch (-want +got):\n%s", i, base[i].ID, diff)
 		}
 		if base[i].NodeText != withZero[i].NodeText {
@@ -202,9 +202,20 @@ func TestProcessPlan_CompactFormatting(t *testing.T) {
 	}
 
 	for id, want := range tests {
-		if got := rowByID(t, rows, id).TreePart; got != want {
+		if got := rowByID(t, rows, id).TreePartString(); got != want {
 			t.Fatalf("row %d TreePart = %q, want %q", id, got, want)
 		}
+	}
+}
+
+func TestRowWithPredicates_TreePartAccessors(t *testing.T) {
+	t.Parallel()
+	r := RowWithPredicates{TreePart: "  +- \n|  ", NodeText: "a\nb"}
+	if got, want := r.TreePartString(), r.TreePart; got != want {
+		t.Fatalf("TreePartString = %q, want %q", got, want)
+	}
+	if diff := cmp.Diff([]string{"  +- ", "|  "}, r.TreePartLines()); diff != "" {
+		t.Fatalf("TreePartLines (-want +got):\n%s", diff)
 	}
 }
 
