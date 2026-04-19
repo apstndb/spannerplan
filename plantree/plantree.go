@@ -127,6 +127,9 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 		wrapper: defaultWrapCondition,
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(&o)
 	}
 	if o.wrapper == nil {

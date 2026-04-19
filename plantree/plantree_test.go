@@ -219,6 +219,19 @@ func TestRowWithPredicates_TreePartAccessors(t *testing.T) {
 	}
 }
 
+func TestProcessPlan_NilOptionSkipped(t *testing.T) {
+	t.Parallel()
+	plan := decodeDCAPlan(t)
+	var nilOpt Option
+	if _, err := ProcessPlan(plan, nilOpt); err != nil {
+		t.Fatalf("ProcessPlan(nil Option) = %v", err)
+	}
+	opts := []Option{nil, nil}
+	if _, err := ProcessPlan(plan, opts...); err != nil {
+		t.Fatalf("ProcessPlan(slice with nil options) = %v", err)
+	}
+}
+
 func TestProcessPlan_InvisibleRootReturnsEmpty(t *testing.T) {
 	qp, err := spannerplan.New([]*sppb.PlanNode{{
 		Index:       0,
