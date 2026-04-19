@@ -26,11 +26,11 @@ func sampleTree() *Node {
 
 func defaultStyleSampleExpectedRows() []Row {
 	return []Row{
-		{TreePart: []string{""}, NodeText: "root"},
-		{TreePart: []string{"+- ", "|  "}, NodeText: "left\ncont"},
-		{TreePart: []string{"|  +- "}, NodeText: "leaf-a"},
-		{TreePart: []string{"|  +- "}, NodeText: "leaf-b"},
-		{TreePart: []string{"+- "}, NodeText: "right"},
+		{TreePart: "", NodeText: "root"},
+		{TreePart: "+- \n|  ", NodeText: "left\ncont"},
+		{TreePart: "|  +- ", NodeText: "leaf-a"},
+		{TreePart: "|  +- ", NodeText: "leaf-b"},
+		{TreePart: "+- ", NodeText: "right"},
 	}
 }
 
@@ -78,11 +78,11 @@ func TestRender_DefaultStyle(t *testing.T) {
 func TestRender_CompactStyle(t *testing.T) {
 	got := Render(sampleTree(), CompactStyle())
 	want := []Row{
-		{TreePart: []string{""}, NodeText: "root"},
-		{TreePart: []string{"+", "|"}, NodeText: "left\ncont"},
-		{TreePart: []string{"|+"}, NodeText: "leaf-a"},
-		{TreePart: []string{"|+"}, NodeText: "leaf-b"},
-		{TreePart: []string{"+"}, NodeText: "right"},
+		{TreePart: "", NodeText: "root"},
+		{TreePart: "+\n|", NodeText: "left\ncont"},
+		{TreePart: "|+", NodeText: "leaf-a"},
+		{TreePart: "|+", NodeText: "leaf-b"},
+		{TreePart: "+", NodeText: "right"},
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -125,11 +125,11 @@ func TestRender_CustomStyle(t *testing.T) {
 
 	got := Render(sampleTree(), style)
 	want := []Row{
-		{TreePart: []string{""}, NodeText: "root"},
-		{TreePart: []string{"=>", ".. "}, NodeText: "left\ncont"},
-		{TreePart: []string{".. =>"}, NodeText: "leaf-a"},
-		{TreePart: []string{".. --"}, NodeText: "leaf-b"},
-		{TreePart: []string{"--"}, NodeText: "right"},
+		{TreePart: "", NodeText: "root"},
+		{TreePart: "=>\n.. ", NodeText: "left\ncont"},
+		{TreePart: ".. =>", NodeText: "leaf-a"},
+		{TreePart: ".. --", NodeText: "leaf-b"},
+		{TreePart: "--", NodeText: "right"},
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {

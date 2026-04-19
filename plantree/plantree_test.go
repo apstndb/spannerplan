@@ -2,7 +2,6 @@ package plantree
 
 import (
 	_ "embed"
-	"strings"
 	"testing"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -10,11 +9,6 @@ import (
 
 	"github.com/apstndb/spannerplan"
 )
-
-// treePartLines splits a legacy single-string tree prefix into per-line parts (tests only).
-func treePartLines(s string) []string {
-	return strings.Split(s, "\n")
-}
 
 //go:embed reference/testdata/dca.yaml
 var dcaYAML []byte
@@ -65,18 +59,18 @@ func TestProcessPlan_CurrentFormatting(t *testing.T) {
 	tests := map[int32]RowWithPredicates{
 		0: {
 			ID:         0,
-			TreePart:   treePartLines(""),
+			TreePart:   "",
 			NodeText:   "Distributed Union on AlbumsByAlbumTitle <Row>",
 			Predicates: []string{"Split Range: (STARTS_WITH($AlbumTitle, 'T') AND ($AlbumTitle LIKE 'T%e'))"},
 		},
 		1: {
 			ID:         1,
-			TreePart:   treePartLines("+- "),
+			TreePart:   "+- ",
 			NodeText:   "Distributed Cross Apply <Row>",
 			Predicates: []string{"Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId))"},
 		},
-		2: {ID: 2, TreePart: treePartLines("   +- "), NodeText: "[Input] Create Batch <Row>"},
-		3: {ID: 3, TreePart: treePartLines("   |  +- "), NodeText: "Local Distributed Union <Row>"},
+		2: {ID: 2, TreePart: "   +- ", NodeText: "[Input] Create Batch <Row>"},
+		3: {ID: 3, TreePart: "   |  +- ", NodeText: "Local Distributed Union <Row>"},
 	}
 
 	for id, want := range tests {
@@ -102,17 +96,17 @@ func TestProcessPlan_WrapWidthPreservesTreeAndNodeParts(t *testing.T) {
 	tests := map[int32]RowWithPredicates{
 		0: {
 			ID:       0,
-			TreePart: treePartLines("\n"),
+			TreePart: "\n",
 			NodeText: "Distributed Union on AlbumsByAlbumTitle\n<Row>",
 		},
 		5: {
 			ID:       5,
-			TreePart: treePartLines("   |        +- \n   |           "),
+			TreePart: "   |        +- \n   |           ",
 			NodeText: "Filter Scan <Row> (seekab\nle_key_size: 1)",
 		},
 		24: {
 			ID:       24,
-			TreePart: treePartLines("         +- \n         |  "),
+			TreePart: "         +- \n         |  ",
 			NodeText: "[Input] KeyRangeAccumulator\n<Row>",
 		},
 	}
@@ -200,17 +194,16 @@ func TestProcessPlan_CompactFormatting(t *testing.T) {
 		t.Fatalf("ProcessPlan() error = %v", err)
 	}
 
-	tests := map[int32][]string{
-		0: {""},
-		1: {"+"},
-		2: {" +"},
-		3: {" |+"},
+	tests := map[int32]string{
+		0: "",
+		1: "+",
+		2: " +",
+		3: " |+",
 	}
 
 	for id, want := range tests {
-		got := rowByID(t, rows, id).TreePart
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Fatalf("row %d TreePart mismatch (-want +got):\n%s", id, diff)
+		if got := rowByID(t, rows, id).TreePart; got != want {
+			t.Fatalf("row %d TreePart = %q, want %q", id, got, want)
 		}
 	}
 }

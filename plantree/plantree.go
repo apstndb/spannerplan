@@ -25,7 +25,7 @@ func newDefaultWrapCondition() *tabwrap.Condition {
 
 type RowWithPredicates struct {
 	ID             int32
-	TreePart       []string // one tree-prefix string per line of NodeText
+	TreePart       string
 	NodeText       string
 	Predicates     []string
 	Keys           map[string][]string
@@ -47,16 +47,23 @@ func (n *renderedNode) lineCount() int {
 }
 
 func (r RowWithPredicates) Text() string {
+	treeLines := strings.Split(r.TreePart, "\n")
 	nodeLines := strings.Split(r.NodeText, "\n")
 	var sb strings.Builder
 	for i, line := range nodeLines {
-		if i < len(r.TreePart) {
-			sb.WriteString(strings.TrimSuffix(r.TreePart[i], "\n"))
+		if len(treeLines) > i {
+			sb.WriteString(strings.TrimSuffix(treeLines[i], "\n"))
 		}
 		sb.WriteString(line)
 		sb.WriteRune('\n')
 	}
 	return strings.TrimSuffix(sb.String(), "\n")
+}
+
+// TreePartLines returns the tree prefix as one string per line of [RowWithPredicates.NodeText]
+// (equivalent to strings.Split(r.TreePart, "\n") when the prefix has the expected shape).
+func (r RowWithPredicates) TreePartLines() []string {
+	return strings.Split(r.TreePart, "\n")
 }
 
 func (r RowWithPredicates) FormatID() string {
