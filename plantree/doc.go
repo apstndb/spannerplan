@@ -18,5 +18,12 @@ Callers that want per-line prefixes can use [RowWithPredicates.TreePartLines].
 
 Breaking changes in this package are called out in the release / PR description when
 they affect exported options or types.
+
+# Stability
+
+This package is still marked EXPERIMENTAL. The shape of exported row types (including
+how TreePart is represented) may change in a future version if we adopt a different
+internal representation—callers should prefer [RowWithPredicates.Text] and stable
+[Option] entrypoints where possible, and pin module versions when upgrading.
 */
 package plantree
