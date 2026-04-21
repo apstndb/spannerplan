@@ -502,6 +502,17 @@ func TestRun_UsageErrors(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:        "custom and custom-file are mutually exclusive",
+			args:        []string{"-custom", "ID:{{.FormatID}}", "-custom-file", "custom.yaml"},
+			wantErrText: "--custom and --custom-file are mutually exclusive",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "--custom and --custom-file are mutually exclusive") {
+					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

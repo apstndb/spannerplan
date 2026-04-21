@@ -43,7 +43,7 @@ $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singe
 
 Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--mode=AUTO` can detect whether the input has execution statistics or not.
 
-Rendered stats columns are customizable using `--custom-file`.
+Rendered stats columns are customizable using `--custom-file`. `--custom-file` and `--custom` are mutually exclusive.
 
 ```
 $ cat custom.yaml
@@ -144,7 +144,7 @@ Predicates(identified by ID):
  34: Seek Condition: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId) AND ($TrackId' = $batched_TrackId))
 ```
 
-You can also use `--custom=<name>:<template>[:<align>[:<inline_type>]]`.
+You can also use `--custom=<name>:<template>[:<align>[:<inline_type>]]`. `--custom` and `--custom-file` cannot be used together.
 
 ```
 $ cat distributed_cross_apply_profile.yaml | rendertree --custom "ID:{{.FormatID}}:RIGHT,Operator:{{.Text}},CPU Time:{{.ExecutionStats.CpuTime | secsToS}},remote_calls:{{.ExecutionStats.RemoteCalls.Total}}::ALWAYS" 

@@ -290,7 +290,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flagSet := flag.NewFlagSet("rendertree", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
 
-	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file")
+	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printModeStr := flagSet.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
@@ -303,7 +303,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 
 	var custom stringList
-	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT] form")
+	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT] form (mutually exclusive with --custom-file)")
 	if err := flagSet.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -322,6 +322,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintln(stderr, "--full-scan is deprecated. You must migrate to --known-flag.")
 
 		*knownFlag = *fullscan
+	}
+
+	if len(custom) > 0 && *customFile != "" {
+		const msg = "--custom and --custom-file are mutually exclusive"
+		_, _ = fmt.Fprintln(stderr, msg)
+		flagSet.Usage()
+		return &usageError{err: errors.New(msg)}
 	}
 
 	printMode, err := parsePrintMode(*printModeStr)
