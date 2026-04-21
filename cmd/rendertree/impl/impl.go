@@ -303,7 +303,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 
 	var custom stringList
-	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT] form (mutually exclusive with --custom-file)")
+	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT[:INLINE_TYPE]] form (mutually exclusive with --custom-file)")
 	if err := flagSet.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
