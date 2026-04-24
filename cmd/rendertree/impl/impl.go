@@ -311,6 +311,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return &usageError{err: err}
 	}
 
+	// These are semantic flag-combination checks that run after Parse succeeds.
+	// flag.ContinueOnError only covers parse-time failures, so we still print usage here.
 	if *fullscan != "" {
 		if *knownFlag != "" {
 			const msg = "--full-scan and --known-flag are mutually exclusive"
