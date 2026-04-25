@@ -204,3 +204,74 @@ func TestRenderTreeWithOptions_TinyBudgetKeepsUTF8Valid(t *testing.T) {
 		t.Fatalf("wrapped NodeText mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestRenderTreeWithOptions_SkipsAnchorCallbackWhenUnused(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "[Input] child"},
+		},
+	}
+
+	calls := 0
+	getAnchor := func(n *Node) string {
+		calls++
+		return "[Input] "
+	}
+
+	_ = RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		getAnchor,
+		0,
+		nil,
+		ContinuationIndentAnchor,
+	)
+	if calls != 0 {
+		t.Fatalf("anchor callback calls = %d, want 0 when wrapping is disabled", calls)
+	}
+
+	_ = RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		getAnchor,
+		20,
+		nil,
+		ContinuationIndentTree,
+	)
+	if calls != 0 {
+		t.Fatalf("anchor callback calls = %d, want 0 when continuation indent is tree-aligned", calls)
+	}
+}
+
+func TestRenderTreeWithOptions_InvalidContinuationIndentPanics(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("RenderTreeWithOptions() did not panic for invalid continuation indent")
+		}
+	}()
+
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "child"},
+		},
+	}
+
+	_ = RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		nil,
+		20,
+		nil,
+		ContinuationIndent(99),
+	)
+}

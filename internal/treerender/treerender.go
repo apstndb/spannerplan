@@ -135,7 +135,7 @@ func RenderTreeWithOptions[T any](
 		}
 		text := getText(node)
 		anchor := ""
-		if getContinuationAnchor != nil {
+		if wrapWidth > 0 && continuationIndent == ContinuationIndentAnchor && getContinuationAnchor != nil {
 			anchor = getContinuationAnchor(node)
 		}
 		rows = append(rows, renderRow(ancestorPrefix, text, anchor, isLast, isRoot, sw, wrapWidth, wrapCondition, continuationIndent))
@@ -202,11 +202,18 @@ func wrapRowLines(
 	continuationIndent ContinuationIndent,
 ) (treeLines, nodeLines []string) {
 	anchorWidth := 0
-	if continuationIndent == ContinuationIndentAnchor && anchor != "" && strings.HasPrefix(text, anchor) {
-		anchorWidth = wrapCondition.StringWidth(anchor)
-		text = strings.TrimPrefix(text, anchor)
-	} else {
+	switch continuationIndent {
+	case ContinuationIndentTree:
 		anchor = ""
+	case ContinuationIndentAnchor:
+		if anchor != "" && strings.HasPrefix(text, anchor) {
+			anchorWidth = wrapCondition.StringWidth(anchor)
+			text = strings.TrimPrefix(text, anchor)
+		} else {
+			anchor = ""
+		}
+	default:
+		panic("treerender: invalid ContinuationIndent")
 	}
 
 	firstBudget := max(1, wrapWidth-wrapCondition.StringWidth(firstPrefix)-anchorWidth)
