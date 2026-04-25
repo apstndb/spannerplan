@@ -25,7 +25,8 @@ func newDefaultWrapCondition() *tabwrap.Condition {
 
 type RowWithPredicates struct {
 	ID int32
-	// TreePart stores the ASCII tree prefix as newline-joined lines (one per line of NodeText).
+	// TreePart stores everything rendered before NodeText on each visual line: the ASCII tree prefix
+	// plus any continuation padding inserted by the renderer for wrapping / hanging indent.
 	// Prefer [RowWithPredicates.TreePartString] or [RowWithPredicates.TreePartLines] instead of
 	// reading this field directly, so callers stay decoupled if the storage shape changes.
 	TreePart       string

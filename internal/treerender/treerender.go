@@ -12,8 +12,9 @@ type Node struct {
 }
 
 type Row struct {
-	// TreePart is the tree prefix for this node: one line of ASCII tree drawing per line of NodeText,
-	// joined with newlines (same structure as strings.Split(NodeText, "\n")).
+	// TreePart is everything rendered before NodeText on each visual line: the ASCII tree drawing
+	// plus any continuation padding added by the renderer (for example, hanging-indent spacing).
+	// It is joined with newlines using the same line structure as strings.Split(NodeText, "\n").
 	TreePart string
 	NodeText string
 }
