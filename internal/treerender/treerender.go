@@ -119,12 +119,12 @@ func RenderTreeWithOptions[T any](
 	wrapCondition *tabwrap.Condition,
 	continuationIndent ContinuationIndent,
 ) []Row {
-	if root == nil {
-		return nil
-	}
 	validateContinuationIndent(continuationIndent)
 	if wrapCondition == nil {
 		wrapCondition = defaultWrapCondition
+	}
+	if root == nil {
+		return nil
 	}
 
 	sw := newStyleWidths(style)
