@@ -2,6 +2,7 @@ package plantree
 
 import (
 	_ "embed"
+	"strings"
 	"testing"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -188,6 +189,12 @@ func TestProcessPlan_NegativeWrapWidthErrors(t *testing.T) {
 	}
 }
 
+func invalidContinuationIndentOption() Option {
+	return func(o *options) {
+		o.continuationIndent = ContinuationIndent(99)
+	}
+}
+
 func TestProcessPlan_CompactFormatting(t *testing.T) {
 	opts := append(currentOptions(), EnableCompact())
 	rows, err := ProcessPlan(decodeDCAPlan(t), opts...)
@@ -304,5 +311,17 @@ func TestProcessPlan_ContinuationIndentNodePrefix(t *testing.T) {
 		NodeText: got.NodeText,
 	}); diff != "" {
 		t.Fatalf("row 1 mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestProcessPlan_InvalidContinuationIndentErrors(t *testing.T) {
+	t.Parallel()
+
+	_, err := ProcessPlan(hangingIndentPlan(t), append(currentOptions(), invalidContinuationIndentOption())...)
+	if err == nil {
+		t.Fatal("ProcessPlan(invalid continuation indent) error = nil, want non-nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "unknown ContinuationIndent") {
+		t.Fatalf("ProcessPlan() error = %q, want unknown ContinuationIndent", got)
 	}
 }

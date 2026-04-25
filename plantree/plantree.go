@@ -156,6 +156,9 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapWidth != nil && *o.wrapWidth < 0 {
 		return nil, fmt.Errorf("wrap width cannot be negative: %d", *o.wrapWidth)
 	}
+	if err := validateContinuationIndent(o.continuationIndent); err != nil {
+		return nil, err
+	}
 
 	root, err := buildRenderedTree(qp, nil, &o)
 	if err != nil {
@@ -266,8 +269,19 @@ func mapContinuationIndent(indent ContinuationIndent) treerender.ContinuationInd
 	switch indent {
 	case ContinuationIndentNodePrefix:
 		return treerender.ContinuationIndentAnchor
-	default:
+	case ContinuationIndentTree:
 		return treerender.ContinuationIndentTree
+	default:
+		panic(fmt.Sprintf("unknown ContinuationIndent: %d", indent))
+	}
+}
+
+func validateContinuationIndent(indent ContinuationIndent) error {
+	switch indent {
+	case ContinuationIndentTree, ContinuationIndentNodePrefix:
+		return nil
+	default:
+		return fmt.Errorf("unknown ContinuationIndent: %d", indent)
 	}
 }
 

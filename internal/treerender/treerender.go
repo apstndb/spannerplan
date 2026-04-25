@@ -7,7 +7,11 @@ import (
 	"github.com/apstndb/go-tabwrap"
 )
 
-var defaultWrapCondition = tabwrap.NewCondition()
+var defaultWrapCondition = func() *tabwrap.Condition {
+	cond := tabwrap.NewCondition()
+	cond.TrimTrailingSpace = true
+	return cond
+}()
 
 type Node struct {
 	Text     string
