@@ -3,6 +3,7 @@ package treerender
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/apstndb/go-tabwrap"
 	"github.com/google/go-cmp/cmp"
@@ -171,5 +172,35 @@ func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("RenderTreeWithOptions() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTreeWithOptions_TinyBudgetKeepsUTF8Valid(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "あい"},
+		},
+	}
+
+	got := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		nil,
+		4, // child budget becomes 1 after "+- "
+		nil,
+		ContinuationIndentTree,
+	)
+
+	if len(got) != 2 {
+		t.Fatalf("RenderTreeWithOptions() rows = %d, want 2", len(got))
+	}
+	if !utf8.ValidString(got[1].NodeText) {
+		t.Fatalf("wrapped NodeText = %q, want valid UTF-8", got[1].NodeText)
+	}
+	if diff := cmp.Diff("あ\nい", got[1].NodeText); diff != "" {
+		t.Fatalf("wrapped NodeText mismatch (-want +got):\n%s", diff)
 	}
 }

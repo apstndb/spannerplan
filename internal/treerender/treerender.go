@@ -2,9 +2,12 @@ package treerender
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/apstndb/go-tabwrap"
 )
+
+var defaultWrapCondition = tabwrap.NewCondition()
 
 type Node struct {
 	Text     string
@@ -116,7 +119,7 @@ func RenderTreeWithOptions[T any](
 		return nil
 	}
 	if wrapCondition == nil {
-		wrapCondition = tabwrap.NewCondition()
+		wrapCondition = defaultWrapCondition
 	}
 
 	sw := newStyleWidths(style)
@@ -235,14 +238,18 @@ func wrapChunks(text string, firstBudget, continuationBudget int, wrapCondition 
 		for rawLine != "" {
 			rawChunk := wrapCondition.Truncate(rawLine, budget, "")
 			if rawChunk == "" {
-				rawChunk = rawLine[:1]
+				_, size := utf8.DecodeRuneInString(rawLine)
+				if size <= 0 {
+					size = 1
+				}
+				rawChunk = rawLine[:size]
 			}
 			chunk := rawChunk
 			if wrapCondition.TrimTrailingSpace {
 				chunk = strings.TrimRight(chunk, " \t")
 			}
 			lines = append(lines, chunk)
-			rawLine = strings.TrimPrefix(rawLine, rawChunk)
+			rawLine = rawLine[len(rawChunk):]
 			budget = continuationBudget
 		}
 	}
