@@ -37,16 +37,13 @@ type RowWithPredicates struct {
 }
 
 type renderedNode struct {
-	ID             int32
-	NodeText       string
-	Predicates     []string
-	ExecutionStats stats.ExecutionStats
-	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
-	Children       []*renderedNode
-}
-
-func (n *renderedNode) lineCount() int {
-	return strings.Count(n.NodeText, "\n") + 1
+	ID                 int32
+	ContinuationAnchor string
+	NodeText           string
+	Predicates         []string
+	ExecutionStats     stats.ExecutionStats
+	ChildLinks         map[string][]*spannerplan.ResolvedChildLink
+	Children           []*renderedNode
 }
 
 func (r RowWithPredicates) Text() string {
@@ -82,13 +79,23 @@ type options struct {
 	disallowUnknownStats bool
 	queryplanOptions     []spannerplan.Option
 	style                treerender.Style
-	prefixMetrics        treerender.PrefixMetrics
 	compact              bool
+	continuationIndent   ContinuationIndent
 	wrapWidth            *int
 	wrapper              *tabwrap.Condition
 }
 
 type Option func(*options)
+
+// ContinuationIndent controls how wrapped continuation lines are aligned.
+type ContinuationIndent int
+
+const (
+	// ContinuationIndentTree preserves the current behavior: continuation lines align only to the tree prefix.
+	ContinuationIndentTree ContinuationIndent = iota
+	// ContinuationIndentNodePrefix hangs continuation lines after a node-local prefix such as `[Input] `.
+	ContinuationIndentNodePrefix
+)
 
 func DisallowUnknownStats() Option {
 	return func(o *options) {
@@ -121,6 +128,16 @@ func EnableCompact() Option {
 	}
 }
 
+// WithContinuationIndent selects how wrapped continuation lines are aligned.
+// The default [ContinuationIndentTree] preserves the current behavior.
+// [ContinuationIndentNodePrefix] is opt-in and hangs continuation lines after a
+// node-local prefix such as `[Input] ` or `[Map] ` when present.
+func WithContinuationIndent(indent ContinuationIndent) Option {
+	return func(o *options) {
+		o.continuationIndent = indent
+	}
+}
+
 func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredicates, err error) {
 	o := options{
 		style:   treerender.DefaultStyle(),
@@ -138,9 +155,8 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapWidth != nil && *o.wrapWidth < 0 {
 		return nil, fmt.Errorf("wrap width cannot be negative: %d", *o.wrapWidth)
 	}
-	o.prefixMetrics = treerender.NewPrefixMetrics(o.style)
 
-	root, err := buildRenderedTree(qp, nil, 0, &o)
+	root, err := buildRenderedTree(qp, nil, &o)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build rendered tree: %w", err)
 	}
@@ -148,9 +164,17 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 		return nil, nil
 	}
 
-	renderRows := treerender.RenderTree(root, o.style,
+	wrapWidth := 0
+	if o.wrapWidth != nil {
+		wrapWidth = *o.wrapWidth
+	}
+	renderRows := treerender.RenderTreeWithOptions(root, o.style,
 		func(n *renderedNode) string { return n.NodeText },
 		func(n *renderedNode) []*renderedNode { return n.Children },
+		func(n *renderedNode) string { return n.ContinuationAnchor },
+		wrapWidth,
+		o.wrapper,
+		mapContinuationIndent(o.continuationIndent),
 	)
 	nodes := collectPreorder(root)
 	if len(renderRows) != len(nodes) {
@@ -161,9 +185,8 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	for i, node := range nodes {
 		row := renderRows[i]
 		gotLines := strings.Count(row.NodeText, "\n") + 1
-		wantLines := node.lineCount()
-		if gotLines != wantLines {
-			return nil, fmt.Errorf("unexpected rendered node line count for node %d: got %d lines, want %d", node.ID, gotLines, wantLines)
+		if wantTreeLines := strings.Count(row.TreePart, "\n") + 1; gotLines != wantTreeLines {
+			return nil, fmt.Errorf("unexpected rendered row line count for node %d: tree=%d node=%d", node.ID, wantTreeLines, gotLines)
 		}
 		result = append(result, RowWithPredicates{
 			ID:             node.ID,
@@ -178,7 +201,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	return result, nil
 }
 
-func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, level int, opts *options) (*renderedNode, error) {
+func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, opts *options) (*renderedNode, error) {
 	if !qp.IsVisible(link) {
 		return nil, nil
 	}
@@ -187,17 +210,8 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 
 	node := qp.GetNodeByChildLink(link)
 	linkType := qp.GetLinkType(link)
-	nodeText := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep) + spannerplan.NodeTitle(node, opts.queryplanOptions...)
-	// Only wrap when width is set and positive; 0 matches CLI/reference "no wrapping".
-	if opts.wrapWidth != nil && *opts.wrapWidth > 0 {
-		// Prefix width matches RenderTree (includes EdgeSeparator). Do not subtract sep again:
-		// it is either absent from nodeText (empty linkType) or already inside the wrapped string.
-		budget := *opts.wrapWidth - opts.prefixMetrics.MaxWidthForDepth(level)
-		if budget < 1 {
-			budget = 1
-		}
-		nodeText = opts.wrapper.Wrap(nodeText, budget)
-	}
+	continuationAnchor := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep)
+	nodeText := continuationAnchor + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 
 	var predicates []string
 	for _, cl := range node.GetChildLinks() {
@@ -227,15 +241,16 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 
 	visibleChildLinks := qp.VisibleChildLinks(node)
 	rendered := &renderedNode{
-		ID:             node.GetIndex(),
-		NodeText:       nodeText,
-		Predicates:     predicates,
-		ExecutionStats: *executionStats,
-		ChildLinks:     childLinks,
+		ID:                 node.GetIndex(),
+		ContinuationAnchor: continuationAnchor,
+		NodeText:           nodeText,
+		Predicates:         predicates,
+		ExecutionStats:     *executionStats,
+		ChildLinks:         childLinks,
 	}
 
 	for _, child := range visibleChildLinks {
-		renderedChild, err := buildRenderedTree(qp, child, level+1, opts)
+		renderedChild, err := buildRenderedTree(qp, child, opts)
 		if err != nil {
 			return nil, fmt.Errorf("buildRenderedTree failed on child link %v: %w", child, err)
 		}
@@ -244,6 +259,15 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		}
 	}
 	return rendered, nil
+}
+
+func mapContinuationIndent(indent ContinuationIndent) treerender.ContinuationIndent {
+	switch indent {
+	case ContinuationIndentNodePrefix:
+		return treerender.ContinuationIndentAnchor
+	default:
+		return treerender.ContinuationIndentTree
+	}
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {

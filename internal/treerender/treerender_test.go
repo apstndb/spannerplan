@@ -1,8 +1,10 @@
 package treerender
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/apstndb/go-tabwrap"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -134,5 +136,40 @@ func TestRender_CustomStyle(t *testing.T) {
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Render() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "[Input] Batch Scan <Row>"},
+			{Text: "tail"},
+		},
+	}
+
+	got := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		func(n *Node) string {
+			if strings.HasPrefix(n.Text, "[Input] ") {
+				return "[Input] "
+			}
+			return ""
+		},
+		21,
+		tabwrap.NewCondition(),
+		ContinuationIndentAnchor,
+	)
+
+	want := []Row{
+		{TreePart: "", NodeText: "root"},
+		{TreePart: "+- \n|          ", NodeText: "[Input] Batch Scan\n <Row>"},
+		{TreePart: "+- ", NodeText: "tail"},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTreeWithOptions() mismatch (-want +got):\n%s", diff)
 	}
 }

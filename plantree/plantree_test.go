@@ -6,6 +6,7 @@ import (
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spannerplan"
 )
@@ -248,5 +249,60 @@ func TestProcessPlan_InvisibleRootReturnsEmpty(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Fatalf("ProcessPlan() rows = %v, want empty", rows)
+	}
+}
+
+func hangingIndentPlan(t *testing.T) *spannerplan.QueryPlan {
+	t.Helper()
+
+	qp, err := spannerplan.New([]*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Cross Apply",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 1},
+				{ChildIndex: 2, Type: "Map"},
+			},
+		},
+		{
+			Index:       1,
+			DisplayName: "Batch Scan",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			Metadata: &structpb.Struct{Fields: map[string]*structpb.Value{
+				"execution_method": structpb.NewStringValue("Row"),
+			}},
+		},
+		{
+			Index:       2,
+			DisplayName: "Serialize Result",
+			Kind:        sppb.PlanNode_RELATIONAL,
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	return qp
+}
+
+func TestProcessPlan_ContinuationIndentNodePrefix(t *testing.T) {
+	opts := append(currentOptions(), WithWrapWidth(21), WithContinuationIndent(ContinuationIndentNodePrefix))
+	rows, err := ProcessPlan(hangingIndentPlan(t), opts...)
+	if err != nil {
+		t.Fatalf("ProcessPlan() error = %v", err)
+	}
+
+	got := rowByID(t, rows, 1)
+	want := RowWithPredicates{
+		ID:       1,
+		TreePart: "+- \n|          ",
+		NodeText: "[Input] Batch Scan\n <Row>",
+	}
+	if diff := cmp.Diff(want, RowWithPredicates{
+		ID:       got.ID,
+		TreePart: got.TreePartString(),
+		NodeText: got.NodeText,
+	}); diff != "" {
+		t.Fatalf("row 1 mismatch (-want +got):\n%s", diff)
 	}
 }
