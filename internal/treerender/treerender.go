@@ -122,6 +122,7 @@ func RenderTreeWithOptions[T any](
 	if root == nil {
 		return nil
 	}
+	validateContinuationIndent(continuationIndent)
 	if wrapCondition == nil {
 		wrapCondition = defaultWrapCondition
 	}
@@ -234,6 +235,15 @@ func wrapRowLines(
 		treeLines[i] = continuationTree
 	}
 	return treeLines, nodeLines
+}
+
+func validateContinuationIndent(continuationIndent ContinuationIndent) {
+	switch continuationIndent {
+	case ContinuationIndentTree, ContinuationIndentAnchor:
+		return
+	default:
+		panic("treerender: invalid ContinuationIndent")
+	}
 }
 
 func wrapChunks(text string, firstBudget, continuationBudget int, wrapCondition *tabwrap.Condition) []string {

@@ -270,7 +270,7 @@ func TestRenderTreeWithOptions_InvalidContinuationIndentPanics(t *testing.T) {
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
 		nil,
-		20,
+		0,
 		nil,
 		ContinuationIndent(99),
 	)
