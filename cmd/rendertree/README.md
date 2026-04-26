@@ -208,7 +208,7 @@ Predicates(identified by ID):
 ```
 
 ```
- $ rendertree --wrap-width=50 --hanging-indent < testdata/distributed_cross_apply.yaml
+$ rendertree --wrap-width=50 --hanging-indent < testdata/distributed_cross_apply.yaml
 ...
 |  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_ |
 |     |          |          method: Row)                   |
