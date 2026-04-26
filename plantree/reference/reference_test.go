@@ -21,6 +21,15 @@ func loadRealPlan(t *testing.T) string {
 	return string(b)
 }
 
+func loadWrappedPlan(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("../../cmd/rendertree/impl/testdata/distributed_cross_apply.yaml")
+	if err != nil {
+		t.Fatalf("failed to read wrapped plan fixture: %v", err)
+	}
+	return string(b)
+}
+
 func Test_RenderTreeTable_withRealPlan_ALL_MODES_AND_FORMATS(t *testing.T) {
 	input := loadRealPlan(t)
 	tests := []struct {
@@ -376,4 +385,77 @@ func TestRenderTreeTable_InputValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRenderTreeTableWithOptions_ContinuationIndentNodePrefix(t *testing.T) {
+	input := loadWrappedPlan(t)
+	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
+	if err != nil {
+		t.Fatalf("Failed to extract query plan: %v", err)
+	}
+
+	planNodes := stats.GetQueryPlan().GetPlanNodes()
+	base, err := RenderTreeTable(planNodes, RenderModePlan, FormatCurrent, 50)
+	if err != nil {
+		t.Fatalf("RenderTreeTable() error = %v", err)
+	}
+
+	hanging, err := RenderTreeTableWithOptions(
+		planNodes,
+		RenderModePlan,
+		FormatCurrent,
+		WithWrapWidth(50),
+		WithHangingIndent(),
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions() error = %v", err)
+	}
+
+	if base == hanging {
+		t.Fatal("RenderTreeTableWithOptions() output = default output, want hanging indent difference")
+	}
+
+	defaultLine := lineContaining(base, "method: Row)")
+	hangingLine := lineContaining(hanging, "method: Row)")
+	if defaultLine == "" || hangingLine == "" {
+		t.Fatalf("expected wrapped Batch Scan line in both outputs\ndefault=%q\nhanging=%q", defaultLine, hangingLine)
+	}
+	if !strings.Contains(defaultLine, "|  method: Row)") {
+		t.Fatalf("default line = %q, want tree-aligned continuation marker", defaultLine)
+	}
+	if strings.Contains(hangingLine, "|  method: Row)") {
+		t.Fatalf("hanging line = %q, want node-prefix hanging indent", hangingLine)
+	}
+}
+
+func TestRenderTreeTableWithOptions_NilOption(t *testing.T) {
+	input := loadWrappedPlan(t)
+	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
+	if err != nil {
+		t.Fatalf("Failed to extract query plan: %v", err)
+	}
+
+	planNodes := stats.GetQueryPlan().GetPlanNodes()
+	got, err := RenderTreeTableWithOptions(planNodes, RenderModePlan, FormatCurrent, nil, WithWrapWidth(50))
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions() error = %v", err)
+	}
+
+	want, err := RenderTreeTable(planNodes, RenderModePlan, FormatCurrent, 50)
+	if err != nil {
+		t.Fatalf("RenderTreeTable() error = %v", err)
+	}
+
+	if got != want {
+		t.Fatal("RenderTreeTableWithOptions(nil, WithWrapWidth(50)) output != RenderTreeTable(..., 50)")
+	}
+}
+
+func lineContaining(s, needle string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if strings.Contains(line, needle) {
+			return line
+		}
+	}
+	return ""
 }

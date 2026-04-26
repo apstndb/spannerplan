@@ -29,6 +29,30 @@ const (
 	RenderModeProfile RenderMode = "PROFILE"
 )
 
+type options struct {
+	wrapWidth     int
+	hangingIndent bool
+}
+
+// Option configures optional rendering behavior for [RenderTreeTableWithOptions].
+type Option func(*options)
+
+// WithWrapWidth sets the maximum total rendered line width, including the tree prefix.
+// A value of 0 disables wrapping. Negative values make [RenderTreeTableWithOptions] return an error.
+func WithWrapWidth(width int) Option {
+	return func(o *options) {
+		o.wrapWidth = width
+	}
+}
+
+// WithHangingIndent hangs wrapped continuation lines after node-local prefixes such as
+// `[Input] ` and `[Map] ` instead of keeping the default tree-aligned indentation.
+func WithHangingIndent() Option {
+	return func(o *options) {
+		o.hangingIndent = true
+	}
+}
+
 // ParseRenderMode parses a string into a RenderMode.
 // Valid values are "AUTO", "PLAN", and "PROFILE" (case-insensitive).
 func ParseRenderMode(s string) (RenderMode, error) {
@@ -48,12 +72,25 @@ func ParseRenderMode(s string) (RenderMode, error) {
 // It supports different render modes (AUTO, PLAN, PROFILE) and formats (TRADITIONAL, CURRENT, COMPACT).
 // The wrapWidth parameter controls text wrapping (0 disables wrapping).
 func RenderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format, wrapWidth int) (string, error) {
+	return RenderTreeTableWithOptions(planNodes, mode, format, WithWrapWidth(wrapWidth))
+}
+
+// RenderTreeTableWithOptions renders Spanner plan nodes as an ASCII table with optional rendering configuration.
+func RenderTreeTableWithOptions(planNodes []*sppb.PlanNode, mode RenderMode, format Format, opts ...Option) (string, error) {
+	o := options{}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&o)
+	}
+
 	// Validate input parameters
 	if len(planNodes) == 0 {
 		return "", fmt.Errorf("planNodes cannot be empty")
 	}
-	if wrapWidth < 0 {
-		return "", fmt.Errorf("wrapWidth cannot be negative: %d", wrapWidth)
+	if o.wrapWidth < 0 {
+		return "", fmt.Errorf("wrapWidth cannot be negative: %d", o.wrapWidth)
 	}
 
 	var withStats bool
@@ -68,7 +105,7 @@ func RenderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", fmt.Errorf("unknown render mode: %s", mode)
 	}
 
-	rendered, err := processTree(planNodes, format, wrapWidth)
+	rendered, err := processTree(planNodes, format, o)
 	if err != nil {
 		return "", err
 	}
@@ -202,18 +239,21 @@ func ParseFormat(str string) (Format, error) {
 }
 
 // processTree converts Spanner plan nodes into a structured tree representation.
-func processTree(planNodes []*sppb.PlanNode, format Format, wrapWidth int) ([]plantree.RowWithPredicates, error) {
+func processTree(planNodes []*sppb.PlanNode, format Format, opts options) ([]plantree.RowWithPredicates, error) {
 	qp, err := queryplan.New(planNodes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create query plan: %w", err)
 	}
 
-	opts := optsForFormat(format)
-	if wrapWidth > 0 {
-		opts = append(opts, plantree.WithWrapWidth(wrapWidth))
+	plantreeOpts := optsForFormat(format)
+	if opts.wrapWidth > 0 {
+		plantreeOpts = append(plantreeOpts, plantree.WithWrapWidth(opts.wrapWidth))
+	}
+	if opts.hangingIndent {
+		plantreeOpts = append(plantreeOpts, plantree.WithContinuationIndent(plantree.ContinuationIndentNodePrefix))
 	}
 
-	return plantree.ProcessPlan(qp, opts...)
+	return plantree.ProcessPlan(qp, plantreeOpts...)
 }
 
 // optsForFormat returns the appropriate rendering options for the given format.

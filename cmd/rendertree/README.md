@@ -178,6 +178,9 @@ rendertree supports a compact format and wrapping for limited width environment.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.
 - `--wrap-width` specifies the number of characters at which to wrap the content of the Operator column.
   - The tree won't be broken even when lines are wrapped.
+- `--hanging-indent` enables hanging indent for wrapped lines.
+  - Wrapped continuation lines align after node-local prefixes such as `[Input] ` and `[Map] `.
+  - Without this flag, wrapped lines keep the original tree-aligned indentation.
 
 ```
 $ rendertree --compact --wrap-width=60 < testdata/distributed_cross_apply.yaml 
@@ -202,4 +205,12 @@ $ rendertree --compact --wrap-width=60 < testdata/distributed_cross_apply.yaml
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+```
+
+```
+ $ rendertree --wrap-width=50 --hanging-indent < testdata/distributed_cross_apply.yaml
+...
+|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_ |
+|     |          |          method: Row)                   |
+...
 ```
