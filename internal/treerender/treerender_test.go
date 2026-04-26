@@ -1,8 +1,11 @@
 package treerender
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
+	"github.com/apstndb/go-tabwrap"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -134,5 +137,172 @@ func TestRender_CustomStyle(t *testing.T) {
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Render() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "[Input] Batch Scan <Row>"},
+			{Text: "tail"},
+		},
+	}
+
+	got, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			GetContinuationAnchor: func(n *Node) string {
+				if strings.HasPrefix(n.Text, "[Input] ") {
+					return "[Input] "
+				}
+				return ""
+			},
+			WrapWidth:          21,
+			WrapCondition:      tabwrap.NewCondition(),
+			ContinuationIndent: ContinuationIndentAnchor,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
+
+	want := []Row{
+		{TreePart: "", NodeText: "root"},
+		{TreePart: "+- \n|          ", NodeText: "[Input] Batch Scan\n <Row>"},
+		{TreePart: "+- ", NodeText: "tail"},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTreeWithOptions() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTreeWithOptions_TinyBudgetKeepsUTF8Valid(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "あい"},
+		},
+	}
+
+	got, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			WrapWidth: 4, // child budget becomes 1 after "+- "
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("RenderTreeWithOptions() rows = %d, want 2", len(got))
+	}
+	if !utf8.ValidString(got[1].NodeText) {
+		t.Fatalf("wrapped NodeText = %q, want valid UTF-8", got[1].NodeText)
+	}
+	if diff := cmp.Diff("あ\nい", got[1].NodeText); diff != "" {
+		t.Fatalf("wrapped NodeText mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTreeWithOptions_SkipsAnchorCallbackWhenUnused(t *testing.T) {
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "[Input] child"},
+		},
+	}
+
+	calls := 0
+	getAnchor := func(n *Node) string {
+		calls++
+		return "[Input] "
+	}
+
+	_, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			GetContinuationAnchor: getAnchor,
+			ContinuationIndent:    ContinuationIndentAnchor,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("anchor callback calls = %d, want 0 when wrapping is disabled", calls)
+	}
+
+	_, err = RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			GetContinuationAnchor: getAnchor,
+			WrapWidth:             20,
+			ContinuationIndent:    ContinuationIndentTree,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("anchor callback calls = %d, want 0 when continuation indent is tree-aligned", calls)
+	}
+}
+
+func TestRenderTreeWithOptions_InvalidContinuationIndentErrors(t *testing.T) {
+	t.Parallel()
+
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "child"},
+		},
+	}
+
+	_, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			ContinuationIndent: ContinuationIndent(99),
+		},
+	)
+	if err == nil {
+		t.Fatal("RenderTreeWithOptions() error = nil, want non-nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "invalid ContinuationIndent") {
+		t.Fatalf("RenderTreeWithOptions() error = %q, want invalid ContinuationIndent", got)
+	}
+}
+
+func TestRenderTreeWithOptions_NilRootStillValidatesOptions(t *testing.T) {
+	t.Parallel()
+
+	var root *Node
+	_, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			ContinuationIndent: ContinuationIndent(99),
+		},
+	)
+	if err == nil {
+		t.Fatal("RenderTreeWithOptions(nil) error = nil, want non-nil")
 	}
 }
