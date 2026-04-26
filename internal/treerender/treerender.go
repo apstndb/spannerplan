@@ -1,6 +1,7 @@
 package treerender
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -32,6 +33,14 @@ const (
 	ContinuationIndentTree ContinuationIndent = iota
 	ContinuationIndentAnchor
 )
+
+// RenderOptions configures the optional wrapping behavior of [RenderTreeWithOptions].
+type RenderOptions[T any] struct {
+	GetContinuationAnchor func(*T) string
+	WrapWidth             int
+	WrapCondition         *tabwrap.Condition
+	ContinuationIndent    ContinuationIndent
+}
 
 type Style struct {
 	EdgeLink      string
@@ -105,24 +114,60 @@ func Render(root *Node, style Style) []Row {
 
 // RenderTree walks an existing tree without copying it into [Node], using the supplied accessors.
 func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildren func(*T) []*T) []Row {
-	return RenderTreeWithOptions(root, style, getText, getChildren, nil, 0, nil, ContinuationIndentTree)
+	return renderTree(root, style, getText, getChildren, defaultRenderOptions[T]())
 }
 
 // RenderTreeWithOptions renders a tree with optional wrapping and continuation-indent behavior.
+// It returns an error if opts contains an invalid [ContinuationIndent].
 func RenderTreeWithOptions[T any](
 	root *T,
 	style Style,
 	getText func(*T) string,
 	getChildren func(*T) []*T,
-	getContinuationAnchor func(*T) string,
-	wrapWidth int,
-	wrapCondition *tabwrap.Condition,
-	continuationIndent ContinuationIndent,
-) []Row {
-	validateContinuationIndent(continuationIndent)
-	if wrapCondition == nil {
-		wrapCondition = defaultWrapCondition
+	opts RenderOptions[T],
+) ([]Row, error) {
+	resolved, err := resolveRenderOptions(opts)
+	if err != nil {
+		return nil, err
 	}
+	return renderTree(root, style, getText, getChildren, resolved), nil
+}
+
+type resolvedRenderOptions[T any] struct {
+	getContinuationAnchor func(*T) string
+	wrapWidth             int
+	wrapCondition         *tabwrap.Condition
+	continuationIndent    ContinuationIndent
+}
+
+func defaultRenderOptions[T any]() resolvedRenderOptions[T] {
+	return resolvedRenderOptions[T]{
+		wrapCondition:      defaultWrapCondition,
+		continuationIndent: ContinuationIndentTree,
+	}
+}
+
+func resolveRenderOptions[T any](opts RenderOptions[T]) (resolvedRenderOptions[T], error) {
+	resolved := defaultRenderOptions[T]()
+	resolved.getContinuationAnchor = opts.GetContinuationAnchor
+	resolved.wrapWidth = opts.WrapWidth
+	if opts.WrapCondition != nil {
+		resolved.wrapCondition = opts.WrapCondition
+	}
+	if err := validateContinuationIndent(opts.ContinuationIndent); err != nil {
+		return resolvedRenderOptions[T]{}, err
+	}
+	resolved.continuationIndent = opts.ContinuationIndent
+	return resolved, nil
+}
+
+func renderTree[T any](
+	root *T,
+	style Style,
+	getText func(*T) string,
+	getChildren func(*T) []*T,
+	opts resolvedRenderOptions[T],
+) []Row {
 	if root == nil {
 		return nil
 	}
@@ -136,10 +181,10 @@ func RenderTreeWithOptions[T any](
 		}
 		text := getText(node)
 		anchor := ""
-		if wrapWidth > 0 && continuationIndent == ContinuationIndentAnchor && getContinuationAnchor != nil {
-			anchor = getContinuationAnchor(node)
+		if opts.wrapWidth > 0 && opts.continuationIndent == ContinuationIndentAnchor && opts.getContinuationAnchor != nil {
+			anchor = opts.getContinuationAnchor(node)
 		}
-		rows = append(rows, renderRow(ancestorPrefix, text, anchor, isLast, isRoot, sw, wrapWidth, wrapCondition, continuationIndent))
+		rows = append(rows, renderRow(ancestorPrefix, text, anchor, isLast, isRoot, sw, opts.wrapWidth, opts.wrapCondition, opts.continuationIndent))
 
 		next := ancestorPrefix
 		if !isRoot {
@@ -203,18 +248,11 @@ func wrapRowLines(
 	continuationIndent ContinuationIndent,
 ) (treeLines, nodeLines []string) {
 	anchorWidth := 0
-	switch continuationIndent {
-	case ContinuationIndentTree:
+	if continuationIndent == ContinuationIndentAnchor && anchor != "" && strings.HasPrefix(text, anchor) {
+		anchorWidth = wrapCondition.StringWidth(anchor)
+		text = strings.TrimPrefix(text, anchor)
+	} else {
 		anchor = ""
-	case ContinuationIndentAnchor:
-		if anchor != "" && strings.HasPrefix(text, anchor) {
-			anchorWidth = wrapCondition.StringWidth(anchor)
-			text = strings.TrimPrefix(text, anchor)
-		} else {
-			anchor = ""
-		}
-	default:
-		panic("treerender: invalid ContinuationIndent")
 	}
 
 	firstBudget := max(1, wrapWidth-wrapCondition.StringWidth(firstPrefix)-anchorWidth)
@@ -237,12 +275,12 @@ func wrapRowLines(
 	return treeLines, nodeLines
 }
 
-func validateContinuationIndent(continuationIndent ContinuationIndent) {
+func validateContinuationIndent(continuationIndent ContinuationIndent) error {
 	switch continuationIndent {
 	case ContinuationIndentTree, ContinuationIndentAnchor:
-		return
+		return nil
 	default:
-		panic("treerender: invalid ContinuationIndent")
+		return fmt.Errorf("invalid ContinuationIndent: %d", continuationIndent)
 	}
 }
 

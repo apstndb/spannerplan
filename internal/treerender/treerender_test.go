@@ -149,21 +149,26 @@ func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
 		},
 	}
 
-	got := RenderTreeWithOptions(
+	got, err := RenderTreeWithOptions(
 		root,
 		DefaultStyle(),
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
-		func(n *Node) string {
-			if strings.HasPrefix(n.Text, "[Input] ") {
-				return "[Input] "
-			}
-			return ""
+		RenderOptions[Node]{
+			GetContinuationAnchor: func(n *Node) string {
+				if strings.HasPrefix(n.Text, "[Input] ") {
+					return "[Input] "
+				}
+				return ""
+			},
+			WrapWidth:          21,
+			WrapCondition:      tabwrap.NewCondition(),
+			ContinuationIndent: ContinuationIndentAnchor,
 		},
-		21,
-		tabwrap.NewCondition(),
-		ContinuationIndentAnchor,
 	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
 
 	want := []Row{
 		{TreePart: "", NodeText: "root"},
@@ -183,16 +188,18 @@ func TestRenderTreeWithOptions_TinyBudgetKeepsUTF8Valid(t *testing.T) {
 		},
 	}
 
-	got := RenderTreeWithOptions(
+	got, err := RenderTreeWithOptions(
 		root,
 		DefaultStyle(),
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
-		nil,
-		4, // child budget becomes 1 after "+- "
-		nil,
-		ContinuationIndentTree,
+		RenderOptions[Node]{
+			WrapWidth: 4, // child budget becomes 1 after "+- "
+		},
 	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
 
 	if len(got) != 2 {
 		t.Fatalf("RenderTreeWithOptions() rows = %d, want 2", len(got))
@@ -219,43 +226,44 @@ func TestRenderTreeWithOptions_SkipsAnchorCallbackWhenUnused(t *testing.T) {
 		return "[Input] "
 	}
 
-	_ = RenderTreeWithOptions(
+	_, err := RenderTreeWithOptions(
 		root,
 		DefaultStyle(),
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
-		getAnchor,
-		0,
-		nil,
-		ContinuationIndentAnchor,
+		RenderOptions[Node]{
+			GetContinuationAnchor: getAnchor,
+			ContinuationIndent:    ContinuationIndentAnchor,
+		},
 	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
 	if calls != 0 {
 		t.Fatalf("anchor callback calls = %d, want 0 when wrapping is disabled", calls)
 	}
 
-	_ = RenderTreeWithOptions(
+	_, err = RenderTreeWithOptions(
 		root,
 		DefaultStyle(),
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
-		getAnchor,
-		20,
-		nil,
-		ContinuationIndentTree,
+		RenderOptions[Node]{
+			GetContinuationAnchor: getAnchor,
+			WrapWidth:             20,
+			ContinuationIndent:    ContinuationIndentTree,
+		},
 	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v", err)
+	}
 	if calls != 0 {
 		t.Fatalf("anchor callback calls = %d, want 0 when continuation indent is tree-aligned", calls)
 	}
 }
 
-func TestRenderTreeWithOptions_InvalidContinuationIndentPanics(t *testing.T) {
+func TestRenderTreeWithOptions_InvalidContinuationIndentErrors(t *testing.T) {
 	t.Parallel()
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("RenderTreeWithOptions() did not panic for invalid continuation indent")
-		}
-	}()
 
 	root := &Node{
 		Text: "root",
@@ -264,14 +272,37 @@ func TestRenderTreeWithOptions_InvalidContinuationIndentPanics(t *testing.T) {
 		},
 	}
 
-	_ = RenderTreeWithOptions(
+	_, err := RenderTreeWithOptions(
 		root,
 		DefaultStyle(),
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
-		nil,
-		0,
-		nil,
-		ContinuationIndent(99),
+		RenderOptions[Node]{
+			ContinuationIndent: ContinuationIndent(99),
+		},
 	)
+	if err == nil {
+		t.Fatal("RenderTreeWithOptions() error = nil, want non-nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "invalid ContinuationIndent") {
+		t.Fatalf("RenderTreeWithOptions() error = %q, want invalid ContinuationIndent", got)
+	}
+}
+
+func TestRenderTreeWithOptions_NilRootStillValidatesOptions(t *testing.T) {
+	t.Parallel()
+
+	var root *Node
+	_, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			ContinuationIndent: ContinuationIndent(99),
+		},
+	)
+	if err == nil {
+		t.Fatal("RenderTreeWithOptions(nil) error = nil, want non-nil")
+	}
 }

@@ -172,14 +172,19 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapWidth != nil {
 		wrapWidth = *o.wrapWidth
 	}
-	renderRows := treerender.RenderTreeWithOptions(root, o.style,
+	renderRows, err := treerender.RenderTreeWithOptions(root, o.style,
 		func(n *renderedNode) string { return n.NodeText },
 		func(n *renderedNode) []*renderedNode { return n.Children },
-		func(n *renderedNode) string { return n.ContinuationAnchor },
-		wrapWidth,
-		o.wrapper,
-		mapContinuationIndent(o.continuationIndent),
+		treerender.RenderOptions[renderedNode]{
+			GetContinuationAnchor: func(n *renderedNode) string { return n.ContinuationAnchor },
+			WrapWidth:             wrapWidth,
+			WrapCondition:         o.wrapper,
+			ContinuationIndent:    mapContinuationIndent(o.continuationIndent),
+		},
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render tree rows: %w", err)
+	}
 	nodes := collectPreorder(root)
 	if len(renderRows) != len(nodes) {
 		return nil, fmt.Errorf("unexpected rendered row count: got=%d want=%d", len(renderRows), len(nodes))
