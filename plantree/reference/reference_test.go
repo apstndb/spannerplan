@@ -23,7 +23,7 @@ func loadRealPlan(t *testing.T) string {
 
 func loadWrappedPlan(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile("../../cmd/rendertree/impl/testdata/distributed_cross_apply.yaml")
+	b, err := os.ReadFile("testdata/distributed_cross_apply.yaml")
 	if err != nil {
 		t.Fatalf("failed to read wrapped plan fixture: %v", err)
 	}
