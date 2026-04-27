@@ -301,6 +301,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	compact := flagSet.Bool("compact", false, "Enable compact format")
 	inlineStats := flagSet.Bool("inline-stats", false, "Enable inline stats")
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
+	hangingIndent := flagSet.Bool("hanging-indent", false, "Enable hanging indent for wrapped lines after node-local prefixes such as [Input] and [Map]")
 
 	var custom stringList
 	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT[:INLINE_TYPE]] form (mutually exclusive with --custom-file)")
@@ -391,6 +392,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	if *wrapWidth > 0 {
 		opts = append(opts, plantree.WithWrapWidth(*wrapWidth))
+	}
+	if *hangingIndent {
+		opts = append(opts, plantree.WithContinuationIndent(plantree.ContinuationIndentNodePrefix))
 	}
 
 	b, err := io.ReadAll(stdin)

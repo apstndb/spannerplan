@@ -513,6 +513,11 @@ func TestRun_UsageErrors(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:        "invalid hanging-indent",
+			args:        []string{"-hanging-indent=broken"},
+			wantErrText: "invalid boolean value \"broken\" for -hanging-indent",
+		},
 	}
 
 	for _, tt := range tests {
@@ -572,4 +577,44 @@ func TestRun_HelpReturnsNil(t *testing.T) {
 	if !strings.Contains(stderr.String(), "-mode") {
 		t.Fatalf("stderr = %q, want usage output", stderr.String())
 	}
+}
+
+func TestRun_HangingIndent(t *testing.T) {
+	t.Parallel()
+
+	var defaultStdout bytes.Buffer
+	var defaultStderr bytes.Buffer
+	if err := run([]string{"-mode", "plan", "-wrap-width", "50"}, bytes.NewReader(dcaYAML), &defaultStdout, &defaultStderr); err != nil {
+		t.Fatalf("run(default) error = %v", err)
+	}
+
+	var hangingStdout bytes.Buffer
+	var hangingStderr bytes.Buffer
+	if err := run([]string{"-mode", "plan", "-wrap-width", "50", "-hanging-indent"}, bytes.NewReader(dcaYAML), &hangingStdout, &hangingStderr); err != nil {
+		t.Fatalf("run(-hanging-indent) error = %v", err)
+	}
+
+	defaultLine := lineContaining(defaultStdout.String(), "method: Row)")
+	hangingLine := lineContaining(hangingStdout.String(), "method: Row)")
+	if defaultLine == "" || hangingLine == "" {
+		t.Fatalf("expected wrapped Batch Scan continuation line\ndefault=%q\nhanging=%q", defaultLine, hangingLine)
+	}
+	if defaultLine == hangingLine {
+		t.Fatalf("continuation line unchanged:\n%s", defaultLine)
+	}
+	if !strings.Contains(defaultLine, "|  method: Row)") {
+		t.Fatalf("default line = %q, want tree-aligned continuation marker", defaultLine)
+	}
+	if strings.Contains(hangingLine, "|  method: Row)") {
+		t.Fatalf("hanging line = %q, want node-prefix hanging indent", hangingLine)
+	}
+}
+
+func lineContaining(s, needle string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if strings.Contains(line, needle) {
+			return line
+		}
+	}
+	return ""
 }
