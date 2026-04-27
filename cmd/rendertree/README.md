@@ -43,7 +43,7 @@ $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singe
 
 Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--mode=AUTO` can detect whether the input has execution statistics or not.
 
-Rendered stats columns are customizable using `--custom-file`. `--custom-file` and `--custom` are mutually exclusive.
+Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.
 
 ```
 $ cat custom.yaml
@@ -144,10 +144,15 @@ Predicates(identified by ID):
  34: Seek Condition: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId) AND ($TrackId' = $batched_TrackId))
 ```
 
-You can also use `--custom=<name>:<template>[:<align>[:<inline_type>]]`. `--custom` and `--custom-file` cannot be used together.
+You can also use repeatable `--custom-column` flags. Each flag value is a single column definition in JSON or flow-style YAML, using the same schema as `--custom-file`.
 
 ```
-$ cat distributed_cross_apply_profile.yaml | rendertree --custom "ID:{{.FormatID}}:RIGHT,Operator:{{.Text}},CPU Time:{{.ExecutionStats.CpuTime | secsToS}},remote_calls:{{.ExecutionStats.RemoteCalls.Total}}::ALWAYS" 
+$ cat distributed_cross_apply_profile.yaml | \
+    rendertree \
+      --custom-column '{"name":"ID","template":"{{.FormatID}}","alignment":"RIGHT"}' \
+      --custom-column '{"name":"Operator","template":"{{.Text}}"}' \
+      --custom-column '{"name":"CPU Time","template":"{{.ExecutionStats.CpuTime | secsToS}}"}' \
+      --custom-column '{"name":"remote_calls","template":"{{.ExecutionStats.RemoteCalls.Total}}","inline":"ALWAYS"}'
 +-----+-------------------------------------------------------------------------------------------+----------+
 | ID  | Operator                                                                                  | CPU Time |
 +-----+-------------------------------------------------------------------------------------------+----------+
@@ -168,6 +173,8 @@ Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
 ```
+
+The older `--custom=<name>:<template>[:<align>[:<inline_type>]]` form is still accepted for compatibility, but it is deprecated because the delimiter-based mini-language cannot represent all valid template strings robustly.
 
 ## Options for narrower width
 
