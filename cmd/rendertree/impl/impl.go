@@ -26,6 +26,8 @@ import (
 	"github.com/apstndb/spannerplan/stats"
 )
 
+var customDecodeOptions = []yaml.DecodeOption{yaml.CustomUnmarshaler(unmarshalAlign)}
+
 // Main is the entry point of this command.
 // It is also used by github.com/apstndb/spannerplanviz/cmd/rendertree
 func Main() {
@@ -242,6 +244,17 @@ func (s *stringList) Set(s2 string) error {
 	return nil
 }
 
+type repeatableStringList []string
+
+func (s *repeatableStringList) String() string {
+	return fmt.Sprint([]string(*s))
+}
+
+func (s *repeatableStringList) Set(s2 string) error {
+	*s = append(*s, s2)
+	return nil
+}
+
 const jsonSnippetLen = 140
 
 type PrintMode int
@@ -290,7 +303,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flagSet := flag.NewFlagSet("rendertree", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
 
-	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom)")
+	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printModeStr := flagSet.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
@@ -304,7 +317,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	hangingIndent := flagSet.Bool("hanging-indent", false, "Enable hanging indent for wrapped lines after node-local prefixes such as [Input] and [Map]")
 
 	var custom stringList
-	flagSet.Var(&custom, "custom", "Add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT[:INLINE_TYPE]] form (mutually exclusive with --custom-file)")
+	var customColumn repeatableStringList
+	flagSet.Var(&custom, "custom", "DEPRECATED: add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT[:INLINE_TYPE]] form (mutually exclusive with --custom-file and --custom-column)")
+	flagSet.Var(&customColumn, "custom-column", "Add one custom table column definition as a YAML/JSON object (repeatable, mutually exclusive with --custom and --custom-file)")
 	if err := flagSet.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -332,6 +347,21 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintln(stderr, msg)
 		flagSet.Usage()
 		return &usageError{err: errors.New(msg)}
+	}
+	if len(customColumn) > 0 && *customFile != "" {
+		const msg = "--custom-column and --custom-file are mutually exclusive"
+		_, _ = fmt.Fprintln(stderr, msg)
+		flagSet.Usage()
+		return &usageError{err: errors.New(msg)}
+	}
+	if len(custom) > 0 && len(customColumn) > 0 {
+		const msg = "--custom and --custom-column are mutually exclusive"
+		_, _ = fmt.Fprintln(stderr, msg)
+		flagSet.Usage()
+		return &usageError{err: errors.New(msg)}
+	}
+	if len(custom) > 0 {
+		_, _ = fmt.Fprintln(stderr, "--custom is deprecated. You must migrate to --custom-column or --custom-file.")
 	}
 
 	printMode, err := parsePrintMode(*printModeStr)
@@ -414,7 +444,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	planNodes := qs.GetQueryPlan().GetPlanNodes()
 
 	var renderDef tableRenderDef
-	if len(custom) > 0 {
+	if len(customColumn) > 0 {
+		renderDef, err = customColumnListToTableRenderDef(customColumn)
+		if err != nil {
+			return err
+		}
+	} else if len(custom) > 0 {
 		renderDef, err = customListToTableRenderDef(custom)
 		if err != nil {
 			return err
@@ -528,15 +563,8 @@ func unmarshalAlign(t *tw.Align, bytes []byte) error {
 	return nil
 }
 
-func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
-	decodeOpts := []yaml.DecodeOption{yaml.CustomUnmarshaler(unmarshalAlign)}
-
-	var defs []plainColumnRenderDef
-	if err := yaml.UnmarshalWithOptions(b, &defs, decodeOpts...); err != nil {
-		return tableRenderDef{}, err
-	}
-
-	var tdef tableRenderDef
+func plainColumnRenderDefsToTableRenderDef(defs []plainColumnRenderDef) (tableRenderDef, error) {
+	tdef := tableRenderDef{Columns: make([]columnRenderDef, 0, len(defs))}
 	for _, def := range defs {
 		mapFunc, err := templateMapFunc(def.Name, def.Template)
 		if err != nil {
@@ -550,6 +578,28 @@ func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
 		})
 	}
 	return tdef, nil
+}
+
+func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
+	var defs []plainColumnRenderDef
+	if err := yaml.UnmarshalWithOptions(b, &defs, customDecodeOptions...); err != nil {
+		return tableRenderDef{}, err
+	}
+
+	return plainColumnRenderDefsToTableRenderDef(defs)
+}
+
+func customColumnListToTableRenderDef(customColumns []string) (tableRenderDef, error) {
+	defs := make([]plainColumnRenderDef, 0, len(customColumns))
+	for i, raw := range customColumns {
+		var def plainColumnRenderDef
+		if err := yaml.UnmarshalWithOptions([]byte(raw), &def, customDecodeOptions...); err != nil {
+			return tableRenderDef{}, fmt.Errorf("failed to parse --custom-column[%d]: %w", i, err)
+		}
+		defs = append(defs, def)
+	}
+
+	return plainColumnRenderDefsToTableRenderDef(defs)
 }
 
 func parseInlineType(s string) (inlineType, error) {

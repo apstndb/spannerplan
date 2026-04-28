@@ -40,6 +40,29 @@ func Test_customFileToTableRenderDef(t *testing.T) {
 	}
 }
 
+func Test_customColumnListToTableRenderDef(t *testing.T) {
+	trd, err := customColumnListToTableRenderDef([]string{
+		`{"name":"CPU,Time","template":"{{printf \"%s:%s,%s\" \"a\" \"b\" \"c\"}}","alignment":"RIGHT","inline":"ALWAYS"}`,
+		`{name: Operator, template: "{{.Text}}"}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := len(trd.Columns), 2; got != want {
+		t.Fatalf("column count = %d, want %d", got, want)
+	}
+	if got, want := trd.Columns[0].Name, "CPU,Time"; got != want {
+		t.Fatalf("name = %q, want %q", got, want)
+	}
+	if got, want := trd.Columns[0].Alignment, tw.AlignRight; got != want {
+		t.Fatalf("alignment = %v, want %v", got, want)
+	}
+	if got, want := trd.Columns[0].Inline, inlineTypeAlways; got != want {
+		t.Fatalf("inline = %q, want %q", got, want)
+	}
+}
+
 //go:embed testdata/distributed_cross_apply.yaml
 var dcaYAML []byte
 
@@ -514,6 +537,28 @@ func TestRun_UsageErrors(t *testing.T) {
 			},
 		},
 		{
+			name:        "custom-column and custom-file are mutually exclusive",
+			args:        []string{"-custom-column", `{"name":"ID","template":"{{.FormatID}}"}`, "-custom-file", "custom.yaml"},
+			wantErrText: "--custom-column and --custom-file are mutually exclusive",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "--custom-column and --custom-file are mutually exclusive") {
+					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
+				}
+			},
+		},
+		{
+			name:        "custom and custom-column are mutually exclusive",
+			args:        []string{"-custom", "ID:{{.FormatID}}", "-custom-column", `{"name":"Operator","template":"{{.Text}}"}`},
+			wantErrText: "--custom and --custom-column are mutually exclusive",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "--custom and --custom-column are mutually exclusive") {
+					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
+				}
+			},
+		},
+		{
 			name:        "invalid hanging-indent",
 			args:        []string{"-hanging-indent=broken"},
 			wantErrText: "invalid boolean value \"broken\" for -hanging-indent",
@@ -563,6 +608,22 @@ func TestRun_DeprecatedFullScanAlias(t *testing.T) {
 	}
 }
 
+func TestRun_DeprecatedCustomAlias(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := run([]string{"-custom", "ID:{{.FormatID}}:RIGHT", "-mode", "plan"}, bytes.NewReader(deleteYAML), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if !strings.Contains(stderr.String(), "--custom is deprecated. You must migrate to --custom-column or --custom-file.") {
+		t.Fatalf("stderr = %q, want deprecation warning", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "| ID |") {
+		t.Fatalf("stdout = %q, want custom output", stdout.String())
+	}
+}
+
 func TestRun_HelpReturnsNil(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -607,6 +668,31 @@ func TestRun_HangingIndent(t *testing.T) {
 	}
 	if strings.Contains(hangingLine, "|  method: Row)") {
 		t.Fatalf("hanging line = %q, want node-prefix hanging indent", hangingLine)
+	}
+}
+
+func TestRun_CustomColumn(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"-mode", "plan",
+		"-custom-column", `{"name":"Literal,Value","template":"{{printf \"%s:%s,%s\" \"a\" \"b\" \"c\"}}"}`,
+		"-custom-column", `{"name":"Operator","template":"{{.Text}}"}`,
+	}, bytes.NewReader(dcaYAML), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run(-custom-column) error = %v", err)
+	}
+
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+	if !strings.Contains(stdout.String(), "Literal,Value") {
+		t.Fatalf("stdout = %q, want custom column header", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "a:b,c") {
+		t.Fatalf("stdout = %q, want literal colon/comma content", stdout.String())
 	}
 }
 
