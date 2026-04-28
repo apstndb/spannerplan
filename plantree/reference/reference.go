@@ -250,7 +250,7 @@ func processTree(planNodes []*sppb.PlanNode, format Format, opts options) ([]pla
 		plantreeOpts = append(plantreeOpts, plantree.WithWrapWidth(opts.wrapWidth))
 	}
 	if opts.hangingIndent {
-		plantreeOpts = append(plantreeOpts, plantree.WithContinuationIndent(plantree.ContinuationIndentNodePrefix))
+		plantreeOpts = append(plantreeOpts, plantree.WithHangingIndent())
 	}
 
 	return plantree.ProcessPlan(qp, plantreeOpts...)

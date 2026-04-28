@@ -424,7 +424,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		opts = append(opts, plantree.WithWrapWidth(*wrapWidth))
 	}
 	if *hangingIndent {
-		opts = append(opts, plantree.WithContinuationIndent(plantree.ContinuationIndentNodePrefix))
+		opts = append(opts, plantree.WithHangingIndent())
 	}
 
 	b, err := io.ReadAll(stdin)

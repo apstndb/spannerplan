@@ -191,7 +191,8 @@ func TestProcessPlan_NegativeWrapWidthErrors(t *testing.T) {
 
 func invalidContinuationIndentOption() Option {
 	return func(o *options) {
-		o.continuationIndent = ContinuationIndent(99)
+		indent := ContinuationIndent(99)
+		o.continuationIndent = &indent
 	}
 }
 
@@ -292,8 +293,8 @@ func hangingIndentPlan(t *testing.T) *spannerplan.QueryPlan {
 	return qp
 }
 
-func TestProcessPlan_ContinuationIndentNodePrefix(t *testing.T) {
-	opts := append(currentOptions(), WithWrapWidth(21), WithContinuationIndent(ContinuationIndentNodePrefix))
+func TestProcessPlan_HangingIndent(t *testing.T) {
+	opts := append(currentOptions(), WithWrapWidth(21), WithHangingIndent())
 	rows, err := ProcessPlan(hangingIndentPlan(t), opts...)
 	if err != nil {
 		t.Fatalf("ProcessPlan() error = %v", err)
@@ -311,6 +312,28 @@ func TestProcessPlan_ContinuationIndentNodePrefix(t *testing.T) {
 		NodeText: got.NodeText,
 	}); diff != "" {
 		t.Fatalf("row 1 mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestProcessPlan_DeprecatedContinuationIndentNodePrefix(t *testing.T) {
+	withDeprecated, err := ProcessPlan(hangingIndentPlan(t), append(currentOptions(),
+		WithWrapWidth(21),
+		WithContinuationIndent(ContinuationIndentNodePrefix),
+	)...)
+	if err != nil {
+		t.Fatalf("ProcessPlan(deprecated option) error = %v", err)
+	}
+
+	withHanging, err := ProcessPlan(hangingIndentPlan(t), append(currentOptions(),
+		WithWrapWidth(21),
+		WithHangingIndent(),
+	)...)
+	if err != nil {
+		t.Fatalf("ProcessPlan(WithHangingIndent) error = %v", err)
+	}
+
+	if diff := cmp.Diff(withHanging, withDeprecated); diff != "" {
+		t.Fatalf("deprecated continuation-indent option mismatch (-want +got):\n%s", diff)
 	}
 }
 

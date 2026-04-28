@@ -81,7 +81,8 @@ type options struct {
 	queryplanOptions     []spannerplan.Option
 	style                treerender.Style
 	compact              bool
-	continuationIndent   ContinuationIndent
+	hangingIndent        bool
+	continuationIndent   *ContinuationIndent
 	wrapWidth            *int
 	wrapper              *tabwrap.Condition
 }
@@ -89,12 +90,19 @@ type options struct {
 type Option func(*options)
 
 // ContinuationIndent controls how wrapped continuation lines are aligned.
+//
+// Deprecated: use [WithHangingIndent] to opt into hanging indent, or omit the option
+// to keep the default tree-aligned continuation behavior.
 type ContinuationIndent int
 
 const (
 	// ContinuationIndentTree preserves the current behavior: continuation lines align only to the tree prefix.
+	//
+	// Deprecated: omit [WithHangingIndent] to keep the default tree-aligned continuation behavior.
 	ContinuationIndentTree ContinuationIndent = iota
 	// ContinuationIndentNodePrefix hangs continuation lines after a node-local prefix such as `[Input] `.
+	//
+	// Deprecated: use [WithHangingIndent].
 	ContinuationIndentNodePrefix
 )
 
@@ -129,13 +137,26 @@ func EnableCompact() Option {
 	}
 }
 
+// WithHangingIndent hangs wrapped continuation lines after a node-local prefix such as
+// `[Input] ` or `[Map] ` instead of keeping the default tree-aligned indentation.
+func WithHangingIndent() Option {
+	return func(o *options) {
+		o.hangingIndent = true
+		o.continuationIndent = nil
+	}
+}
+
 // WithContinuationIndent selects how wrapped continuation lines are aligned.
 // The default [ContinuationIndentTree] preserves the current behavior.
 // [ContinuationIndentNodePrefix] is opt-in and hangs continuation lines after a
 // node-local prefix such as `[Input] ` or `[Map] ` when present.
+//
+// Deprecated: use [WithHangingIndent] to opt into hanging indent, or omit the option
+// to keep the default tree-aligned continuation behavior.
 func WithContinuationIndent(indent ContinuationIndent) Option {
 	return func(o *options) {
-		o.continuationIndent = indent
+		o.continuationIndent = &indent
+		o.hangingIndent = indent == ContinuationIndentNodePrefix
 	}
 }
 
@@ -156,8 +177,10 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapWidth != nil && *o.wrapWidth < 0 {
 		return nil, fmt.Errorf("wrap width cannot be negative: %d", *o.wrapWidth)
 	}
-	if err := validateContinuationIndent(o.continuationIndent); err != nil {
-		return nil, err
+	if o.continuationIndent != nil {
+		if err := validateContinuationIndent(*o.continuationIndent); err != nil {
+			return nil, err
+		}
 	}
 
 	root, err := buildRenderedTree(qp, nil, &o)
@@ -179,7 +202,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			GetContinuationAnchor: func(n *renderedNode) string { return n.ContinuationAnchor },
 			WrapWidth:             wrapWidth,
 			WrapCondition:         o.wrapper,
-			ContinuationIndent:    mapContinuationIndent(o.continuationIndent),
+			ContinuationIndent:    mapHangingIndent(o.hangingIndent),
 		},
 	)
 	if err != nil {
@@ -270,15 +293,11 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	return rendered, nil
 }
 
-func mapContinuationIndent(indent ContinuationIndent) treerender.ContinuationIndent {
-	switch indent {
-	case ContinuationIndentNodePrefix:
+func mapHangingIndent(enabled bool) treerender.ContinuationIndent {
+	if enabled {
 		return treerender.ContinuationIndentAnchor
-	case ContinuationIndentTree:
-		return treerender.ContinuationIndentTree
-	default:
-		panic(fmt.Sprintf("unknown ContinuationIndent: %d", indent))
 	}
+	return treerender.ContinuationIndentTree
 }
 
 func validateContinuationIndent(indent ContinuationIndent) error {
