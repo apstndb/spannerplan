@@ -26,6 +26,8 @@ import (
 	"github.com/apstndb/spannerplan/stats"
 )
 
+var customDecodeOptions = []yaml.DecodeOption{yaml.CustomUnmarshaler(unmarshalAlign)}
+
 // Main is the entry point of this command.
 // It is also used by github.com/apstndb/spannerplanviz/cmd/rendertree
 func Main() {
@@ -561,12 +563,8 @@ func unmarshalAlign(t *tw.Align, bytes []byte) error {
 	return nil
 }
 
-func customDecodeOptions() []yaml.DecodeOption {
-	return []yaml.DecodeOption{yaml.CustomUnmarshaler(unmarshalAlign)}
-}
-
 func plainColumnRenderDefsToTableRenderDef(defs []plainColumnRenderDef) (tableRenderDef, error) {
-	var tdef tableRenderDef
+	tdef := tableRenderDef{Columns: make([]columnRenderDef, 0, len(defs))}
 	for _, def := range defs {
 		mapFunc, err := templateMapFunc(def.Name, def.Template)
 		if err != nil {
@@ -584,7 +582,7 @@ func plainColumnRenderDefsToTableRenderDef(defs []plainColumnRenderDef) (tableRe
 
 func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
 	var defs []plainColumnRenderDef
-	if err := yaml.UnmarshalWithOptions(b, &defs, customDecodeOptions()...); err != nil {
+	if err := yaml.UnmarshalWithOptions(b, &defs, customDecodeOptions...); err != nil {
 		return tableRenderDef{}, err
 	}
 
@@ -592,10 +590,10 @@ func customFileToTableRenderDef(b []byte) (tableRenderDef, error) {
 }
 
 func customColumnListToTableRenderDef(customColumns []string) (tableRenderDef, error) {
-	var defs []plainColumnRenderDef
+	defs := make([]plainColumnRenderDef, 0, len(customColumns))
 	for i, raw := range customColumns {
 		var def plainColumnRenderDef
-		if err := yaml.UnmarshalWithOptions([]byte(raw), &def, customDecodeOptions()...); err != nil {
+		if err := yaml.UnmarshalWithOptions([]byte(raw), &def, customDecodeOptions...); err != nil {
 			return tableRenderDef{}, fmt.Errorf("failed to parse --custom-column[%d]: %w", i, err)
 		}
 		defs = append(defs, def)
