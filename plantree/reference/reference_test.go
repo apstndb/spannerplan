@@ -387,7 +387,7 @@ func TestRenderTreeTable_InputValidation(t *testing.T) {
 	}
 }
 
-func TestRenderTreeTableWithOptions_ContinuationIndentNodePrefix(t *testing.T) {
+func TestRenderTreeTableWithOptions_HangingIndent(t *testing.T) {
 	input := loadWrappedPlan(t)
 	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
 	if err != nil {
