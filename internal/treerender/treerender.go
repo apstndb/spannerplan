@@ -298,14 +298,14 @@ func hangingIndentPadding(anchorWidth int, hasChildren bool, childGuide string, 
 	}
 
 	guide := childGuide
-	if guideWidth := wrapCondition.StringWidth(guide); guideWidth > anchorWidth {
-		guide = wrapCondition.Truncate(guide, anchorWidth, "")
-	}
-	if guide == "" {
-		return strings.Repeat(" ", anchorWidth)
-	}
-
 	guideWidth := wrapCondition.StringWidth(guide)
+	if guideWidth > anchorWidth {
+		guide = wrapCondition.Truncate(guide, anchorWidth, "")
+		if guide == "" {
+			return strings.Repeat(" ", anchorWidth)
+		}
+		guideWidth = wrapCondition.StringWidth(guide)
+	}
 	return guide + strings.Repeat(" ", max(0, anchorWidth-guideWidth))
 }
 
