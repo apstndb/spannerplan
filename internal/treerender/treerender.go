@@ -179,17 +179,6 @@ func renderTree[T any](
 		if node == nil {
 			return
 		}
-		text := getText(node)
-		anchor := ""
-		if opts.wrapWidth > 0 && opts.continuationIndent == ContinuationIndentAnchor && opts.getContinuationAnchor != nil {
-			anchor = opts.getContinuationAnchor(node)
-		}
-		rows = append(rows, renderRow(ancestorPrefix, text, anchor, isLast, isRoot, sw, opts.wrapWidth, opts.wrapCondition, opts.continuationIndent))
-
-		next := ancestorPrefix
-		if !isRoot {
-			next = ancestorPrefix + sw.segment(!isLast)
-		}
 		children := getChildren(node)
 		lastIdx := -1
 		for i := len(children) - 1; i >= 0; i-- {
@@ -197,6 +186,28 @@ func renderTree[T any](
 				lastIdx = i
 				break
 			}
+		}
+		text := getText(node)
+		anchor := ""
+		if opts.wrapWidth > 0 && opts.continuationIndent == ContinuationIndentAnchor && opts.getContinuationAnchor != nil {
+			anchor = opts.getContinuationAnchor(node)
+		}
+		rows = append(rows, renderRow(
+			ancestorPrefix,
+			text,
+			anchor,
+			lastIdx >= 0,
+			isLast,
+			isRoot,
+			sw,
+			opts.wrapWidth,
+			opts.wrapCondition,
+			opts.continuationIndent,
+		))
+
+		next := ancestorPrefix
+		if !isRoot {
+			next = ancestorPrefix + sw.segment(!isLast)
 		}
 		for i, child := range children {
 			if child == nil {
@@ -212,6 +223,7 @@ func renderTree[T any](
 
 func renderRow(
 	ancestorPrefix, text, anchor string,
+	hasChildren bool,
 	isLast, isRoot bool,
 	sw styleWidths,
 	wrapWidth int,
@@ -226,7 +238,7 @@ func renderRow(
 	}
 
 	firstPrefix, continuationPrefix := rowPrefixes(ancestorPrefix, isLast, isRoot, sw)
-	treeLines, nodeLines := wrapRowLines(text, anchor, firstPrefix, continuationPrefix, wrapWidth, wrapCondition, continuationIndent)
+	treeLines, nodeLines := wrapRowLines(text, anchor, firstPrefix, continuationPrefix, hasChildren, sw.style.EdgeLink, wrapWidth, wrapCondition, continuationIndent)
 	return Row{
 		TreePart: strings.Join(treeLines, "\n"),
 		NodeText: strings.Join(nodeLines, "\n"),
@@ -243,6 +255,8 @@ func rowPrefixes(ancestorPrefix string, isLast, isRoot bool, sw styleWidths) (fi
 
 func wrapRowLines(
 	text, anchor, firstPrefix, continuationPrefix string,
+	hasChildren bool,
+	childGuide string,
 	wrapWidth int,
 	wrapCondition *tabwrap.Condition,
 	continuationIndent ContinuationIndent,
@@ -267,12 +281,32 @@ func wrapRowLines(
 	treeLines[0] = firstPrefix
 	continuationTree := continuationPrefix
 	if anchorWidth > 0 {
-		continuationTree += strings.Repeat(" ", anchorWidth)
+		continuationTree += hangingIndentPadding(anchorWidth, hasChildren, childGuide, wrapCondition)
 	}
 	for i := 1; i < len(treeLines); i++ {
 		treeLines[i] = continuationTree
 	}
 	return treeLines, nodeLines
+}
+
+func hangingIndentPadding(anchorWidth int, hasChildren bool, childGuide string, wrapCondition *tabwrap.Condition) string {
+	if anchorWidth <= 0 {
+		return ""
+	}
+	if !hasChildren || childGuide == "" {
+		return strings.Repeat(" ", anchorWidth)
+	}
+
+	guide := childGuide
+	if guideWidth := wrapCondition.StringWidth(guide); guideWidth > anchorWidth {
+		guide = wrapCondition.Truncate(guide, anchorWidth, "")
+	}
+	if guide == "" {
+		return strings.Repeat(" ", anchorWidth)
+	}
+
+	guideWidth := wrapCondition.StringWidth(guide)
+	return guide + strings.Repeat(" ", max(0, anchorWidth-guideWidth))
 }
 
 func validateContinuationIndent(continuationIndent ContinuationIndent) error {
