@@ -5,7 +5,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/apstndb/go-tabwrap"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -162,7 +161,7 @@ func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
 				return ""
 			},
 			WrapWidth:          21,
-			WrapCondition:      tabwrap.NewCondition(),
+			WrapCondition:      defaultWrapCondition,
 			ContinuationIndent: ContinuationIndentAnchor,
 		},
 	)
@@ -218,7 +217,7 @@ func TestRenderTreeWithOptions_HangingIndentAnchorKeepsChildGuide(t *testing.T) 
 		"last": {
 			{TreePart: "", NodeText: "root"},
 			{TreePart: "+- ", NodeText: "head"},
-			{TreePart: "+- \n   |     \n   |     ", NodeText: "[Map] Local Distri\nbuted Union \n<Row>"},
+			{TreePart: "+- \n   |     \n   |     ", NodeText: "[Map] Local Distri\nbuted Union\n<Row>"},
 			{TreePart: "   +- ", NodeText: "leaf"},
 		},
 	}
@@ -242,7 +241,7 @@ func TestRenderTreeWithOptions_HangingIndentAnchorKeepsChildGuide(t *testing.T) 
 						}
 					},
 					WrapWidth:          21,
-					WrapCondition:      tabwrap.NewCondition(),
+					WrapCondition:      defaultWrapCondition,
 					ContinuationIndent: ContinuationIndentAnchor,
 				},
 			)
