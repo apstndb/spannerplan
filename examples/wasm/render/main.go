@@ -3,8 +3,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"syscall/js"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -103,7 +105,7 @@ func decodeRenderConfig(args []js.Value, index int) (reference.RenderConfig, err
 	}
 
 	var config reference.RenderConfig
-	if err := json.Unmarshal(raw, &config); err != nil {
+	if err := unmarshalStrictJSON(raw, &config); err != nil {
 		return reference.RenderConfig{}, fmt.Errorf("decode config JSON: %w", err)
 	}
 	return config, nil
@@ -153,4 +155,20 @@ func stringifyJSON(v js.Value) (jsonStr string, err error) {
 		return "", fmt.Errorf("failed to stringify JavaScript value")
 	}
 	return stringified.String(), nil
+}
+
+func unmarshalStrictJSON(raw []byte, dst any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("unexpected trailing JSON")
+		}
+		return err
+	}
+	return nil
 }
