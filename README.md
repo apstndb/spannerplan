@@ -20,7 +20,7 @@ parses `mode` and `format` strings with `reference.ParseRenderMode(...)` and
 `{error: string}`.
 
 ```bash
-GOOS=js GOARCH=wasm go build -o dist/spannerplan.wasm ./examples/wasm/render
+GOOS=js GOARCH=wasm go build -o ./spannerplan.wasm ./examples/wasm/render
 ```
 
 ```js

@@ -24,7 +24,15 @@ func main() {
 	select {}
 }
 
-func renderTreeTable(this js.Value, args []js.Value) any {
+func renderTreeTable(this js.Value, args []js.Value) (result any) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result = map[string]any{
+				"error": fmt.Sprintf("panic while rendering query plan: %v", recovered),
+			}
+		}
+	}()
+
 	output, err := renderTreeTableFromArgs(args)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
@@ -119,9 +127,30 @@ func jsonBytes(v js.Value) ([]byte, error) {
 		return nil, fmt.Errorf("expected JSON string or object, got %s", v.Type())
 	}
 
+	uint8Array := js.Global().Get("Uint8Array")
+	if uint8Array.Truthy() && v.InstanceOf(uint8Array) {
+		b := make([]byte, v.Get("length").Int())
+		js.CopyBytesToGo(b, v)
+		return b, nil
+	}
+
+	stringified, err := stringifyJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(stringified), nil
+}
+
+func stringifyJSON(v js.Value) (_ string, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("failed to stringify JavaScript value: %v", recovered)
+		}
+	}()
+
 	stringified := js.Global().Get("JSON").Call("stringify", v)
 	if stringified.Type() != js.TypeString {
-		return nil, fmt.Errorf("failed to stringify JavaScript value")
+		return "", fmt.Errorf("failed to stringify JavaScript value")
 	}
-	return []byte(stringified.String()), nil
+	return stringified.String(), nil
 }
