@@ -5,7 +5,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/apstndb/go-tabwrap"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -162,7 +161,7 @@ func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
 				return ""
 			},
 			WrapWidth:          21,
-			WrapCondition:      tabwrap.NewCondition(),
+			WrapCondition:      defaultWrapCondition,
 			ContinuationIndent: ContinuationIndentAnchor,
 		},
 	)
@@ -177,6 +176,82 @@ func TestRenderTreeWithOptions_HangingIndentAnchor(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("RenderTreeWithOptions() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTreeWithOptions_HangingIndentAnchorKeepsChildGuide(t *testing.T) {
+	tests := map[string]*Node{
+		"non-last": {
+			Text: "root",
+			Children: []*Node{
+				{
+					Text: "[Input] Batch Scan <Row>",
+					Children: []*Node{
+						{Text: "leaf"},
+					},
+				},
+				{Text: "tail"},
+			},
+		},
+		"last": {
+			Text: "root",
+			Children: []*Node{
+				{Text: "head"},
+				{
+					Text: "[Map] Local Distributed Union <Row>",
+					Children: []*Node{
+						{Text: "leaf"},
+					},
+				},
+			},
+		},
+	}
+
+	wants := map[string][]Row{
+		"non-last": {
+			{TreePart: "", NodeText: "root"},
+			{TreePart: "+- \n|  |       ", NodeText: "[Input] Batch Scan\n <Row>"},
+			{TreePart: "|  +- ", NodeText: "leaf"},
+			{TreePart: "+- ", NodeText: "tail"},
+		},
+		"last": {
+			{TreePart: "", NodeText: "root"},
+			{TreePart: "+- ", NodeText: "head"},
+			{TreePart: "+- \n   |     \n   |     ", NodeText: "[Map] Local Distri\nbuted Union\n<Row>"},
+			{TreePart: "   +- ", NodeText: "leaf"},
+		},
+	}
+
+	for name, root := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := RenderTreeWithOptions(
+				root,
+				DefaultStyle(),
+				func(n *Node) string { return n.Text },
+				func(n *Node) []*Node { return n.Children },
+				RenderOptions[Node]{
+					GetContinuationAnchor: func(n *Node) string {
+						switch {
+						case strings.HasPrefix(n.Text, "[Input] "):
+							return "[Input] "
+						case strings.HasPrefix(n.Text, "[Map] "):
+							return "[Map] "
+						default:
+							return ""
+						}
+					},
+					WrapWidth:          21,
+					WrapCondition:      defaultWrapCondition,
+					ContinuationIndent: ContinuationIndentAnchor,
+				},
+			)
+			if err != nil {
+				t.Fatalf("RenderTreeWithOptions() error = %v", err)
+			}
+			if diff := cmp.Diff(wants[name], got); diff != "" {
+				t.Fatalf("RenderTreeWithOptions() mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
