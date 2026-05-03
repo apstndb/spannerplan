@@ -428,6 +428,74 @@ func TestRenderTreeTableWithOptions_HangingIndent(t *testing.T) {
 	}
 }
 
+func TestRenderTreeTableWithConfig(t *testing.T) {
+	input := loadWrappedPlan(t)
+	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
+	if err != nil {
+		t.Fatalf("Failed to extract query plan: %v", err)
+	}
+	planNodes := stats.GetQueryPlan().GetPlanNodes()
+
+	tests := []struct {
+		name   string
+		config RenderConfig
+		opts   []Option
+	}{
+		{
+			name:   "zero value matches no options",
+			config: RenderConfig{},
+		},
+		{
+			name:   "wrap width matches WithWrapWidth",
+			config: RenderConfig{WrapWidth: 50},
+			opts:   []Option{WithWrapWidth(50)},
+		},
+		{
+			name:   "hanging indent matches WithHangingIndent",
+			config: RenderConfig{HangingIndent: true},
+			opts:   []Option{WithHangingIndent()},
+		},
+		{
+			name:   "wrap width and hanging indent match options",
+			config: RenderConfig{WrapWidth: 50, HangingIndent: true},
+			opts:   []Option{WithWrapWidth(50), WithHangingIndent()},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RenderTreeTableWithConfig(planNodes, RenderModePlan, FormatCurrent, tc.config)
+			if err != nil {
+				t.Fatalf("RenderTreeTableWithConfig() error = %v", err)
+			}
+
+			want, err := RenderTreeTableWithOptions(planNodes, RenderModePlan, FormatCurrent, tc.opts...)
+			if err != nil {
+				t.Fatalf("RenderTreeTableWithOptions() error = %v", err)
+			}
+
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Fatalf("RenderTreeTableWithConfig() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestRenderTreeTableWithConfig_NegativeWrapWidth(t *testing.T) {
+	_, err := RenderTreeTableWithConfig(
+		[]*sppb.PlanNode{{}},
+		RenderModeAuto,
+		FormatCurrent,
+		RenderConfig{WrapWidth: -1},
+	)
+	if err == nil {
+		t.Fatal("RenderTreeTableWithConfig() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "wrapWidth cannot be negative") {
+		t.Fatalf("RenderTreeTableWithConfig() error = %q, want wrapWidth cannot be negative", err)
+	}
+}
+
 func TestRenderTreeTableWithOptions_NilOption(t *testing.T) {
 	input := loadWrappedPlan(t)
 	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
