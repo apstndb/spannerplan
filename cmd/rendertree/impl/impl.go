@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"cmp"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 	"text/template"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/apstndb/lox"
 	"github.com/goccy/go-yaml"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/renderer"
@@ -196,6 +196,14 @@ var secsRe = regexp.MustCompile(`secs$`)
 
 func secsToS(v any) string {
 	return secsRe.ReplaceAllString(fmt.Sprint(v), "s")
+}
+
+func sortedChildLinkEntries(m map[string][]*spannerplan.ResolvedChildLink) []lo.Entry[string, []*spannerplan.ResolvedChildLink] {
+	entries := lo.Entries(m)
+	slices.SortFunc(entries, func(a, b lo.Entry[string, []*spannerplan.ResolvedChildLink]) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
+	return entries
 }
 
 var (
@@ -712,7 +720,7 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 		}
 
 		i := 0
-		for _, t := range lox.EntriesSortedByKey(row.ChildLinks) {
+		for _, t := range sortedChildLinkEntries(row.ChildLinks) {
 			typ, childLinks := t.Key, t.Value
 			if printMode != PrintFull && typ == "" {
 				continue
