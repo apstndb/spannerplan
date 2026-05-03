@@ -1,5 +1,10 @@
 // Package reference provides a reference implementation for rendering
 // Spanner query plans as ASCII tables with various formatting options.
+//
+// Go callers should prefer [RenderTreeTableWithOptions] with functional options.
+// Cross-language integrations, such as WebAssembly or JavaScript wrappers that
+// start from JSON-like configuration, can use [RenderTreeTableWithConfig] and
+// [RenderConfig].
 package reference
 
 import (
@@ -32,6 +37,21 @@ const (
 type options struct {
 	wrapWidth     int
 	hangingIndent bool
+}
+
+// RenderConfig configures optional rendering behavior using serialization-friendly fields.
+//
+// Use this type for cross-language integrations that start from JSON-like configuration,
+// such as WebAssembly or JavaScript callers. Go callers can continue to use functional
+// [Option] values with [RenderTreeTableWithOptions].
+type RenderConfig struct {
+	// WrapWidth sets the maximum total rendered line width, including the tree prefix.
+	// A value of 0 disables wrapping. Negative values make [RenderTreeTableWithConfig] return an error.
+	WrapWidth int `json:"wrapWidth,omitempty"`
+
+	// HangingIndent hangs wrapped continuation lines after node-local prefixes such as
+	// `[Input] ` and `[Map] ` instead of keeping the default tree-aligned indentation.
+	HangingIndent bool `json:"hangingIndent,omitempty"`
 }
 
 // Option configures optional rendering behavior for [RenderTreeTableWithOptions].
@@ -75,6 +95,12 @@ func RenderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 	return RenderTreeTableWithOptions(planNodes, mode, format, WithWrapWidth(wrapWidth))
 }
 
+// RenderTreeTableWithConfig renders Spanner plan nodes as an ASCII table using
+// serialization-friendly rendering configuration.
+func RenderTreeTableWithConfig(planNodes []*sppb.PlanNode, mode RenderMode, format Format, config RenderConfig) (string, error) {
+	return renderTreeTable(planNodes, mode, format, optionsFromConfig(config))
+}
+
 // RenderTreeTableWithOptions renders Spanner plan nodes as an ASCII table with optional rendering configuration.
 func RenderTreeTableWithOptions(planNodes []*sppb.PlanNode, mode RenderMode, format Format, opts ...Option) (string, error) {
 	o := options{}
@@ -85,6 +111,17 @@ func RenderTreeTableWithOptions(planNodes []*sppb.PlanNode, mode RenderMode, for
 		opt(&o)
 	}
 
+	return renderTreeTable(planNodes, mode, format, o)
+}
+
+func optionsFromConfig(config RenderConfig) options {
+	return options{
+		wrapWidth:     config.WrapWidth,
+		hangingIndent: config.HangingIndent,
+	}
+}
+
+func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format, o options) (string, error) {
 	// Validate input parameters
 	if len(planNodes) == 0 {
 		return "", fmt.Errorf("planNodes cannot be empty")
