@@ -141,7 +141,7 @@ func jsonBytes(v js.Value) ([]byte, error) {
 	return []byte(stringified), nil
 }
 
-func stringifyJSON(v js.Value) (_ string, err error) {
+func stringifyJSON(v js.Value) (jsonStr string, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = fmt.Errorf("failed to stringify JavaScript value: %v", recovered)
