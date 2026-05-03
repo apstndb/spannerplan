@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/apstndb/lox"
 	"github.com/samber/lo"
 )
 
@@ -262,7 +261,7 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 		opt(&o)
 	}
 
-	sep := lox.IfOrEmpty(!o.compact, " ")
+	sep := lo.Ternary(!o.compact, " ", "")
 
 	metadataFields := node.GetMetadata().GetFields()
 
@@ -285,8 +284,11 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 			"on "+target, ""),
 	)
 
-	executionMethodPart := lox.IfOrEmpty(o.executionMethodFormat == ExecutionMethodFormatAngle && len(executionMethod) > 0,
-		"<"+executionMethod+">")
+	executionMethodPart := lo.Ternary(
+		o.executionMethodFormat == ExecutionMethodFormatAngle && len(executionMethod) > 0,
+		"<"+executionMethod+">",
+		"",
+	)
 
 	var labels []string
 	var fields []string

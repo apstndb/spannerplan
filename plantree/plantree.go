@@ -7,7 +7,6 @@ import (
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/go-tabwrap"
-	"github.com/apstndb/lox"
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spannerplan"
@@ -73,7 +72,7 @@ func (r RowWithPredicates) TreePartLines() []string {
 }
 
 func (r RowWithPredicates) FormatID() string {
-	return lox.IfOrEmpty(len(r.Predicates) != 0, "*") + strconv.Itoa(int(r.ID))
+	return lo.Ternary(len(r.Predicates) != 0, "*", "") + strconv.Itoa(int(r.ID))
 }
 
 type options struct {
@@ -242,7 +241,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 
 	node := qp.GetNodeByChildLink(link)
 	linkType := qp.GetLinkType(link)
-	continuationAnchor := lox.IfOrEmpty(linkType != "", "["+linkType+"]"+sep)
+	continuationAnchor := lo.Ternary(linkType != "", "["+linkType+"]"+sep, "")
 	nodeText := continuationAnchor + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 
 	var predicates []string
@@ -256,9 +255,11 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 			qp.GetNodeByChildLink(cl).GetShortRepresentation().GetDescription()))
 	}
 
-	resolvedChildLinks := lox.MapWithoutIndex(node.GetChildLinks(), qp.ResolveChildLink)
+	resolvedChildLinks := lo.Map(node.GetChildLinks(), func(item *sppb.PlanNode_ChildLink, _ int) *spannerplan.ResolvedChildLink {
+		return qp.ResolveChildLink(item)
+	})
 
-	scalarChildLinks := lox.FilterWithoutIndex(resolvedChildLinks, func(item *spannerplan.ResolvedChildLink) bool {
+	scalarChildLinks := lo.Filter(resolvedChildLinks, func(item *spannerplan.ResolvedChildLink, _ int) bool {
 		return item.Child.GetKind() == sppb.PlanNode_SCALAR
 	})
 
