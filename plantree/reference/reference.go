@@ -8,8 +8,9 @@
 //
 // For browser or WebAssembly embeddings, this package is the recommended
 // high-level renderer entrypoint: decode serialized query plan JSON into
-// sppb.QueryPlan with protojson, parse string inputs with [ParseRenderMode] and
-// [ParseFormat], then call [RenderTreeTableWithConfig] with plan.GetPlanNodes().
+// spannerpb.QueryPlan with protojson, parse string inputs with [ParseRenderMode]
+// and [ParseFormat], then call [RenderTreeTableWithConfig] with
+// plan.GetPlanNodes().
 // The repository's examples/wasm/render example shows a small syscall/js wrapper
 // with that flow.
 package reference
