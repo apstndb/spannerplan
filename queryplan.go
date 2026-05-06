@@ -65,15 +65,18 @@ func (qp *QueryPlan) HasStats() bool {
 }
 
 func (qp *QueryPlan) IsFunction(childLink *sppb.PlanNode_ChildLink) bool {
-	// Known predicates are Condition(Filter, Hash Join) or Seek Condition(FilterScan) or Residual Condition(FilterScan, Hash Join) or Split Range(Distributed Union).
-	// Agg(Aggregate) is a Function but not a predicate.
 	child := qp.GetNodeByChildLink(childLink)
 	return child.DisplayName == "Function"
 }
 
 func (qp *QueryPlan) IsPredicate(childLink *sppb.PlanNode_ChildLink) bool {
-	// Known predicates are Condition(Filter, Hash Join) or Seek Condition(FilterScan) or Residual Condition(FilterScan, Hash Join) or Split Range(Distributed Union).
+	// Known predicates are Search Predicate(Full Text Search), Condition(Filter, Hash Join), Seek Condition(FilterScan),
+	// Residual Condition(FilterScan, Hash Join), or Split Range(Distributed Union).
 	// Agg(Aggregate) is a Function but not a predicate.
+	if childLink.GetType() == "Search Predicate" {
+		return qp.GetNodeByChildLink(childLink).GetKind() == sppb.PlanNode_SCALAR
+	}
+
 	if !qp.IsFunction(childLink) {
 		return false
 	}

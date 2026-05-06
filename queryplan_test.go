@@ -116,3 +116,83 @@ func TestHasStats(t *testing.T) {
 		})
 	}
 }
+
+func TestIsPredicate(t *testing.T) {
+	tests := []struct {
+		name      string
+		childLink *sppb.PlanNode_ChildLink
+		child     *sppb.PlanNode
+		want      bool
+	}{
+		{
+			name:      "search predicate node",
+			childLink: &sppb.PlanNode_ChildLink{ChildIndex: 1, Type: "Search Predicate"},
+			child: &sppb.PlanNode{
+				Index:       1,
+				Kind:        sppb.PlanNode_SCALAR,
+				DisplayName: "Search Predicate",
+			},
+			want: true,
+		},
+		{
+			name:      "compound search predicate function",
+			childLink: &sppb.PlanNode_ChildLink{ChildIndex: 1, Type: "Search Predicate"},
+			child: &sppb.PlanNode{
+				Index:       1,
+				Kind:        sppb.PlanNode_SCALAR,
+				DisplayName: "Function",
+			},
+			want: true,
+		},
+		{
+			name:      "search predicate link to relational node",
+			childLink: &sppb.PlanNode_ChildLink{ChildIndex: 1, Type: "Search Predicate"},
+			child: &sppb.PlanNode{
+				Index:       1,
+				Kind:        sppb.PlanNode_RELATIONAL,
+				DisplayName: "Scan",
+			},
+			want: false,
+		},
+		{
+			name:      "condition function remains predicate",
+			childLink: &sppb.PlanNode_ChildLink{ChildIndex: 1, Type: "Seek Condition"},
+			child: &sppb.PlanNode{
+				Index:       1,
+				Kind:        sppb.PlanNode_SCALAR,
+				DisplayName: "Function",
+			},
+			want: true,
+		},
+		{
+			name:      "aggregate function remains non predicate",
+			childLink: &sppb.PlanNode_ChildLink{ChildIndex: 1, Type: "Agg"},
+			child: &sppb.PlanNode{
+				Index:       1,
+				Kind:        sppb.PlanNode_SCALAR,
+				DisplayName: "Function",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qp, err := New([]*sppb.PlanNode{
+				{
+					Index:      0,
+					Kind:       sppb.PlanNode_RELATIONAL,
+					ChildLinks: []*sppb.PlanNode_ChildLink{tt.childLink},
+				},
+				tt.child,
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			if got := qp.IsPredicate(tt.childLink); got != tt.want {
+				t.Fatalf("IsPredicate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
