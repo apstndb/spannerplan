@@ -95,6 +95,7 @@ func (qp *QueryPlan) GetNodeByIndex(id int32) *sppb.PlanNode {
 // IsVisible reports whether a child link should be rendered as part of the
 // operator tree. Scalar PlanNodes are hidden unless the child link type is
 // "Scalar", which represents scalar subquery-like operator subtrees.
+// A nil link represents the root node.
 func (qp *QueryPlan) IsVisible(link *sppb.PlanNode_ChildLink) bool {
 	return qp.GetNodeByChildLink(link).GetKind() == sppb.PlanNode_RELATIONAL || link.GetType() == "Scalar"
 }
