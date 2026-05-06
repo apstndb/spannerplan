@@ -117,6 +117,66 @@ func TestHasStats(t *testing.T) {
 	}
 }
 
+func TestParentLinks(t *testing.T) {
+	firstLink := &sppb.PlanNode_ChildLink{ChildIndex: 2, Type: "Input"}
+	secondLink := &sppb.PlanNode_ChildLink{ChildIndex: 2, Type: "Scalar"}
+	thirdLink := &sppb.PlanNode_ChildLink{ChildIndex: 2, Type: "Condition"}
+
+	qp, err := New([]*sppb.PlanNode{
+		{
+			Index:      0,
+			ChildLinks: []*sppb.PlanNode_ChildLink{firstLink, secondLink},
+		},
+		{
+			Index:      1,
+			ChildLinks: []*sppb.PlanNode_ChildLink{thirdLink},
+		},
+		{Index: 2},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	got := qp.ParentLinks(2)
+	if len(got) != 3 {
+		t.Fatalf("len(ParentLinks(2)) = %d, want 3", len(got))
+	}
+
+	want := []struct {
+		parentIndex int32
+		childLink   *sppb.PlanNode_ChildLink
+	}{
+		{parentIndex: 0, childLink: firstLink},
+		{parentIndex: 0, childLink: secondLink},
+		{parentIndex: 1, childLink: thirdLink},
+	}
+	for i, wantLink := range want {
+		if got[i].Parent.GetIndex() != wantLink.parentIndex {
+			t.Fatalf("ParentLinks(2)[%d].Parent.Index = %d, want %d", i, got[i].Parent.GetIndex(), wantLink.parentIndex)
+		}
+		if got[i].ChildLink != wantLink.childLink {
+			t.Fatalf("ParentLinks(2)[%d].ChildLink = %p, want %p", i, got[i].ChildLink, wantLink.childLink)
+		}
+	}
+
+	if got := qp.GetParentNodeByChildIndex(2).GetIndex(); got != 1 {
+		t.Fatalf("GetParentNodeByChildIndex(2) = %d, want 1", got)
+	}
+
+	got[0] = ResolvedParentLink{}
+	if got := qp.ParentLinks(2)[0]; got == (ResolvedParentLink{}) {
+		t.Fatal("ParentLinks(2) returned internal slice")
+	}
+
+	if got := qp.ParentLinks(0); got != nil {
+		t.Fatalf("ParentLinks(0) = %v, want nil", got)
+	}
+
+	if got := qp.ParentLinks(99); got != nil {
+		t.Fatalf("ParentLinks(99) = %v, want nil", got)
+	}
+}
+
 func TestIsPredicate(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -12,8 +12,9 @@ import (
 )
 
 type QueryPlan struct {
-	planNodes []*sppb.PlanNode
-	parentMap map[int32]int32
+	planNodes      []*sppb.PlanNode
+	parentMap      map[int32]int32
+	parentLinksMap map[int32][]ResolvedParentLink
 }
 
 var ErrEmptyPlanNodes = errors.New("spannerplan: planNodes cannot be empty")
@@ -44,6 +45,7 @@ func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	}
 
 	parentMap := make(map[int32]int32)
+	parentLinksMap := make(map[int32][]ResolvedParentLink)
 	for _, planNode := range planNodes {
 		for j, childLink := range planNode.GetChildLinks() {
 			if childLink == nil {
@@ -54,10 +56,18 @@ func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 				return nil, fmt.Errorf("%w: parent node %d childLinks[%d] has childIndex %d, len(planNodes)=%d", ErrChildLinkIndexOutOfRange, planNode.GetIndex(), j, childIndex, len(planNodes))
 			}
 			parentMap[childIndex] = planNode.GetIndex()
+			parentLinksMap[childIndex] = append(parentLinksMap[childIndex], ResolvedParentLink{
+				Parent:    planNode,
+				ChildLink: childLink,
+			})
 		}
 	}
 
-	return &QueryPlan{planNodes, parentMap}, nil
+	return &QueryPlan{
+		planNodes:      planNodes,
+		parentMap:      parentMap,
+		parentLinksMap: parentLinksMap,
+	}, nil
 }
 
 func (qp *QueryPlan) HasStats() bool {
@@ -126,6 +136,21 @@ func (qp *QueryPlan) GetParentNodeByChildIndex(index int32) *sppb.PlanNode {
 
 func (qp *QueryPlan) GetParentNodeByChildLink(link *sppb.PlanNode_ChildLink) *sppb.PlanNode {
 	return qp.GetParentNodeByChildIndex(link.GetChildIndex())
+}
+
+// ParentLinks returns all parent child links that point to childIndex.
+//
+// Links are returned in plan node traversal order, preserving each parent's
+// ChildLinks order. The returned slice is a copy and can be modified by callers.
+func (qp *QueryPlan) ParentLinks(childIndex int32) []ResolvedParentLink {
+	return slices.Clone(qp.parentLinksMap[childIndex])
+}
+
+// ResolvedParentLink contains a parent PlanNode and the child link that points
+// from that parent to a child node.
+type ResolvedParentLink struct {
+	Parent    *sppb.PlanNode
+	ChildLink *sppb.PlanNode_ChildLink
 }
 
 type option struct {
