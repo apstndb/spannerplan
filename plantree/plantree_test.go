@@ -260,6 +260,98 @@ func TestProcessPlan_InvisibleRootReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestProcessPlan_FullTextSearchPredicates(t *testing.T) {
+	tests := []struct {
+		name      string
+		planNodes []*sppb.PlanNode
+		want      []string
+	}{
+		{
+			name: "simple search predicate",
+			planNodes: []*sppb.PlanNode{
+				{
+					Index:       0,
+					DisplayName: "Scan",
+					Kind:        sppb.PlanNode_RELATIONAL,
+					ChildLinks: []*sppb.PlanNode_ChildLink{
+						{ChildIndex: 1, Type: "Search Predicate"},
+					},
+				},
+				{
+					Index:       1,
+					DisplayName: "Search Predicate",
+					Kind:        sppb.PlanNode_SCALAR,
+					ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+						Description: "SEARCH(Tokens, 'blue')",
+					},
+				},
+			},
+			want: []string{"Search Predicate: SEARCH(Tokens, 'blue')"},
+		},
+		{
+			name: "compound search predicate function",
+			planNodes: []*sppb.PlanNode{
+				{
+					Index:       0,
+					DisplayName: "Scan",
+					Kind:        sppb.PlanNode_RELATIONAL,
+					ChildLinks: []*sppb.PlanNode_ChildLink{
+						{ChildIndex: 1, Type: "Search Predicate"},
+					},
+				},
+				{
+					Index:       1,
+					DisplayName: "Function",
+					Kind:        sppb.PlanNode_SCALAR,
+					ChildLinks: []*sppb.PlanNode_ChildLink{
+						{ChildIndex: 2, Type: "Search Predicate"},
+						{ChildIndex: 3, Type: "Search Predicate"},
+					},
+					ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+						Description: "(SEARCH(Tokens, 'blue') AND SEARCH(Tokens, 'green'))",
+					},
+				},
+				{
+					Index:       2,
+					DisplayName: "Search Predicate",
+					Kind:        sppb.PlanNode_SCALAR,
+					ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+						Description: "SEARCH(Tokens, 'blue')",
+					},
+				},
+				{
+					Index:       3,
+					DisplayName: "Search Predicate",
+					Kind:        sppb.PlanNode_SCALAR,
+					ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+						Description: "SEARCH(Tokens, 'green')",
+					},
+				},
+			},
+			want: []string{"Search Predicate: (SEARCH(Tokens, 'blue') AND SEARCH(Tokens, 'green'))"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qp, err := spannerplan.New(tt.planNodes)
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			rows, err := ProcessPlan(qp)
+			if err != nil {
+				t.Fatalf("ProcessPlan() error = %v", err)
+			}
+
+			got := rowByID(t, rows, 0)
+			if diff := cmp.Diff(tt.want, got.Predicates); diff != "" {
+				t.Fatalf("Predicates mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func hangingIndentPlan(t *testing.T) *spannerplan.QueryPlan {
 	t.Helper()
 

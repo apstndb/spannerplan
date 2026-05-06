@@ -387,6 +387,41 @@ func TestRenderTreeTable_InputValidation(t *testing.T) {
 	}
 }
 
+func TestRenderTreeTable_FullTextSearchPredicate(t *testing.T) {
+	planNodes := []*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Scan",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 1, Type: "Search Predicate"},
+			},
+		},
+		{
+			Index:       1,
+			DisplayName: "Search Predicate",
+			Kind:        sppb.PlanNode_SCALAR,
+			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+				Description: "SEARCH(Tokens, 'blue')",
+			},
+		},
+	}
+
+	got, err := RenderTreeTable(planNodes, RenderModePlan, FormatCurrent, 0)
+	if err != nil {
+		t.Fatalf("RenderTreeTable() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"Predicates(identified by ID):",
+		" 0: Search Predicate: SEARCH(Tokens, 'blue')",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("RenderTreeTable() output does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderTreeTableWithOptions_HangingIndent(t *testing.T) {
 	input := loadWrappedPlan(t)
 	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
