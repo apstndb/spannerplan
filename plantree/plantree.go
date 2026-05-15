@@ -230,6 +230,9 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	sep := lo.Ternary(!opts.compact, " ", "")
 
 	node := qp.GetNodeByChildLink(link)
+	if node.GetIndex() < 0 {
+		return nil, fmt.Errorf("plan node index cannot be negative: %d", node.GetIndex())
+	}
 	linkType := qp.GetLinkType(link)
 	continuationAnchor := lo.Ternary(linkType != "", "["+linkType+"]"+sep, "")
 	nodeText := continuationAnchor + spannerplan.NodeTitle(node, opts.queryplanOptions...)

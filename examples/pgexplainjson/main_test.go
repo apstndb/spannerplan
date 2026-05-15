@@ -70,6 +70,34 @@ func TestRun_InvalidJSONShape(t *testing.T) {
 	}
 }
 
+func TestRun_MultipleResults(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run(nil, strings.NewReader(`[{"Plan":{"Node Type":"Seq Scan"}},{"Plan":{"Node Type":"Seq Scan"}}]`), &stdout, &stderr)
+	if err == nil {
+		t.Fatal("run() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "contains multiple results") {
+		t.Fatalf("run() error = %q, want multiple results", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+func TestRun_TrailingData(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run(nil, strings.NewReader(`[{"Plan":{"Node Type":"Seq Scan"}}] {}`), &stdout, &stderr)
+	if err == nil {
+		t.Fatal("run() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "contains trailing data") {
+		t.Fatalf("run() error = %q, want trailing data", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+}
+
 func TestRenderPlan_NilRoot(t *testing.T) {
 	got, err := renderPlan(nil, renderOptions{})
 	if err != nil {

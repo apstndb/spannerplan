@@ -145,9 +145,7 @@ func collectPredicateRows[T any](rows []T, spec PredicateSpec[T]) (predicateRows
 		return predicateRows{}, fmt.Errorf("predicate spec has nil Predicates")
 	}
 
-	resolved := predicateRows{
-		rows: make([]predicateRow, 0, len(rows)),
-	}
+	var resolved predicateRows
 	for _, row := range rows {
 		id := spec.ID(row)
 		predicates := spec.Predicates(row)
@@ -156,11 +154,11 @@ func collectPredicateRows[T any](rows []T, spec PredicateSpec[T]) (predicateRows
 		}
 		if len(predicates) > 0 {
 			resolved.hasPredicates = true
+			resolved.rows = append(resolved.rows, predicateRow{
+				id:         id,
+				predicates: predicates,
+			})
 		}
-		resolved.rows = append(resolved.rows, predicateRow{
-			id:         id,
-			predicates: predicates,
-		})
 	}
 	return resolved, nil
 }

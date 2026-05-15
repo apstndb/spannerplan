@@ -98,6 +98,33 @@ func TestRender_NegativeIndentDoesNotPanic(t *testing.T) {
 	_ = Render(sampleTree(), style)
 }
 
+func TestRowText_PreservesMismatchedLines(t *testing.T) {
+	tests := []struct {
+		name string
+		row  Row
+		want string
+	}{
+		{
+			name: "extra tree line",
+			row:  Row{TreePart: "|  \n+- ", NodeText: "root"},
+			want: "|  root\n+- ",
+		},
+		{
+			name: "extra node line",
+			row:  Row{TreePart: "+- ", NodeText: "root\ncont"},
+			want: "+- root\ncont",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.row.Text(); got != tc.want {
+				t.Fatalf("Text() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestPrefixMetrics_MaxWidthForDepth_DefaultStyle(t *testing.T) {
 	style := DefaultStyle()
 	metrics := NewPrefixMetrics(style)

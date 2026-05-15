@@ -142,6 +142,22 @@ func decodeRoot(r io.Reader) (*planNode, error) {
 	if result.Plan == nil {
 		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON result 0 has no Plan")
 	}
+	if dec.More() {
+		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON contains multiple results")
+	}
+	tok, err = dec.Token()
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode PostgreSQL EXPLAIN JSON array end: %w", err)
+	}
+	delim, ok = tok.(json.Delim)
+	if !ok || delim != ']' {
+		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON array is not closed")
+	}
+	if tok, err = dec.Token(); err == nil {
+		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON contains trailing data after array: %v", tok)
+	} else if !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to decode PostgreSQL EXPLAIN JSON trailing data: %w", err)
+	}
 	return result.Plan, nil
 }
 

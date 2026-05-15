@@ -31,18 +31,22 @@ type Row struct {
 }
 
 // Text returns the full rendered row text, with the tree prefix prepended to each node text line.
+// If a manually constructed row has mismatched tree and node line counts, all lines are preserved.
 func (r Row) Text() string {
 	treeLines := r.TreePartLines()
 	nodeLines := strings.Split(r.NodeText, "\n")
 	var sb strings.Builder
-	for i, line := range nodeLines {
+	numLines := max(len(treeLines), len(nodeLines))
+	for i := 0; i < numLines; i++ {
 		if i > 0 {
 			sb.WriteByte('\n')
 		}
 		if i < len(treeLines) {
 			sb.WriteString(treeLines[i])
 		}
-		sb.WriteString(line)
+		if i < len(nodeLines) {
+			sb.WriteString(nodeLines[i])
+		}
 	}
 	return sb.String()
 }
