@@ -89,6 +89,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
+		// flag.Parse has already printed the parse error and usage to stderr
+		// because the flag set output is stderr.
 		return &usageError{err: err}
 	}
 	if flagSet.NArg() != 0 {

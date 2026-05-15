@@ -7,6 +7,7 @@ package asciitable
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/apstndb/go-tabwrap"
@@ -94,9 +95,9 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 	table.Header(headers)
 
 	for i, row := range rows {
-		rowData := make([]string, 0, len(spec.Columns))
-		for _, col := range spec.Columns {
-			rowData = append(rowData, col.Cell(row, i))
+		rowData := make([]string, len(spec.Columns))
+		for j, col := range spec.Columns {
+			rowData[j] = col.Cell(row, i)
 		}
 
 		if err := table.Append(rowData); err != nil {
@@ -126,7 +127,7 @@ func RenderPredicates[T any](rows []T, spec PredicateSpec[T]) (string, error) {
 		for i, predicate := range row.predicates {
 			idPartStr := ""
 			if i == 0 {
-				idPartStr = fmt.Sprint(row.id) + ":"
+				idPartStr = strconv.FormatUint(uint64(row.id), 10) + ":"
 			}
 
 			prefix := tabwrap.FillLeft(idPartStr, resolved.maxIDLength+1)
@@ -150,7 +151,7 @@ func collectPredicateRows[T any](rows []T, spec PredicateSpec[T]) (predicateRows
 	for _, row := range rows {
 		id := spec.ID(row)
 		predicates := spec.Predicates(row)
-		if idLength := len(fmt.Sprint(id)); idLength > resolved.maxIDLength {
+		if idLength := len(strconv.FormatUint(uint64(id), 10)); idLength > resolved.maxIDLength {
 			resolved.maxIDLength = idLength
 		}
 		if len(predicates) > 0 {
