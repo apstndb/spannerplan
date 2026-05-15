@@ -120,21 +120,33 @@ type renderOptions struct {
 }
 
 func decodeRoot(r io.Reader) (*planNode, error) {
-	var results []explainResult
 	dec := json.NewDecoder(r)
-	if err := dec.Decode(&results); err != nil {
+	tok, err := dec.Token()
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode PostgreSQL EXPLAIN JSON: %w", err)
 	}
-	if len(results) == 0 {
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '[' {
+		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON must be an array")
+	}
+	if !dec.More() {
 		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON contains no results")
 	}
-	if results[0].Plan == nil {
+
+	var result explainResult
+	if err := dec.Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode PostgreSQL EXPLAIN JSON result 0: %w", err)
+	}
+	if result.Plan == nil {
 		return nil, fmt.Errorf("PostgreSQL EXPLAIN JSON result 0 has no Plan")
 	}
-	return results[0].Plan, nil
+	return result.Plan, nil
 }
 
 func renderPlan(rootPlan *planNode, opts renderOptions) (string, error) {
+	if rootPlan == nil {
+		return "", nil
+	}
 	nextID := uint(0)
 	root := buildRenderTree(rootPlan, &nextID)
 

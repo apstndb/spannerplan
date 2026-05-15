@@ -70,6 +70,16 @@ func TestRun_InvalidJSONShape(t *testing.T) {
 	}
 }
 
+func TestRenderPlan_NilRoot(t *testing.T) {
+	got, err := renderPlan(nil, renderOptions{})
+	if err != nil {
+		t.Fatalf("renderPlan() error = %v", err)
+	}
+	if got != "" {
+		t.Fatalf("renderPlan() = %q, want empty", got)
+	}
+}
+
 func TestRun_UnexpectedPositionalArgs(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := run([]string{"extra"}, bytes.NewReader(postgres18AnalyzeJSON), &stdout, &stderr)
