@@ -11,7 +11,7 @@ import (
 )
 
 type testRow struct {
-	id         int32
+	id         uint
 	idText     string
 	text       string
 	rows       string
@@ -139,10 +139,10 @@ func TestRenderPredicates(t *testing.T) {
 	}
 }
 
-func TestRenderPredicates_NegativeIDs(t *testing.T) {
+func TestRenderPredicates_MultiDigitIDs(t *testing.T) {
 	rows := []testRow{
-		{id: -3, text: "Filter", predicates: []string{"Filter: a = 1", "Expression: b"}},
-		{id: -12, text: "Scan", predicates: []string{"Seek Condition: k = 1"}},
+		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1", "Expression: b"}},
+		{id: 120, text: "Scan", predicates: []string{"Seek Condition: k = 1"}},
 	}
 
 	got, err := asciitable.RenderPredicates(rows, testPredicateSpec())
@@ -151,9 +151,9 @@ func TestRenderPredicates_NegativeIDs(t *testing.T) {
 	}
 	want := heredoc.Doc(`
 		Predicates(identified by ID):
-		  -3: Filter: a = 1
+		   3: Filter: a = 1
 		      Expression: b
-		 -12: Seek Condition: k = 1
+		 120: Seek Condition: k = 1
 	`)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
@@ -178,7 +178,7 @@ func TestRenderPredicates_ReadsEachRowOnce(t *testing.T) {
 	var idCalls int
 	var predicateCalls int
 	spec := asciitable.PredicateSpec[testRow]{
-		ID: func(row testRow) int32 {
+		ID: func(row testRow) uint {
 			idCalls++
 			return row.id
 		},
@@ -233,7 +233,7 @@ func operatorColumn() asciitable.Column[testRow] {
 
 func testPredicateSpec() asciitable.PredicateSpec[testRow] {
 	return asciitable.PredicateSpec[testRow]{
-		ID: func(row testRow) int32 {
+		ID: func(row testRow) uint {
 			return row.id
 		},
 		Predicates: func(row testRow) []string {

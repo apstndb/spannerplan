@@ -45,7 +45,8 @@ type TableSpec[T any] struct {
 
 // PredicateSpec defines how predicate appendices read row IDs and predicate lines.
 type PredicateSpec[T any] struct {
-	ID         func(row T) int32
+	// ID returns the non-negative display ID used in the predicate appendix.
+	ID         func(row T) uint
 	Predicates func(row T) []string
 }
 
@@ -56,7 +57,7 @@ type predicateRows struct {
 }
 
 type predicateRow struct {
-	id         int32
+	id         uint
 	predicates []string
 }
 

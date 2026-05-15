@@ -68,13 +68,13 @@ type planNode struct {
 }
 
 type renderNode struct {
-	id       int32
+	id       uint
 	plan     *planNode
 	children []*renderNode
 }
 
 type renderedRow struct {
-	id         int32
+	id         uint
 	treeRow    treerender.Row
 	predicates []string
 	plan       *planNode
@@ -135,7 +135,7 @@ func decodeRoot(r io.Reader) (*planNode, error) {
 }
 
 func renderPlan(rootPlan *planNode, opts renderOptions) (string, error) {
-	nextID := int32(0)
+	nextID := uint(0)
 	root := buildRenderTree(rootPlan, &nextID)
 
 	style := treerender.DefaultStyle()
@@ -178,7 +178,7 @@ func renderPlan(rootPlan *planNode, opts renderOptions) (string, error) {
 	return tablePart + predicatePart, nil
 }
 
-func buildRenderTree(plan *planNode, nextID *int32) *renderNode {
+func buildRenderTree(plan *planNode, nextID *uint) *renderNode {
 	node := &renderNode{
 		id:   *nextID,
 		plan: plan,
@@ -321,7 +321,7 @@ func tableSpec() asciitable.TableSpec[renderedRow] {
 
 func predicateSpec() asciitable.PredicateSpec[renderedRow] {
 	return asciitable.PredicateSpec[renderedRow]{
-		ID: func(row renderedRow) int32 {
+		ID: func(row renderedRow) uint {
 			return row.id
 		},
 		Predicates: func(row renderedRow) []string {

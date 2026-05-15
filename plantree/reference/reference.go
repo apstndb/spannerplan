@@ -224,8 +224,10 @@ func spannerTableSpec(withStats bool) asciitable.TableSpec[plantree.RowWithPredi
 
 func predicateSpec() asciitable.PredicateSpec[plantree.RowWithPredicates] {
 	return asciitable.PredicateSpec[plantree.RowWithPredicates]{
-		ID: func(row plantree.RowWithPredicates) int32 {
-			return row.ID
+		ID: func(row plantree.RowWithPredicates) uint {
+			// Spanner PlanNode indexes are zero-based node positions, so they are
+			// non-negative when used as predicate appendix display IDs.
+			return uint(row.ID)
 		},
 		Predicates: func(row plantree.RowWithPredicates) []string {
 			return row.Predicates
