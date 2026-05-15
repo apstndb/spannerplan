@@ -194,14 +194,21 @@ func buildRenderTree(plan *planNode, nextID *uint) *renderNode {
 	return node
 }
 
-func collectRenderNodes(root *renderNode) []*renderNode {
-	if root == nil {
-		return nil
+func collectRenderNodes(root *renderNode) []renderNode {
+	var nodes []renderNode
+	var walk func(*renderNode)
+	walk = func(n *renderNode) {
+		if n == nil {
+			return
+		}
+		node := *n
+		node.children = nil
+		nodes = append(nodes, node)
+		for _, child := range n.children {
+			walk(child)
+		}
 	}
-	nodes := []*renderNode{root}
-	for _, child := range root.children {
-		nodes = append(nodes, collectRenderNodes(child)...)
-	}
+	walk(root)
 	return nodes
 }
 
