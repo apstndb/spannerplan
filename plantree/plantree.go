@@ -10,8 +10,8 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spannerplan"
-	"github.com/apstndb/spannerplan/internal/treerender"
 	"github.com/apstndb/spannerplan/stats"
+	"github.com/apstndb/spannerplan/treerender"
 )
 
 var defaultWrapCondition = newDefaultWrapCondition()
@@ -47,17 +47,7 @@ type renderedNode struct {
 }
 
 func (r RowWithPredicates) Text() string {
-	treeLines := r.TreePartLines()
-	nodeLines := strings.Split(r.NodeText, "\n")
-	var sb strings.Builder
-	for i, line := range nodeLines {
-		if len(treeLines) > i {
-			sb.WriteString(strings.TrimSuffix(treeLines[i], "\n"))
-		}
-		sb.WriteString(line)
-		sb.WriteRune('\n')
-	}
-	return strings.TrimSuffix(sb.String(), "\n")
+	return treerender.Row{TreePart: r.TreePart, NodeText: r.NodeText}.Text()
 }
 
 // TreePartString returns the full tree-prefix string (newline-separated lines), matching the
@@ -66,9 +56,9 @@ func (r RowWithPredicates) TreePartString() string {
 	return r.TreePart
 }
 
-// TreePartLines returns the tree prefix as one string per line of [RowWithPredicates.NodeText].
+// TreePartLines splits [RowWithPredicates.TreePartString] into one prefix per visual line.
 func (r RowWithPredicates) TreePartLines() []string {
-	return strings.Split(r.TreePartString(), "\n")
+	return treerender.Row{TreePart: r.TreePartString()}.TreePartLines()
 }
 
 func (r RowWithPredicates) FormatID() string {

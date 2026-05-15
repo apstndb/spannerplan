@@ -98,8 +98,9 @@ func TestRender_NegativeIndentDoesNotPanic(t *testing.T) {
 	_ = Render(sampleTree(), style)
 }
 
-func TestMaxPrefixWidthForDepth_DefaultStyle(t *testing.T) {
+func TestPrefixMetrics_MaxWidthForDepth_DefaultStyle(t *testing.T) {
 	style := DefaultStyle()
+	metrics := NewPrefixMetrics(style)
 	tests := []struct {
 		depth int
 		want  int
@@ -110,8 +111,8 @@ func TestMaxPrefixWidthForDepth_DefaultStyle(t *testing.T) {
 		{3, 9}, // "   |  +- "
 	}
 	for _, tc := range tests {
-		if got := MaxPrefixWidthForDepth(style, tc.depth); got != tc.want {
-			t.Fatalf("MaxPrefixWidthForDepth(DefaultStyle(), %d) = %d, want %d", tc.depth, got, tc.want)
+		if got := metrics.MaxWidthForDepth(tc.depth); got != tc.want {
+			t.Fatalf("MaxWidthForDepth(%d) = %d, want %d", tc.depth, got, tc.want)
 		}
 	}
 }
@@ -136,6 +137,16 @@ func TestRender_CustomStyle(t *testing.T) {
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Render() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRowText(t *testing.T) {
+	row := Row{TreePart: "+- \n|  ", NodeText: "left\ncont"}
+	if got, want := row.Text(), "+- left\n|  cont"; got != want {
+		t.Fatalf("Text() = %q, want %q", got, want)
+	}
+	if diff := cmp.Diff([]string{"+- ", "|  "}, row.TreePartLines()); diff != "" {
+		t.Fatalf("TreePartLines() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -361,6 +372,33 @@ func TestRenderTreeWithOptions_InvalidContinuationIndentErrors(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "invalid ContinuationIndent") {
 		t.Fatalf("RenderTreeWithOptions() error = %q, want invalid ContinuationIndent", got)
+	}
+}
+
+func TestRenderTreeWithOptions_AnchorIndentRequiresAnchorCallback(t *testing.T) {
+	t.Parallel()
+
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "[Input] child"},
+		},
+	}
+
+	_, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			ContinuationIndent: ContinuationIndentAnchor,
+		},
+	)
+	if err == nil {
+		t.Fatal("RenderTreeWithOptions() error = nil, want non-nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "GetContinuationAnchor is required") {
+		t.Fatalf("RenderTreeWithOptions() error = %q, want missing anchor callback", got)
 	}
 }
 
