@@ -330,7 +330,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printSectionsStr := flagSet.String("print", "predicates", "print appendix sections: predicates, ordering, aggregate, typed, full (comma-separated; typed/full are raw debug dumps)")
-	resolveScalarVars := flagSet.Bool("resolve-scalar-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
+	resolveScalarVars := flagSet.Bool("resolve-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
 	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
 	targetMetadata := flagSet.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
