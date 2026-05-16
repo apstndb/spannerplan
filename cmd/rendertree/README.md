@@ -98,14 +98,14 @@ Predicates(identified by ID):
  10: Seek Condition: STARTS_WITH($SongName, 'A')
  35: Seek Condition: (($Songs_key_SingerId'3 = $batched_Songs_key_SingerId'3) AND ($Songs_key_AlbumId'3 = $batched_Songs_key_AlbumId'3) AND ($Songs_key_TrackId'3 = $batched_Songs_key_TrackId'3))
 Ordering(identified by ID):
-  1: Key: $sort_SongCount=$SongCount (DESC), $sort_group_SongGenre'2=$group_SongGenre'2
+  1: Key: $SongCount (DESC), $group_SongGenre'2
 Aggregates(identified by ID):
-  2: Key: $group_SongGenre'2=$group_SongGenre'
-     Agg: $SongCount=COUNT_FINAL($v1)
-  4: Key: $group_SongGenre'=$group_SongGenre
-     Agg: $v1=COUNT_FINAL($v3)
- 22: Key: $group_SongGenre=$SongGenre
-     Agg: $v3=COUNT()
+  2: Key: $group_SongGenre'
+     Agg: COUNT_FINAL($v1)
+  4: Key: $group_SongGenre
+     Agg: COUNT_FINAL($v3)
+ 22: Key: $SongGenre
+     Agg: COUNT()
 ```
 
 Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.

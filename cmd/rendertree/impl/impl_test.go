@@ -404,7 +404,7 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, true, tcase.inline, opts)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, false, true, tcase.inline, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -448,7 +448,7 @@ func TestPrintResult_PrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate})
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}, false)
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
@@ -456,10 +456,67 @@ func TestPrintResult_PrintSections(t *testing.T) {
 Predicates(identified by ID):
  2: Condition: ($SingerId = $SingerId_1)
 Ordering(identified by ID):
- 0: Key: $sort_key=$SongGenre
+ 0: Key: $SongGenre
 Aggregates(identified by ID):
- 1: Key: $group_key=$SingerId
-    Agg: $song_count=COUNT(*)
+ 1: Key: $SingerId
+    Agg: COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrintResult_ResolveScalarVars(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Sort",
+			NodeText:    "Sort",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "sort_count", Description: "$SongCount (DESC)"},
+				{Type: "Key", Variable: "sort_genre", Description: "$group_SongGenre'"},
+			},
+		},
+		{
+			ID:          1,
+			DisplayName: "Aggregate",
+			NodeText:    "Aggregate",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "group_SongGenre'", Description: "$group_SongGenre"},
+				{Type: "Agg", Variable: "SongCount", Description: "COUNT_FINAL($v1)"},
+			},
+		},
+		{
+			ID:          2,
+			DisplayName: "Aggregate",
+			NodeText:    "Aggregate",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "group_SongGenre", Description: "$SongGenre"},
+				{Type: "Agg", Variable: "v1", Description: "COUNT()"},
+			},
+		},
+		{
+			ID:          3,
+			DisplayName: "Scan",
+			NodeText:    "Scan",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Variable: "SongGenre", Description: "SongGenre"},
+			},
+		},
+	}
+
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true)
+	if err != nil {
+		t.Fatalf("printResult() error = %v", err)
+	}
+	want := heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: COUNT_FINAL($v1) DESC, SongGenre
+Aggregates(identified by ID):
+ 1: Key: SongGenre
+    Agg: COUNT_FINAL($v1)
+ 2: Key: SongGenre
+    Agg: COUNT()
 `)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
@@ -479,7 +536,7 @@ func TestPrintResult_RawPrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped})
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped}, false)
 	if err != nil {
 		t.Fatalf("printResult(typed) error = %v", err)
 	}
@@ -491,7 +548,7 @@ Node Parameters(identified by ID):
 		t.Fatalf("printResult(typed) mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull})
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull}, false)
 	if err != nil {
 		t.Fatalf("printResult(full) error = %v", err)
 	}

@@ -330,6 +330,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printSectionsStr := flagSet.String("print", "predicates", "print appendix sections: predicates, ordering, aggregate, typed, full (comma-separated; typed/full are raw debug dumps)")
+	resolveScalarVars := flagSet.Bool("resolve-scalar-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
 	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
 	targetMetadata := flagSet.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
@@ -492,7 +493,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
-	s, err := renderTreeImpl(planNodes, renderDef, printSections, *disallowUnknownStats, *inlineStats, opts)
+	s, err := renderTreeImpl(planNodes, renderDef, printSections, *resolveScalarVars, *disallowUnknownStats, *inlineStats, opts)
 	if err != nil {
 		return err
 	}
@@ -501,7 +502,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return err
 }
 
-func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printSections PrintSections, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
+func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printSections PrintSections, resolveScalarVars bool, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
 	opts = append(opts,
 		plantree.WithQueryPlanOptions(
 			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inline)),
@@ -523,7 +524,7 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printS
 				return !def.shouldInline(inline)
 			}),
 		},
-		rows, printSections)
+		rows, printSections, resolveScalarVars)
 	if err != nil {
 		return "", err
 	}
@@ -681,8 +682,9 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 	return tableRenderDef{Columns: columns}, nil
 }
 
-func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections) (string, error) {
+func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections, resolveScalarVars bool) (string, error) {
 	var b strings.Builder
+	resolver := newScalarLinkResolver(rows)
 
 	if len(rows) > 0 && len(renderDef.Columns) > 0 {
 		tablePart, err := renderTablePart(renderDef, rows)
@@ -704,7 +706,7 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, func(_ plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
 						return section == PrintFull || link.Type != ""
-					})
+					}, formatRawScalarLink)
 				},
 			))
 		case PrintPredicates:
@@ -715,17 +717,25 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				},
 			))
 		case PrintOrdering:
+			format := formatSemanticScalarLink
+			if resolveScalarVars {
+				format = resolver.formatKeyScalarLink
+			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Ordering(identified by ID):",
 				func(row plantree.RowWithPredicates) []string {
-					return scalarLinkLines(row, isOrderingScalarLink)
+					return scalarLinkLines(row, isOrderingScalarLink, format)
 				},
 			))
 		case PrintAggregate:
+			format := formatSemanticScalarLink
+			if resolveScalarVars {
+				format = resolver.formatAggregateScalarLink
+			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Aggregates(identified by ID):",
 				func(row plantree.RowWithPredicates) []string {
-					return scalarLinkLines(row, isAggregateScalarLink)
+					return scalarLinkLines(row, isAggregateScalarLink, format)
 				},
 			))
 		}
@@ -754,7 +764,7 @@ type scalarLinkGroup struct {
 	values []string
 }
 
-func scalarLinkLines(row plantree.RowWithPredicates, include func(plantree.RowWithPredicates, plantree.ScalarChildLink) bool) []string {
+func scalarLinkLines(row plantree.RowWithPredicates, include func(plantree.RowWithPredicates, plantree.ScalarChildLink) bool, format func(plantree.ScalarChildLink) string) []string {
 	groupByType := map[string]int{}
 	var groups []scalarLinkGroup
 
@@ -769,7 +779,7 @@ func scalarLinkLines(row plantree.RowWithPredicates, include func(plantree.RowWi
 			groupByType[link.Type] = groupIndex
 			groups = append(groups, scalarLinkGroup{typ: link.Type})
 		}
-		groups[groupIndex].values = append(groups[groupIndex].values, formatScalarLink(link))
+		groups[groupIndex].values = append(groups[groupIndex].values, format(link))
 	}
 
 	lines := make([]string, 0, len(groups))
@@ -784,11 +794,91 @@ func scalarLinkLines(row plantree.RowWithPredicates, include func(plantree.RowWi
 	return lines
 }
 
-func formatScalarLink(link plantree.ScalarChildLink) string {
+func formatRawScalarLink(link plantree.ScalarChildLink) string {
 	if link.Variable != "" {
 		return fmt.Sprintf("$%s=%s", link.Variable, link.Description)
 	}
 	return link.Description
+}
+
+func formatSemanticScalarLink(link plantree.ScalarChildLink) string {
+	return link.Description
+}
+
+type scalarLinkResolver struct {
+	variableToDescription map[string]string
+}
+
+func newScalarLinkResolver(rows []plantree.RowWithPredicates) scalarLinkResolver {
+	variableToDescription := map[string]string{}
+	for _, row := range rows {
+		for _, link := range row.ScalarChildLinks {
+			if link.Variable == "" {
+				continue
+			}
+			variableToDescription[link.Variable] = link.Description
+		}
+	}
+	return scalarLinkResolver{variableToDescription: variableToDescription}
+}
+
+func (r scalarLinkResolver) formatKeyScalarLink(link plantree.ScalarChildLink) string {
+	return r.resolveKeyDescription(link.Description)
+}
+
+func (r scalarLinkResolver) formatAggregateScalarLink(link plantree.ScalarChildLink) string {
+	if link.Type == "Key" {
+		return r.resolveKeyDescription(link.Description)
+	}
+	return link.Description
+}
+
+func (r scalarLinkResolver) resolveKeyDescription(desc string) string {
+	return r.resolveKeyDescriptionSeen(desc, map[string]bool{})
+}
+
+func (r scalarLinkResolver) resolveKeyDescriptionSeen(desc string, seen map[string]bool) string {
+	first, last, found := strings.Cut(desc, " ")
+	keyElem := r.lookupVar(strings.TrimSpace(first), seen)
+	if !found {
+		return keyElem
+	}
+
+	suffix := normalizeKeySuffix(last)
+	if suffix == "" {
+		return keyElem
+	}
+	return keyElem + " " + suffix
+}
+
+func (r scalarLinkResolver) lookupVar(ref string, seen map[string]bool) string {
+	if !strings.HasPrefix(ref, "$") {
+		return ref
+	}
+
+	varName := strings.TrimPrefix(ref, "$")
+	if seen[varName] {
+		return ref
+	}
+
+	desc, ok := r.variableToDescription[varName]
+	if !ok {
+		return ref
+	}
+
+	seen[varName] = true
+	return r.resolveKeyDescriptionSeen(desc, seen)
+}
+
+func normalizeKeySuffix(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		return strings.TrimSuffix(strings.TrimPrefix(s, "("), ")")
+	}
+	return s
 }
 
 func isOrderingScalarLink(row plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
