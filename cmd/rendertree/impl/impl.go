@@ -685,7 +685,10 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 
 func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections, showScalarVars bool, resolveScalarVars bool) (string, error) {
 	var b strings.Builder
-	resolver := newScalarLinkResolver(rows)
+	var resolver scalarLinkResolver
+	if resolveScalarVars && needsScalarLinkResolver(printSections) {
+		resolver = newScalarLinkResolver(rows)
+	}
 
 	if len(rows) > 0 && len(renderDef.Columns) > 0 {
 		tablePart, err := renderTablePart(renderDef, rows)
@@ -746,6 +749,10 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 		b.WriteString(part)
 	}
 	return b.String(), nil
+}
+
+func needsScalarLinkResolver(printSections PrintSections) bool {
+	return slices.Contains(printSections, PrintOrdering) || slices.Contains(printSections, PrintAggregate)
 }
 
 func scalarAppendixSpec(title string, items func(row plantree.RowWithPredicates) []string) asciitable.AppendixSpec[plantree.RowWithPredicates] {

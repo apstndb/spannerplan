@@ -20,6 +20,9 @@ Rows also expose scalar child links in original plan order via
 rendering time using the parent row's [RowWithPredicates.DisplayName] together
 with each [ScalarChildLink.Type], because the same child-link type can have
 different meanings under different operators.
+[RowWithPredicates.ChildLinks] remains available for compatibility with older
+callers, but new code should prefer [RowWithPredicates.ScalarChildLinks] because
+it preserves Spanner's original child-link order.
 
 A []string field would avoid one strings.Join in the renderer and one strings.Split in
 Text, but it is a breaking API change for modules that build [RowWithPredicates] literals

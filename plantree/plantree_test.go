@@ -426,6 +426,9 @@ func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T)
 	if diff := cmp.Diff(wantSortLinks, sortRow.ScalarChildLinks); diff != "" {
 		t.Fatalf("sort ScalarChildLinks mismatch (-want +got):\n%s", diff)
 	}
+	if got := sortRow.ChildLinks["Key"]; len(got) != 1 || got[0].ChildLink.GetVariable() != "sort_key" {
+		t.Fatalf("sort deprecated ChildLinks[Key] = %v, want sort_key", got)
+	}
 
 	aggregateRow := rowByID(t, rows, 3)
 	wantAggregateLinks := []ScalarChildLink{
@@ -434,6 +437,9 @@ func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T)
 	}
 	if diff := cmp.Diff(wantAggregateLinks, aggregateRow.ScalarChildLinks); diff != "" {
 		t.Fatalf("aggregate ScalarChildLinks mismatch (-want +got):\n%s", diff)
+	}
+	if got := aggregateRow.ChildLinks["Agg"]; len(got) != 1 || got[0].ChildLink.GetVariable() != "song_count" {
+		t.Fatalf("aggregate deprecated ChildLinks[Agg] = %v, want song_count", got)
 	}
 }
 

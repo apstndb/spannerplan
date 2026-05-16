@@ -37,8 +37,17 @@ type RowWithPredicates struct {
 	DisplayName string
 	// Predicates contains filter predicate text associated with this row.
 	Predicates []string
+	// Keys contains key metadata associated with this row.
+	//
+	// Deprecated: this field is kept for source compatibility and is not populated.
+	// Use [RowWithPredicates.ScalarChildLinks] and filter by [ScalarChildLink.Type] instead.
+	Keys map[string][]string
 	// ExecutionStats contains execution statistics associated with this row.
 	ExecutionStats stats.ExecutionStats
+	// ChildLinks contains resolved child-link metadata associated with this row.
+	//
+	// Deprecated: use [RowWithPredicates.ScalarChildLinks] for ordered scalar child-link metadata.
+	ChildLinks map[string][]*spannerplan.ResolvedChildLink
 	// ScalarChildLinks contains this row's scalar child links in original ChildLinks order.
 	ScalarChildLinks []ScalarChildLink
 }
@@ -69,6 +78,7 @@ type renderedNode struct {
 	DisplayName        string
 	Predicates         []string
 	ExecutionStats     stats.ExecutionStats
+	ChildLinks         map[string][]*spannerplan.ResolvedChildLink
 	ScalarChildLinks   []ScalarChildLink
 	Children           []*renderedNode
 }
@@ -246,6 +256,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			ID:               node.ID,
 			DisplayName:      node.DisplayName,
 			Predicates:       node.Predicates,
+			ChildLinks:       node.ChildLinks,
 			ScalarChildLinks: node.ScalarChildLinks,
 			TreePart:         row.TreePart,
 			NodeText:         row.NodeText,
@@ -295,6 +306,10 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		return item.Child.GetKind() == sppb.PlanNode_SCALAR
 	})
 
+	childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
+		return item.ChildLink.GetType()
+	})
+
 	renderedScalarChildLinks := lo.Map(scalarChildLinks, func(item *spannerplan.ResolvedChildLink, _ int) ScalarChildLink {
 		return ScalarChildLink{
 			Type:        item.ChildLink.GetType(),
@@ -318,6 +333,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		DisplayName:        node.GetDisplayName(),
 		Predicates:         predicates,
 		ExecutionStats:     *executionStats,
+		ChildLinks:         childLinks,
 		ScalarChildLinks:   renderedScalarChildLinks,
 	}
 
