@@ -14,6 +14,8 @@ which combines tree prefix and node title.
 
 The TreePart field remains exported for struct literals and cmp.Diff in tests; new code
 should use the accessors above when not constructing rows by hand.
+When tests do construct [RowWithPredicates] values directly, prefer keyed
+composite literals so future exported fields do not break the call site.
 
 Rows also expose scalar child links in original PlanNode.ChildLinks order via
 [RowWithPredicates.ScalarChildLinks]. Callers should group those links at
