@@ -113,6 +113,7 @@ func TestRenderTree(t *testing.T) {
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |
 +-----+-------------------------------------------------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -140,6 +141,7 @@ Predicates(identified by ID):
 | *17 |     +Filter Scan<Row>(seekable_key_size:0)                                  |
 |  18 |      +Index Scan on SongsBySongGenre<Row>(Full scan,scan_method:Row)        |
 +-----+-----------------------------------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -172,6 +174,7 @@ Predicates(identified by ID):
 |  18 |      +Index Scan on SongsBySongGenre<Row |
 |     |       >(Full scan,scan_method:Row)       |
 +-----+------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -205,6 +208,7 @@ Predicates(identified by ID):
 |     |                   Row> (Full scan, scan_method: Ro |
 |     |                   w)                               |
 +-----+----------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -231,6 +235,7 @@ Predicates(identified by ID):
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |       |         |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |     7 | 0.84 ms |
 +-----+-------------------------------------------------------------------------------------------+------+-------+---------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -274,6 +279,7 @@ Predicates(identified by ID):
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |         |          |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |      63 |       30 |
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -306,6 +312,7 @@ Predicates(identified by ID):
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |         |          |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |      63 |       30 |
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -345,6 +352,7 @@ Predicates(identified by ID):
 |     |                    scan, scan_method: Row, Scanned=63, Filte |      |
 |     |                   red=30)                                    |      |
 +-----+--------------------------------------------------------------+------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -404,13 +412,318 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintPredicates, true, tcase.inline, opts)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), renderTreeOptions{
+				renderDef:            tcase.renderDef,
+				printSections:        PrintSections{PrintPredicates},
+				disallowUnknownStats: true,
+				inlineStats:          tcase.inline,
+				plantreeOptions:      opts,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if diff := cmp.Diff(tcase.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestPrintResult_PrintSections(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Sort",
+			NodeText:    "Sort",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "sort_key", Description: "$SongGenre (DESC)"},
+				{Type: "Value", Variable: "sort_value", Description: "$SongName"},
+			},
+		},
+		{
+			ID:          1,
+			DisplayName: "Aggregate",
+			NodeText:    "Aggregate",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "group_key", Description: "$SingerId"},
+				{Type: "Agg", Variable: "song_count", Description: "COUNT(*)"},
+			},
+		},
+		{
+			ID:          2,
+			DisplayName: "Hash Join",
+			NodeText:    "Hash Join",
+			Predicates:  []string{"Condition: ($SingerId = $SingerId_1)"},
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Condition", Description: "($SingerId = $SingerId_1)"},
+				{Type: "Build", Variable: "build_key", Description: "$SingerId_1"},
+			},
+		},
+	}
+
+	got, err := printResult(rows, printResultOptions{
+		printSections: PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+	})
+	if err != nil {
+		t.Fatalf("printResult() error = %v", err)
+	}
+	want := heredoc.Doc(`
+Predicates(identified by ID):
+ 2: Condition: ($SingerId = $SingerId_1)
+
+Ordering(identified by ID):
+ 0: Key: $SongGenre DESC
+
+Aggregates(identified by ID):
+ 1: Key: $SingerId
+    Agg: COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(rows, printResultOptions{
+		printSections:  PrintSections{PrintOrdering, PrintAggregate},
+		showScalarVars: true,
+	})
+	if err != nil {
+		t.Fatalf("printResult(show vars) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: $sort_key=$SongGenre DESC
+
+Aggregates(identified by ID):
+ 1: Key: $group_key=$SingerId
+    Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(show vars) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrintResult_ResolveScalarVars(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Sort",
+			NodeText:    "Sort",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "sort_count", Description: "$SongCount (DESC)"},
+				{Type: "Key", Variable: "sort_genre", Description: "$group_SongGenre'"},
+				{Type: "Key", Variable: "sort_expression", Description: "$left + $right"},
+				{Type: "Key", Variable: "sort_album", Description: "$v1.AlbumId_1"},
+			},
+		},
+		{
+			ID:          1,
+			DisplayName: "Aggregate",
+			NodeText:    "Aggregate",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "group_SongGenre'", Description: "$group_SongGenre"},
+				{Type: "Agg", Variable: "SongCount", Description: "COUNT_FINAL($v1)"},
+			},
+		},
+		{
+			ID:          2,
+			DisplayName: "Aggregate",
+			NodeText:    "Aggregate",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "group_SongGenre", Description: "$SongGenre"},
+				{Type: "Agg", Variable: "v1", Description: "COUNT()"},
+			},
+		},
+		{
+			ID:          3,
+			DisplayName: "Scan",
+			NodeText:    "Scan",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Variable: "SongGenre", Description: "SongGenre"},
+				{Variable: "SingerId", Description: "SingerId"},
+				{Variable: "left", Description: "$SongGenre"},
+				{Variable: "right", Description: "$SingerId"},
+				{Variable: "v1.AlbumId_1", Description: "AlbumId"},
+			},
+		},
+	}
+
+	got, err := printResult(rows, printResultOptions{
+		printSections:     PrintSections{PrintOrdering, PrintAggregate},
+		resolveScalarVars: true,
+	})
+	if err != nil {
+		t.Fatalf("printResult() error = %v", err)
+	}
+	want := heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: COUNT_FINAL($v1) DESC, $group_SongGenre, $SongGenre + $SingerId, AlbumId
+
+Aggregates(identified by ID):
+ 1: Key: $SongGenre
+    Agg: COUNT_FINAL($v1)
+ 2: Key: SongGenre
+    Agg: COUNT()
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(rows, printResultOptions{
+		printSections:     PrintSections{PrintOrdering, PrintAggregate},
+		showScalarVars:    true,
+		resolveScalarVars: true,
+	})
+	if err != nil {
+		t.Fatalf("printResult(show vars and resolve vars) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=$group_SongGenre, $sort_expression=$SongGenre + $SingerId, $sort_album=AlbumId
+
+Aggregates(identified by ID):
+ 1: Key: $group_SongGenre'=$SongGenre
+    Agg: $SongCount=COUNT_FINAL($v1)
+ 2: Key: $group_SongGenre=SongGenre
+    Agg: $v1=COUNT()
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(show vars and resolve vars) mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(rows, printResultOptions{
+		printSections:              PrintSections{PrintOrdering, PrintAggregate},
+		resolveScalarVarsRecursive: true,
+	})
+	if err != nil {
+		t.Fatalf("printResult(resolve vars recursively) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: COUNT_FINAL(COUNT()) DESC, SongGenre, SongGenre + SingerId, AlbumId
+
+Aggregates(identified by ID):
+ 1: Key: SongGenre
+    Agg: COUNT_FINAL($v1)
+ 2: Key: SongGenre
+    Agg: COUNT()
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(resolve vars recursively) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrintResult_RawPrintSections(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Compute",
+			NodeText:    "Compute",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Variable: "value", Description: "$SingerId"},
+				{Type: "Agg", Variable: "song_count", Description: "COUNT(*)"},
+			},
+		},
+	}
+
+	got, err := printResult(rows, printResultOptions{
+		printSections: PrintSections{PrintTyped},
+	})
+	if err != nil {
+		t.Fatalf("printResult(typed) error = %v", err)
+	}
+	want := heredoc.Doc(`
+Node Parameters(identified by ID):
+ 0: Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(typed) mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(rows, printResultOptions{
+		printSections: PrintSections{PrintFull},
+	})
+	if err != nil {
+		t.Fatalf("printResult(full) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Node Parameters(identified by ID):
+ 0: $value=$SingerId
+    Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(full) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrintResult_UnsupportedPrintSection(t *testing.T) {
+	_, err := printResult(nil, printResultOptions{
+		printSections: PrintSections{"broken"},
+	})
+	if err == nil {
+		t.Fatal("printResult() error = nil, want non-nil")
+	}
+	if got, want := err.Error(), "unsupported print section: broken"; got != want {
+		t.Fatalf("printResult() error = %q, want %q", got, want)
+	}
+}
+
+func TestParsePrintSections(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    PrintSections
+		wantErr string
+	}{
+		{
+			name:  "single section",
+			input: "predicates",
+			want:  PrintSections{PrintPredicates},
+		},
+		{
+			name:  "multiple sections",
+			input: "predicates,ordering,aggregate",
+			want:  PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+		},
+		{
+			name:  "case and space",
+			input: " Predicates, Ordering ",
+			want:  PrintSections{PrintPredicates, PrintOrdering},
+		},
+		{
+			name:    "unknown",
+			input:   "broken",
+			wantErr: "unknown print section: broken",
+		},
+		{
+			name:    "duplicate",
+			input:   "predicates,predicates",
+			wantErr: "duplicate print section: predicates",
+		},
+		{
+			name:    "raw dump cannot be combined",
+			input:   "predicates,full",
+			wantErr: `print section "full" cannot be combined with other sections`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parsePrintSections(tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("parsePrintSections() error = nil, want non-nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parsePrintSections() error = %q, want substring %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parsePrintSections() error = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("parsePrintSections() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -500,7 +813,7 @@ func TestRun_UsageErrors(t *testing.T) {
 		{
 			name:        "invalid print",
 			args:        []string{"-print", "broken"},
-			wantErrText: "unknown PrintMode: broken",
+			wantErrText: "unknown print section: broken",
 			postCheck: func(t *testing.T, stderr string, err error) {
 				t.Helper()
 				if !strings.Contains(stderr, "Invalid value for -print flag:") {

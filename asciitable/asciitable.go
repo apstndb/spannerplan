@@ -47,26 +47,25 @@ type TableSpec[T any] struct {
 	Columns []Column[T]
 }
 
-// PredicateSpec defines how predicate appendices read row IDs and predicate lines.
-type PredicateSpec[T any] struct {
-	// Title is printed before predicate lines. The zero value uses
-	// "Predicates(identified by ID):".
+// AppendixSpec defines how appendices read row IDs and item lines.
+type AppendixSpec[T any] struct {
+	// Title is printed before item lines. It must be non-empty.
 	Title string
-	// ID returns the non-negative display ID used in the predicate appendix.
+	// ID returns the non-negative display ID used in the appendix.
 	ID func(row T) uint
-	// Predicates returns the predicate lines associated with the row.
-	Predicates func(row T) []string
+	// Items returns the item lines associated with the row.
+	Items func(row T) []string
 }
 
-type predicateRows struct {
-	rows          []predicateRow
-	hasPredicates bool
-	maxIDLength   int
+type appendixRows struct {
+	rows        []appendixRow
+	hasItems    bool
+	maxIDLength int
 }
 
-type predicateRow struct {
-	id         uint
-	predicates []string
+type appendixRow struct {
+	id    uint
+	items []string
 }
 
 // RenderTable renders rows using spec.
@@ -119,56 +118,55 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 	return sb.String(), nil
 }
 
-// RenderPredicates formats the predicate appendix for rows with predicates.
-func RenderPredicates[T any](rows []T, spec PredicateSpec[T]) (string, error) {
-	resolved, err := collectPredicateRows(rows, spec)
+// RenderAppendix formats an appendix for rows with associated items.
+func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
+	resolved, err := collectAppendixRows(rows, spec)
 	if err != nil {
 		return "", err
 	}
-	if !resolved.hasPredicates {
+	if !resolved.hasItems {
 		return "", nil
 	}
 
 	var sb strings.Builder
-	title := spec.Title
-	if title == "" {
-		title = "Predicates(identified by ID):"
-	}
-	_, _ = fmt.Fprintln(&sb, title)
+	_, _ = fmt.Fprintln(&sb, spec.Title)
 	for _, row := range resolved.rows {
-		for i, predicate := range row.predicates {
+		for i, item := range row.items {
 			idPartStr := ""
 			if i == 0 {
 				idPartStr = strconv.FormatUint(uint64(row.id), 10) + ":"
 			}
 
 			prefix := tabwrap.FillLeft(idPartStr, resolved.maxIDLength+1)
-			_, _ = fmt.Fprintf(&sb, " %s %s\n", prefix, predicate)
+			_, _ = fmt.Fprintf(&sb, " %s %s\n", prefix, item)
 		}
 	}
 	return sb.String(), nil
 }
 
-func collectPredicateRows[T any](rows []T, spec PredicateSpec[T]) (predicateRows, error) {
-	if spec.ID == nil {
-		return predicateRows{}, fmt.Errorf("predicate spec has nil ID")
+func collectAppendixRows[T any](rows []T, spec AppendixSpec[T]) (appendixRows, error) {
+	if spec.Title == "" {
+		return appendixRows{}, fmt.Errorf("appendix spec has empty Title")
 	}
-	if spec.Predicates == nil {
-		return predicateRows{}, fmt.Errorf("predicate spec has nil Predicates")
+	if spec.ID == nil {
+		return appendixRows{}, fmt.Errorf("appendix spec has nil ID")
+	}
+	if spec.Items == nil {
+		return appendixRows{}, fmt.Errorf("appendix spec has nil Items")
 	}
 
-	var resolved predicateRows
+	var resolved appendixRows
 	for _, row := range rows {
 		id := spec.ID(row)
-		predicates := spec.Predicates(row)
+		items := spec.Items(row)
 		if idLength := len(strconv.FormatUint(uint64(id), 10)); idLength > resolved.maxIDLength {
 			resolved.maxIDLength = idLength
 		}
-		if len(predicates) > 0 {
-			resolved.hasPredicates = true
-			resolved.rows = append(resolved.rows, predicateRow{
-				id:         id,
-				predicates: predicates,
+		if len(items) > 0 {
+			resolved.hasItems = true
+			resolved.rows = append(resolved.rows, appendixRow{
+				id:    id,
+				items: items,
 			})
 		}
 	}

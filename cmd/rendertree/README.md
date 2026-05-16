@@ -24,6 +24,7 @@ $ cat queryplan.yaml | rendertree --mode=PLAN
 | *3 |       +- FilterScan                     |
 |  4 |          +- Table Scan (Table: Singers) |
 +----+-----------------------------------------+
+
 Predicates(identified by ID):
  0: Split Range: ($SingerId = 1)
  3: Seek Condition: ($SingerId = 1)
@@ -42,6 +43,80 @@ $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singe
 ```
 
 Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--mode=AUTO` can detect whether the input has execution statistics or not.
+
+`rendertree` prints predicate-like scalar parameters by default. The `--print` flag can select one or more appendix sections:
+
+- `predicates` prints predicate-like scalar links such as `Condition`, `Residual Condition`, `Seek Condition`, `Search Predicate`, and `Split Range`.
+- `ordering` prints ordering details from `Sort`, `Sort Limit`, `Minor Sort`, and `Minor Sort Limit` operators.
+- `aggregate` prints `Key` and `Agg` details from `Aggregate` operators.
+- `typed` prints all typed scalar links as a raw debug dump.
+- `full` prints all scalar links, including unnamed links, as a raw debug dump.
+
+Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
+`typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
+
+Semantic appendix sections hide scalar assignment variable names by default. Use `--show-vars` when
+the assignment name itself is useful, for example to inspect what `$v1` is assigned to. Use
+`--resolve-vars` to replace direct scalar variable aliases with their assigned expression in semantic
+appendix sections. `--resolve-vars-recursive` is experimental and recursively traces aliases; it is
+useful for investigation, but can produce noisier expanded expressions.
+
+For example, the following query has a `WHERE` predicate, aggregation, and ordering:
+
+```sql
+SELECT SongGenre, COUNT(*) AS SongCount
+FROM Songs
+WHERE SongName LIKE 'A%'
+GROUP BY SongGenre
+ORDER BY SongCount DESC, SongGenre
+LIMIT 5
+```
+
+Rendering the captured PLAN JSON with `--print=predicates,ordering,aggregate` shows only the selected scalar details:
+
+```
+$ rendertree --mode=PLAN --print=predicates,ordering,aggregate < plan.json
++-----+--------------------------------------------------------------------------------------+
+| ID  | Operator                                                                             |
++-----+--------------------------------------------------------------------------------------+
+|   0 | Serialize Result <Row>                                                               |
+|   1 | +- Global Sort Limit <Row>                                                           |
+|   2 |    +- Global Hash Aggregate <Row>                                                    |
+|  *3 |       +- Distributed Union on SongsBySongName <Row>                                  |
+|   4 |          +- Local Hash Aggregate <Row>                                               |
+|  *5 |             +- Distributed Cross Apply <Row>                                         |
+|   6 |                +- [Input] Create Batch <Batch>                                       |
+|   7 |                |  +- RowToDataBlock                                                  |
+|   8 |                |     +- Local Distributed Union <Row>                                |
+|   9 |                |        +- Filter Scan <Row> (seekable_key_size: 1)                  |
+| *10 |                |           +- Index Scan on SongsBySongName <Row> (scan_method: Row) |
+|  22 |                +- [Map] Local Hash Aggregate <Row>                                   |
+|  23 |                   +- Cross Apply <Row>                                               |
+|  24 |                      +- [Input] KeyRangeAccumulator <Row>                            |
+|  25 |                      |  +- DataBlockToRow                                            |
+|  26 |                      |     +- Batch Scan on $v5 <Batch> (scan_method: Batch)         |
+|  33 |                      +- [Map] Local Distributed Union <Row>                          |
+|  34 |                         +- Filter Scan <Row> (seekable_key_size: 0)                  |
+| *35 |                            +- Table Scan on Songs <Row> (scan_method: Row)           |
++-----+--------------------------------------------------------------------------------------+
+
+Predicates(identified by ID):
+  3: Split Range: STARTS_WITH($SongName, 'A')
+  5: Split Range: (($Songs_key_SingerId'3 = $Songs_key_SingerId'2) AND ($Songs_key_AlbumId'3 = $Songs_key_AlbumId'2) AND ($Songs_key_TrackId'3 = $Songs_key_TrackId'2))
+ 10: Seek Condition: STARTS_WITH($SongName, 'A')
+ 35: Seek Condition: (($Songs_key_SingerId'3 = $batched_Songs_key_SingerId'3) AND ($Songs_key_AlbumId'3 = $batched_Songs_key_AlbumId'3) AND ($Songs_key_TrackId'3 = $batched_Songs_key_TrackId'3))
+
+Ordering(identified by ID):
+  1: Key: $SongCount DESC, $group_SongGenre'2
+
+Aggregates(identified by ID):
+  2: Key: $group_SongGenre'
+     Agg: COUNT_FINAL($v1)
+  4: Key: $group_SongGenre
+     Agg: COUNT_FINAL($v3)
+ 22: Key: $SongGenre
+     Agg: COUNT()
+```
 
 Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.
 
@@ -108,6 +183,7 @@ $ rendertree --custom-file custom.example.yaml < profile.yaml
 |  33 |             +- Filter Scan <Row> (seekable_key_size: 0)                  |      |         |
 | *34 |                +- Table Scan on Songs <Row> (scan_method: Row)           | 3069 |    3069 |
 +-----+--------------------------------------------------------------------------+------+---------+
+
 Predicates(identified by ID):
   0: Split Range: (STARTS_WITH($SongName, 'Th') AND ($SongName LIKE 'Th%e'))
   1: Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId) AND ($TrackId' = $TrackId))
@@ -136,6 +212,7 @@ $ rendertree --inline-stats --custom-file custom.example.yaml < profile.yaml
 |  33 |             +- Filter Scan <Row> (seekable_key_size: 0)                                 |      |
 | *34 |                +- Table Scan on Songs <Row> (scan_method: Row, scanned=3069)            | 3069 |
 +-----+-----------------------------------------------------------------------------------------+------+
+
 Predicates(identified by ID):
   0: Split Range: (STARTS_WITH($SongName, 'Th') AND ($SongName LIKE 'Th%e'))
   1: Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId) AND ($TrackId' = $TrackId))
@@ -169,6 +246,7 @@ $ cat distributed_cross_apply_profile.yaml | \
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |          |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      | 0.18 ms  |
 +-----+-------------------------------------------------------------------------------------------+----------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -184,7 +262,7 @@ rendertree supports a compact format and wrapping for limited width environment.
   - Each level of depth in the Query Plan tree adds only one character to its indentation.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.
 - `--wrap-width` specifies the number of characters at which to wrap the content of the Operator column.
-  - The tree won't be broken even when lines are wrapped.
+  - The tree won't be broken even when operator lines are wrapped.
 - `--hanging-indent` enables hanging indent for wrapped lines.
   - Wrapped continuation lines align after node-local prefixes such as `[Input] ` and `[Map] `.
   - Without this flag, wrapped lines keep the original tree-aligned indentation.
@@ -209,6 +287,7 @@ $ rendertree --compact --wrap-width=60 < testdata/distributed_cross_apply.yaml
 |  18 |      +Index Scan on SongsBySongGenre<Row>(Full scan,scan_met |
 |     |       hod:Row)                                               |
 +-----+--------------------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
