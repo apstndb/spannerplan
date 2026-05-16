@@ -89,6 +89,34 @@ func TestRenderTable_RowIndex(t *testing.T) {
 	}
 }
 
+func TestRenderTable_PreservesMultilineCells(t *testing.T) {
+	rows := []testRow{
+		{id: 1, idText: "1", text: "Root\n+- Child"},
+	}
+	spec := asciitable.TableSpec[testRow]{
+		Columns: []asciitable.Column[testRow]{
+			idColumn(),
+			operatorColumn(),
+		},
+	}
+
+	got, err := asciitable.RenderTable(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderTable() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		+----+----------+
+		| ID | Operator |
+		+----+----------+
+		|  1 | Root     |
+		|    | +- Child |
+		+----+----------+
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTable() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRenderTable_InvalidSpec(t *testing.T) {
 	_, err := asciitable.RenderTable[testRow](nil, asciitable.TableSpec[testRow]{})
 	if err == nil {

@@ -95,6 +95,7 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 		tablewriter.WithHeaderAutoFormat(tw.Off),
 		tablewriter.WithHeaderAlignment(tw.AlignLeft),
 		tablewriter.WithRowAlignmentConfig(tw.CellAlignment{PerColumn: alignments}),
+		tablewriter.WithRowAutoWrap(tw.WrapNone),
 	)
 	table.Header(headers)
 
