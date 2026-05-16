@@ -54,6 +54,60 @@ Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--m
 Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
 `typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
 
+For example, the following query has a `WHERE` predicate, aggregation, and ordering:
+
+```sql
+SELECT SongGenre, COUNT(*) AS SongCount
+FROM Songs
+WHERE SongName LIKE 'A%'
+GROUP BY SongGenre
+ORDER BY SongCount DESC, SongGenre
+LIMIT 5
+```
+
+Rendering the captured PLAN JSON with `--print=predicates,ordering,aggregate` shows only the selected scalar details:
+
+```
+$ rendertree --mode=PLAN --print=predicates,ordering,aggregate < plan.json
++-----+--------------------------------------------------------------------------------------+
+| ID  | Operator                                                                             |
++-----+--------------------------------------------------------------------------------------+
+|   0 | Serialize Result <Row>                                                               |
+|   1 | +- Global Sort Limit <Row>                                                           |
+|   2 |    +- Global Hash Aggregate <Row>                                                    |
+|  *3 |       +- Distributed Union on SongsBySongName <Row>                                  |
+|   4 |          +- Local Hash Aggregate <Row>                                               |
+|  *5 |             +- Distributed Cross Apply <Row>                                         |
+|   6 |                +- [Input] Create Batch <Batch>                                       |
+|   7 |                |  +- RowToDataBlock                                                  |
+|   8 |                |     +- Local Distributed Union <Row>                                |
+|   9 |                |        +- Filter Scan <Row> (seekable_key_size: 1)                  |
+| *10 |                |           +- Index Scan on SongsBySongName <Row> (scan_method: Row) |
+|  22 |                +- [Map] Local Hash Aggregate <Row>                                   |
+|  23 |                   +- Cross Apply <Row>                                               |
+|  24 |                      +- [Input] KeyRangeAccumulator <Row>                            |
+|  25 |                      |  +- DataBlockToRow                                            |
+|  26 |                      |     +- Batch Scan on $v5 <Batch> (scan_method: Batch)         |
+|  33 |                      +- [Map] Local Distributed Union <Row>                          |
+|  34 |                         +- Filter Scan <Row> (seekable_key_size: 0)                  |
+| *35 |                            +- Table Scan on Songs <Row> (scan_method: Row)           |
++-----+--------------------------------------------------------------------------------------+
+Predicates(identified by ID):
+  3: Split Range: STARTS_WITH($SongName, 'A')
+  5: Split Range: (($Songs_key_SingerId'3 = $Songs_key_SingerId'2) AND ($Songs_key_AlbumId'3 = $Songs_key_AlbumId'2) AND ($Songs_key_TrackId'3 = $Songs_key_TrackId'2))
+ 10: Seek Condition: STARTS_WITH($SongName, 'A')
+ 35: Seek Condition: (($Songs_key_SingerId'3 = $batched_Songs_key_SingerId'3) AND ($Songs_key_AlbumId'3 = $batched_Songs_key_AlbumId'3) AND ($Songs_key_TrackId'3 = $batched_Songs_key_TrackId'3))
+Ordering(identified by ID):
+  1: Key: $sort_SongCount=$SongCount (DESC), $sort_group_SongGenre'2=$group_SongGenre'2
+Aggregates(identified by ID):
+  2: Key: $group_SongGenre'2=$group_SongGenre'
+     Agg: $SongCount=COUNT_FINAL($v1)
+  4: Key: $group_SongGenre'=$group_SongGenre
+     Agg: $v1=COUNT_FINAL($v3)
+ 22: Key: $group_SongGenre=$SongGenre
+     Agg: $v3=COUNT()
+```
+
 Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.
 
 ```
