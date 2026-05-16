@@ -659,6 +659,26 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 		b.WriteString(tablePart)
 	}
 
+	switch printMode {
+	case PrintFull, PrintTyped:
+		parameters := parameterLines(rows, printMode)
+		if len(parameters) > 0 {
+			fmt.Fprintln(&b, "Node Parameters(identified by ID):")
+			for _, s := range parameters {
+				fmt.Fprintf(&b, " %s\n", s)
+			}
+		}
+	case PrintPredicates:
+		predPart, err := asciitable.RenderPredicates(rows, predicateSpec())
+		if err != nil {
+			return "", err
+		}
+		b.WriteString(predPart)
+	}
+	return b.String(), nil
+}
+
+func parameterLines(rows []plantree.RowWithPredicates, printMode PrintMode) []string {
 	var maxIDLength int
 	for _, row := range rows {
 		if length := len(fmt.Sprint(row.ID)); length > maxIDLength {
@@ -685,9 +705,8 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 			join := strings.Join(lo.Map(childLinks, func(item *spannerplan.ResolvedChildLink, index int) string {
 				if varName := item.ChildLink.GetVariable(); varName != "" {
 					return fmt.Sprintf("$%s=%s", item.ChildLink.GetVariable(), item.Child.GetShortRepresentation().GetDescription())
-				} else {
-					return item.Child.GetShortRepresentation().GetDescription()
 				}
+				return item.Child.GetShortRepresentation().GetDescription()
 			}), ", ")
 			if join == "" {
 				continue
@@ -697,23 +716,7 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 			parameters = append(parameters, fmt.Sprintf("%s %s%s", prefix, typePartStr, join))
 		}
 	}
-
-	switch printMode {
-	case PrintFull, PrintTyped:
-		if len(parameters) > 0 {
-			fmt.Fprintln(&b, "Node Parameters(identified by ID):")
-			for _, s := range parameters {
-				fmt.Fprintf(&b, " %s\n", s)
-			}
-		}
-	case PrintPredicates:
-		predPart, err := asciitable.RenderPredicates(rows, predicateSpec())
-		if err != nil {
-			return "", err
-		}
-		b.WriteString(predPart)
-	}
-	return b.String(), nil
+	return parameters
 }
 
 type renderedTableRow []string
