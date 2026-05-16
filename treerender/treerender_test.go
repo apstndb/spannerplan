@@ -418,6 +418,7 @@ func TestRenderTreeWithOptions_AnchorIndentRequiresAnchorCallback(t *testing.T) 
 		func(n *Node) string { return n.Text },
 		func(n *Node) []*Node { return n.Children },
 		RenderOptions[Node]{
+			WrapWidth:          20,
 			ContinuationIndent: ContinuationIndentAnchor,
 		},
 	)
@@ -426,6 +427,30 @@ func TestRenderTreeWithOptions_AnchorIndentRequiresAnchorCallback(t *testing.T) 
 	}
 	if got := err.Error(); !strings.Contains(got, "GetContinuationAnchor is required") {
 		t.Fatalf("RenderTreeWithOptions() error = %q, want missing anchor callback", got)
+	}
+}
+
+func TestRenderTreeWithOptions_AnchorIndentWithoutCallbackNoopsWhenWrappingDisabled(t *testing.T) {
+	t.Parallel()
+
+	root := &Node{
+		Text: "root",
+		Children: []*Node{
+			{Text: "[Input] child"},
+		},
+	}
+
+	_, err := RenderTreeWithOptions(
+		root,
+		DefaultStyle(),
+		func(n *Node) string { return n.Text },
+		func(n *Node) []*Node { return n.Children },
+		RenderOptions[Node]{
+			ContinuationIndent: ContinuationIndentAnchor,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeWithOptions() error = %v, want nil when wrapping is disabled", err)
 	}
 }
 

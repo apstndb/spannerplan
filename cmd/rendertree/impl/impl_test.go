@@ -691,6 +691,11 @@ func TestParsePrintSections(t *testing.T) {
 			want:  PrintSections{PrintPredicates, PrintOrdering},
 		},
 		{
+			name:  "empty means no sections",
+			input: "",
+			want:  PrintSections{},
+		},
+		{
 			name:    "unknown",
 			input:   "broken",
 			wantErr: "unknown print section: broken",
@@ -913,6 +918,25 @@ func TestRun_UsageErrors(t *testing.T) {
 				t.Fatalf("stdout = %q, want empty", stdout.String())
 			}
 		})
+	}
+}
+
+func TestRun_EmptyPrintSuppressesAppendix(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := run([]string{"-print", "", "-mode", "plan"}, bytes.NewReader(dcaYAML), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "Predicates(identified by ID):") {
+		t.Fatalf("stdout contains predicates appendix despite -print empty:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "Distributed Cross Apply") {
+		t.Fatalf("stdout = %q, want rendered tree", stdout.String())
 	}
 }
 
