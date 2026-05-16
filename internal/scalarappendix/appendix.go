@@ -90,9 +90,6 @@ func ParseSections(s string) (Sections, error) {
 		sections = append(sections, section)
 	}
 
-	if len(sections) == 0 {
-		return nil, fmt.Errorf("print section must not be empty")
-	}
 	if err := ValidateSections(sections); err != nil {
 		return nil, err
 	}
@@ -338,7 +335,7 @@ func (r scalarLinkResolver) resolveKeyDescription(desc string, recursive bool) s
 
 func (r scalarLinkResolver) resolveDirectDescriptionVariables(desc string) string {
 	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
-		desc, ok := r.variableToDescription[strings.TrimPrefix(ref, "$")]
+		desc, ok := r.variableToDescription[ref[1:]]
 		if !ok {
 			return ref
 		}
@@ -357,7 +354,7 @@ func (r scalarLinkResolver) lookupVarRecursive(ref string, seen map[string]bool)
 		return ref
 	}
 
-	varName := strings.TrimPrefix(ref, "$")
+	varName := ref[1:]
 	if seen[varName] {
 		return ref
 	}
