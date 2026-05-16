@@ -74,7 +74,7 @@ const (
 type RenderOptions[T any] struct {
 	// GetContinuationAnchor returns the node-local prefix used for hanging continuation lines.
 	GetContinuationAnchor func(*T) string
-	// WrapWidth sets the maximum total rendered line width. A value of 0 disables wrapping.
+	// WrapWidth sets the maximum total rendered line width. A non-positive value disables wrapping.
 	WrapWidth int
 	// WrapCondition controls display-width calculation and truncation for wrapped text.
 	WrapCondition *tabwrap.Condition
