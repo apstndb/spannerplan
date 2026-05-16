@@ -49,7 +49,9 @@ type TableSpec[T any] struct {
 
 // AppendixSpec defines how appendices read row IDs and item lines.
 type AppendixSpec[T any] struct {
-	// Title is printed before item lines.
+	// Title is printed before item lines. It must be non-empty; callers that want
+	// the predicate default title can use [PredicateSpec] or provide
+	// "Predicates(identified by ID):".
 	Title string
 	// ID returns the non-negative display ID used in the appendix.
 	ID func(row T) uint

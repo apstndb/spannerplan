@@ -594,6 +594,16 @@ Node Parameters(identified by ID):
 	}
 }
 
+func TestPrintResult_UnsupportedPrintSection(t *testing.T) {
+	_, err := printResult(tableRenderDef{}, nil, PrintSections{"broken"}, false, false)
+	if err == nil {
+		t.Fatal("printResult() error = nil, want non-nil")
+	}
+	if got, want := err.Error(), "unsupported print section: broken"; got != want {
+		t.Fatalf("printResult() error = %q, want %q", got, want)
+	}
+}
+
 func TestParsePrintSections(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -742,6 +742,8 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 					return scalarLinkLines(row, isAggregateScalarLink, format)
 				},
 			))
+		default:
+			return "", fmt.Errorf("unsupported print section: %s", section)
 		}
 		if err != nil {
 			return "", err
