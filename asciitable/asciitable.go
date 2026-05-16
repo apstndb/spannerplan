@@ -49,6 +49,9 @@ type TableSpec[T any] struct {
 
 // PredicateSpec defines how predicate appendices read row IDs and predicate lines.
 type PredicateSpec[T any] struct {
+	// Title is printed before predicate lines. The zero value uses
+	// "Predicates(identified by ID):".
+	Title string
 	// ID returns the non-negative display ID used in the predicate appendix.
 	ID func(row T) uint
 	// Predicates returns the predicate lines associated with the row.
@@ -127,7 +130,11 @@ func RenderPredicates[T any](rows []T, spec PredicateSpec[T]) (string, error) {
 	}
 
 	var sb strings.Builder
-	_, _ = fmt.Fprintln(&sb, "Predicates(identified by ID):")
+	title := spec.Title
+	if title == "" {
+		title = "Predicates(identified by ID):"
+	}
+	_, _ = fmt.Fprintln(&sb, title)
 	for _, row := range resolved.rows {
 		for i, predicate := range row.predicates {
 			idPartStr := ""

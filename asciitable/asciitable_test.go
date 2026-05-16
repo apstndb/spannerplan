@@ -167,6 +167,26 @@ func TestRenderPredicates(t *testing.T) {
 	}
 }
 
+func TestRenderPredicates_CustomTitle(t *testing.T) {
+	rows := []testRow{
+		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1"}},
+	}
+	spec := testPredicateSpec()
+	spec.Title = "Filters:"
+
+	got, err := asciitable.RenderPredicates(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderPredicates() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		Filters:
+		 3: Filter: a = 1
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRenderPredicates_MultiDigitIDs(t *testing.T) {
 	rows := []testRow{
 		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1", "Expression: b"}},

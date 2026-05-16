@@ -368,7 +368,7 @@ func predicateSpec() asciitable.PredicateSpec[renderedRow] {
 }
 
 func (r renderedRow) formatID() string {
-	id := strconv.Itoa(int(r.id))
+	id := strconv.FormatUint(uint64(r.id), 10)
 	if len(r.predicates) > 0 {
 		return "*" + id
 	}
