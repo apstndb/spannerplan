@@ -541,7 +541,7 @@ func TestRenderTreeTableWithConfig_PrintSections(t *testing.T) {
 		RenderModePlan,
 		FormatCurrent,
 		RenderConfig{
-			PrintSections:     PrintSections{PrintOrdering, PrintAggregate},
+			PrintSections:     printSectionsPtr(PrintOrdering, PrintAggregate),
 			ShowScalarVars:    true,
 			ResolveScalarVars: true,
 		},
@@ -627,16 +627,29 @@ func TestRenderTreeTableWithOptions_PrintSectionValidation(t *testing.T) {
 	}
 }
 
-func TestRenderConfigPrintSectionsJSONInputEmptySlice(t *testing.T) {
+func printSectionsPtr(sections ...PrintSection) *PrintSections {
+	copied := append(PrintSections{}, sections...)
+	return &copied
+}
+
+func TestRenderConfigPrintSectionsJSONRoundTripEmptySlice(t *testing.T) {
+	b, err := json.Marshal(RenderConfig{PrintSections: printSectionsPtr()})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if !strings.Contains(string(b), `"printSections":[]`) {
+		t.Fatalf("json.Marshal() = %s, want printSections to preserve explicit empty slice", b)
+	}
+
 	var got RenderConfig
-	if err := json.Unmarshal([]byte(`{"printSections":[]}`), &got); err != nil {
+	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 	if got.PrintSections == nil {
-		t.Fatal("json.Unmarshal() left PrintSections nil, want explicit empty slice")
+		t.Fatal("json round trip left PrintSections nil, want explicit empty slice")
 	}
-	if len(got.PrintSections) != 0 {
-		t.Fatalf("json.Unmarshal() PrintSections = %#v, want empty", got.PrintSections)
+	if len(*got.PrintSections) != 0 {
+		t.Fatalf("json round trip PrintSections = %#v, want empty", *got.PrintSections)
 	}
 
 	rendered, err := RenderTreeTableWithConfig(
