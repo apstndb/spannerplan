@@ -404,13 +404,163 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintPredicates, true, tcase.inline, opts)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, true, tcase.inline, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if diff := cmp.Diff(tcase.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestPrintResult_PrintSections(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Sort",
+			NodeText:    "Sort",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "sort_key", Description: "$SongGenre"},
+				{Type: "Value", Variable: "sort_value", Description: "$SongName"},
+			},
+		},
+		{
+			ID:          1,
+			DisplayName: "Aggregate",
+			NodeText:    "Aggregate",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Variable: "group_key", Description: "$SingerId"},
+				{Type: "Agg", Variable: "song_count", Description: "COUNT(*)"},
+			},
+		},
+		{
+			ID:          2,
+			DisplayName: "Hash Join",
+			NodeText:    "Hash Join",
+			Predicates:  []string{"Condition: ($SingerId = $SingerId_1)"},
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Condition", Description: "($SingerId = $SingerId_1)"},
+				{Type: "Build", Variable: "build_key", Description: "$SingerId_1"},
+			},
+		},
+	}
+
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate})
+	if err != nil {
+		t.Fatalf("printResult() error = %v", err)
+	}
+	want := heredoc.Doc(`
+Predicates(identified by ID):
+ 2: Condition: ($SingerId = $SingerId_1)
+Ordering(identified by ID):
+ 0: Key: $sort_key=$SongGenre
+Aggregates(identified by ID):
+ 1: Key: $group_key=$SingerId
+    Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrintResult_RawPrintSections(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Compute",
+			NodeText:    "Compute",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Variable: "value", Description: "$SingerId"},
+				{Type: "Agg", Variable: "song_count", Description: "COUNT(*)"},
+			},
+		},
+	}
+
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped})
+	if err != nil {
+		t.Fatalf("printResult(typed) error = %v", err)
+	}
+	want := heredoc.Doc(`
+Node Parameters(identified by ID):
+ 0: Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(typed) mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull})
+	if err != nil {
+		t.Fatalf("printResult(full) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Node Parameters(identified by ID):
+ 0: $value=$SingerId
+    Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(full) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestParsePrintSections(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    PrintSections
+		wantErr string
+	}{
+		{
+			name:  "single section",
+			input: "predicates",
+			want:  PrintSections{PrintPredicates},
+		},
+		{
+			name:  "multiple sections",
+			input: "predicates,ordering,aggregate",
+			want:  PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+		},
+		{
+			name:  "case and space",
+			input: " Predicates, Ordering ",
+			want:  PrintSections{PrintPredicates, PrintOrdering},
+		},
+		{
+			name:    "unknown",
+			input:   "broken",
+			wantErr: "unknown print section: broken",
+		},
+		{
+			name:    "duplicate",
+			input:   "predicates,predicates",
+			wantErr: "duplicate print section: predicates",
+		},
+		{
+			name:    "raw dump cannot be combined",
+			input:   "predicates,full",
+			wantErr: `print section "full" cannot be combined with other sections`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parsePrintSections(tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("parsePrintSections() error = nil, want non-nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parsePrintSections() error = %q, want substring %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parsePrintSections() error = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("parsePrintSections() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -500,7 +650,7 @@ func TestRun_UsageErrors(t *testing.T) {
 		{
 			name:        "invalid print",
 			args:        []string{"-print", "broken"},
-			wantErrText: "unknown PrintMode: broken",
+			wantErrText: "unknown print section: broken",
 			postCheck: func(t *testing.T, stderr string, err error) {
 				t.Helper()
 				if !strings.Contains(stderr, "Invalid value for -print flag:") {

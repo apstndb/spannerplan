@@ -352,6 +352,91 @@ func TestProcessPlan_FullTextSearchPredicates(t *testing.T) {
 	}
 }
 
+func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T) {
+	qp, err := spannerplan.New([]*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Sort",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 1, Type: "Key", Variable: "sort_key"},
+				{ChildIndex: 2, Type: "Value", Variable: "sort_value"},
+				{ChildIndex: 3},
+			},
+		},
+		{
+			Index:       1,
+			DisplayName: "Reference",
+			Kind:        sppb.PlanNode_SCALAR,
+			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+				Description: "$SongGenre",
+			},
+		},
+		{
+			Index:       2,
+			DisplayName: "Reference",
+			Kind:        sppb.PlanNode_SCALAR,
+			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+				Description: "$SongName",
+			},
+		},
+		{
+			Index:       3,
+			DisplayName: "Aggregate",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 4, Type: "Key", Variable: "group_key"},
+				{ChildIndex: 5, Type: "Agg", Variable: "song_count"},
+			},
+		},
+		{
+			Index:       4,
+			DisplayName: "Reference",
+			Kind:        sppb.PlanNode_SCALAR,
+			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+				Description: "$SingerId",
+			},
+		},
+		{
+			Index:       5,
+			DisplayName: "Function",
+			Kind:        sppb.PlanNode_SCALAR,
+			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+				Description: "COUNT(*)",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	rows, err := ProcessPlan(qp)
+	if err != nil {
+		t.Fatalf("ProcessPlan() error = %v", err)
+	}
+
+	sortRow := rowByID(t, rows, 0)
+	if sortRow.DisplayName != "Sort" {
+		t.Fatalf("sort row DisplayName = %q, want Sort", sortRow.DisplayName)
+	}
+	wantSortLinks := []ScalarChildLink{
+		{Type: "Key", Variable: "sort_key", Description: "$SongGenre", DisplayName: "Reference", ChildIndex: 1},
+		{Type: "Value", Variable: "sort_value", Description: "$SongName", DisplayName: "Reference", ChildIndex: 2},
+	}
+	if diff := cmp.Diff(wantSortLinks, sortRow.ScalarChildLinks); diff != "" {
+		t.Fatalf("sort ScalarChildLinks mismatch (-want +got):\n%s", diff)
+	}
+
+	aggregateRow := rowByID(t, rows, 3)
+	wantAggregateLinks := []ScalarChildLink{
+		{Type: "Key", Variable: "group_key", Description: "$SingerId", DisplayName: "Reference", ChildIndex: 4},
+		{Type: "Agg", Variable: "song_count", Description: "COUNT(*)", DisplayName: "Function", ChildIndex: 5},
+	}
+	if diff := cmp.Diff(wantAggregateLinks, aggregateRow.ScalarChildLinks); diff != "" {
+		t.Fatalf("aggregate ScalarChildLinks mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func hangingIndentPlan(t *testing.T) *spannerplan.QueryPlan {
 	t.Helper()
 

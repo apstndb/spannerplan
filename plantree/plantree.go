@@ -33,23 +33,43 @@ type RowWithPredicates struct {
 	TreePart string
 	// NodeText is the rendered operator title, possibly split across visual lines.
 	NodeText string
+	// DisplayName is the raw Spanner PlanNode display name, before metadata is folded into NodeText.
+	DisplayName string
 	// Predicates contains filter predicate text associated with this row.
 	Predicates []string
-	// Keys contains key metadata associated with this row.
-	Keys map[string][]string
 	// ExecutionStats contains execution statistics associated with this row.
 	ExecutionStats stats.ExecutionStats
-	// ChildLinks contains resolved child-link metadata associated with this row.
-	ChildLinks map[string][]*spannerplan.ResolvedChildLink
+	// ScalarChildLinks contains this row's scalar child links in original ChildLinks order.
+	ScalarChildLinks []ScalarChildLink
+}
+
+// ScalarChildLink is a scalar child link attached to a rendered plan row.
+//
+// It keeps raw-ish child-link fields so callers can group links by the parent
+// row's DisplayName and the child-link Type. The same Type can have different
+// semantics under different parent operators, for example Sort Key versus
+// Aggregate Key.
+type ScalarChildLink struct {
+	// Type is the ChildLink type, such as "Condition", "Key", or "Agg".
+	Type string
+	// Variable is the ChildLink variable, when Spanner provides one.
+	Variable string
+	// Description is the scalar child node's short representation description.
+	Description string
+	// DisplayName is the scalar child node's raw PlanNode display name.
+	DisplayName string
+	// ChildIndex is the scalar child node's PlanNode index.
+	ChildIndex int32
 }
 
 type renderedNode struct {
 	ID                 int32
 	ContinuationAnchor string
 	NodeText           string
+	DisplayName        string
 	Predicates         []string
 	ExecutionStats     stats.ExecutionStats
-	ChildLinks         map[string][]*spannerplan.ResolvedChildLink
+	ScalarChildLinks   []ScalarChildLink
 	Children           []*renderedNode
 }
 
@@ -223,12 +243,13 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			return nil, fmt.Errorf("unexpected rendered row line count for node %d: tree=%d node=%d", node.ID, wantTreeLines, gotLines)
 		}
 		result = append(result, RowWithPredicates{
-			ID:             node.ID,
-			Predicates:     node.Predicates,
-			ChildLinks:     node.ChildLinks,
-			TreePart:       row.TreePart,
-			NodeText:       row.NodeText,
-			ExecutionStats: node.ExecutionStats,
+			ID:               node.ID,
+			DisplayName:      node.DisplayName,
+			Predicates:       node.Predicates,
+			ScalarChildLinks: node.ScalarChildLinks,
+			TreePart:         row.TreePart,
+			NodeText:         row.NodeText,
+			ExecutionStats:   node.ExecutionStats,
 		})
 	}
 
@@ -274,8 +295,14 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		return item.Child.GetKind() == sppb.PlanNode_SCALAR
 	})
 
-	childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
-		return item.ChildLink.GetType()
+	renderedScalarChildLinks := lo.Map(scalarChildLinks, func(item *spannerplan.ResolvedChildLink, _ int) ScalarChildLink {
+		return ScalarChildLink{
+			Type:        item.ChildLink.GetType(),
+			Variable:    item.ChildLink.GetVariable(),
+			Description: item.Child.GetShortRepresentation().GetDescription(),
+			DisplayName: item.Child.GetDisplayName(),
+			ChildIndex:  item.Child.GetIndex(),
+		}
 	})
 
 	executionStats, err := stats.Extract(node, opts.disallowUnknownStats)
@@ -288,9 +315,10 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		ID:                 node.GetIndex(),
 		ContinuationAnchor: continuationAnchor,
 		NodeText:           nodeText,
+		DisplayName:        node.GetDisplayName(),
 		Predicates:         predicates,
 		ExecutionStats:     *executionStats,
-		ChildLinks:         childLinks,
+		ScalarChildLinks:   renderedScalarChildLinks,
 	}
 
 	for _, child := range visibleChildLinks {

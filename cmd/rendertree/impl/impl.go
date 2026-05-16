@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"cmp"
 	"errors"
 	"flag"
 	"fmt"
@@ -181,14 +180,6 @@ func secsToS(v any) string {
 	return secsRe.ReplaceAllString(fmt.Sprint(v), "s")
 }
 
-func sortedChildLinkEntries(m map[string][]*spannerplan.ResolvedChildLink) []lo.Entry[string, []*spannerplan.ResolvedChildLink] {
-	entries := lo.Entries(m)
-	slices.SortFunc(entries, func(a, b lo.Entry[string, []*spannerplan.ResolvedChildLink]) int {
-		return cmp.Compare(a.Key, b.Key)
-	})
-	return entries
-}
-
 var (
 	withStatsToRenderDefMap = map[bool]tableRenderDef{
 		false: {
@@ -248,25 +239,67 @@ func (s *repeatableStringList) Set(s2 string) error {
 
 const jsonSnippetLen = 140
 
-type PrintMode int
+// PrintSection selects one appendix section printed after the rendered tree.
+type PrintSection string
 
 const (
-	PrintPredicates PrintMode = iota
-	PrintTyped
-	PrintFull
+	// PrintPredicates prints predicate-like scalar links.
+	PrintPredicates PrintSection = "predicates"
+	// PrintOrdering prints ordering scalar links for sort operators.
+	PrintOrdering PrintSection = "ordering"
+	// PrintAggregate prints grouping and aggregate scalar links for aggregate operators.
+	PrintAggregate PrintSection = "aggregate"
+	// PrintTyped prints all typed scalar links as a raw debug dump.
+	PrintTyped PrintSection = "typed"
+	// PrintFull prints all scalar links, including unnamed links, as a raw debug dump.
+	PrintFull PrintSection = "full"
 )
 
-func parsePrintMode(s string) (PrintMode, error) {
-	switch strings.ToLower(s) {
-	case "predicates":
-		return PrintPredicates, nil
-	case "typed":
-		return PrintTyped, nil
-	case "full":
-		return PrintFull, nil
-	default:
-		return 0, fmt.Errorf("unknown PrintMode: %s", s)
+// PrintSections is the ordered list of appendix sections requested by the CLI.
+type PrintSections []PrintSection
+
+func parsePrintSections(s string) (PrintSections, error) {
+	var sections PrintSections
+	seen := map[PrintSection]bool{}
+	for _, raw := range strings.Split(s, ",") {
+		part := strings.TrimSpace(strings.ToLower(raw))
+		if part == "" {
+			return nil, fmt.Errorf("print section must not be empty")
+		}
+
+		var section PrintSection
+		switch part {
+		case string(PrintPredicates):
+			section = PrintPredicates
+		case string(PrintOrdering):
+			section = PrintOrdering
+		case string(PrintAggregate):
+			section = PrintAggregate
+		case string(PrintTyped):
+			section = PrintTyped
+		case string(PrintFull):
+			section = PrintFull
+		default:
+			return nil, fmt.Errorf("unknown print section: %s", raw)
+		}
+
+		if seen[section] {
+			return nil, fmt.Errorf("duplicate print section: %s", section)
+		}
+		seen[section] = true
+		sections = append(sections, section)
 	}
+
+	if len(sections) == 0 {
+		return nil, fmt.Errorf("print section must not be empty")
+	}
+
+	for _, section := range sections {
+		if (section == PrintTyped || section == PrintFull) && len(sections) > 1 {
+			return nil, fmt.Errorf("print section %q cannot be combined with other sections", section)
+		}
+	}
+	return sections, nil
 }
 
 type explainMode string
@@ -296,7 +329,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
-	printModeStr := flagSet.String("print", "predicates", "print node parameters(EXPERIMENTAL)")
+	printSectionsStr := flagSet.String("print", "predicates", "print appendix sections: predicates, ordering, aggregate, typed, full (comma-separated; typed/full are raw debug dumps)")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
 	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
 	targetMetadata := flagSet.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
@@ -355,7 +388,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintln(stderr, "--custom is deprecated. You must migrate to --custom-column or --custom-file.")
 	}
 
-	printMode, err := parsePrintMode(*printModeStr)
+	printSections, err := parsePrintSections(*printSectionsStr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "Invalid value for -print flag: %v\n", err)
 		flagSet.Usage()
@@ -459,7 +492,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
-	s, err := renderTreeImpl(planNodes, renderDef, printMode, *disallowUnknownStats, *inlineStats, opts)
+	s, err := renderTreeImpl(planNodes, renderDef, printSections, *disallowUnknownStats, *inlineStats, opts)
 	if err != nil {
 		return err
 	}
@@ -468,7 +501,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return err
 }
 
-func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printMode PrintMode, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
+func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printSections PrintSections, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
 	opts = append(opts,
 		plantree.WithQueryPlanOptions(
 			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inline)),
@@ -490,7 +523,7 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printM
 				return !def.shouldInline(inline)
 			}),
 		},
-		rows, printMode)
+		rows, printSections)
 	if err != nil {
 		return "", err
 	}
@@ -648,7 +681,7 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 	return tableRenderDef{Columns: columns}, nil
 }
 
-func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printMode PrintMode) (string, error) {
+func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections) (string, error) {
 	var b strings.Builder
 
 	if len(rows) > 0 && len(renderDef.Columns) > 0 {
@@ -659,64 +692,118 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 		b.WriteString(tablePart)
 	}
 
-	switch printMode {
-	case PrintFull, PrintTyped:
-		parameters := parameterLines(rows, printMode)
-		if len(parameters) > 0 {
-			fmt.Fprintln(&b, "Node Parameters(identified by ID):")
-			for _, s := range parameters {
-				fmt.Fprintf(&b, " %s\n", s)
-			}
+	for _, section := range printSections {
+		var (
+			part string
+			err  error
+		)
+		switch section {
+		case PrintFull, PrintTyped:
+			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+				"Node Parameters(identified by ID):",
+				func(row plantree.RowWithPredicates) []string {
+					return scalarLinkLines(row, func(_ plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
+						return section == PrintFull || link.Type != ""
+					})
+				},
+			))
+		case PrintPredicates:
+			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+				"Predicates(identified by ID):",
+				func(row plantree.RowWithPredicates) []string {
+					return row.Predicates
+				},
+			))
+		case PrintOrdering:
+			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+				"Ordering(identified by ID):",
+				func(row plantree.RowWithPredicates) []string {
+					return scalarLinkLines(row, isOrderingScalarLink)
+				},
+			))
+		case PrintAggregate:
+			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+				"Aggregates(identified by ID):",
+				func(row plantree.RowWithPredicates) []string {
+					return scalarLinkLines(row, isAggregateScalarLink)
+				},
+			))
 		}
-	case PrintPredicates:
-		predPart, err := asciitable.RenderPredicates(rows, predicateSpec())
 		if err != nil {
 			return "", err
 		}
-		b.WriteString(predPart)
+		b.WriteString(part)
 	}
 	return b.String(), nil
 }
 
-func parameterLines(rows []plantree.RowWithPredicates, printMode PrintMode) []string {
-	var maxIDLength int
-	for _, row := range rows {
-		if length := len(fmt.Sprint(row.ID)); length > maxIDLength {
-			maxIDLength = length
+func scalarAppendixSpec(title string, items func(row plantree.RowWithPredicates) []string) asciitable.AppendixSpec[plantree.RowWithPredicates] {
+	return asciitable.AppendixSpec[plantree.RowWithPredicates]{
+		Title: title,
+		ID: func(row plantree.RowWithPredicates) uint {
+			// Spanner PlanNode indexes are zero-based node positions, so they are
+			// non-negative when used as appendix display IDs.
+			return uint(row.ID)
+		},
+		Items: items,
+	}
+}
+
+type scalarLinkGroup struct {
+	typ    string
+	values []string
+}
+
+func scalarLinkLines(row plantree.RowWithPredicates, include func(plantree.RowWithPredicates, plantree.ScalarChildLink) bool) []string {
+	groupByType := map[string]int{}
+	var groups []scalarLinkGroup
+
+	for _, link := range row.ScalarChildLinks {
+		if !include(row, link) {
+			continue
 		}
+
+		groupIndex, ok := groupByType[link.Type]
+		if !ok {
+			groupIndex = len(groups)
+			groupByType[link.Type] = groupIndex
+			groups = append(groups, scalarLinkGroup{typ: link.Type})
+		}
+		groups[groupIndex].values = append(groups[groupIndex].values, formatScalarLink(link))
 	}
 
-	var parameters []string
-	for _, row := range rows {
-		var prefix string
-		i := 0
-		for _, t := range sortedChildLinkEntries(row.ChildLinks) {
-			typ, childLinks := t.Key, t.Value
-			if printMode != PrintFull && typ == "" {
-				continue
-			}
-
-			if i == 0 {
-				prefix = fmt.Sprintf("%*d:", maxIDLength, row.ID)
-			} else {
-				prefix = strings.Repeat(" ", maxIDLength+1)
-			}
-
-			join := strings.Join(lo.Map(childLinks, func(item *spannerplan.ResolvedChildLink, index int) string {
-				if varName := item.ChildLink.GetVariable(); varName != "" {
-					return fmt.Sprintf("$%s=%s", item.ChildLink.GetVariable(), item.Child.GetShortRepresentation().GetDescription())
-				}
-				return item.Child.GetShortRepresentation().GetDescription()
-			}), ", ")
-			if join == "" {
-				continue
-			}
-			i++
-			typePartStr := lo.Ternary(typ != "", typ+": ", "")
-			parameters = append(parameters, fmt.Sprintf("%s %s%s", prefix, typePartStr, join))
+	lines := make([]string, 0, len(groups))
+	for _, group := range groups {
+		joined := strings.Join(group.values, ", ")
+		if joined == "" {
+			continue
 		}
+		typePartStr := lo.Ternary(group.typ != "", group.typ+": ", "")
+		lines = append(lines, typePartStr+joined)
 	}
-	return parameters
+	return lines
+}
+
+func formatScalarLink(link plantree.ScalarChildLink) string {
+	if link.Variable != "" {
+		return fmt.Sprintf("$%s=%s", link.Variable, link.Description)
+	}
+	return link.Description
+}
+
+func isOrderingScalarLink(row plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
+	switch row.DisplayName {
+	case "Sort", "Sort Limit":
+		return link.Type == "Key"
+	case "Minor Sort", "Minor Sort Limit":
+		return link.Type == "MajorKey" || link.Type == "MinorKey"
+	default:
+		return false
+	}
+}
+
+func isAggregateScalarLink(row plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
+	return row.DisplayName == "Aggregate" && (link.Type == "Key" || link.Type == "Agg")
 }
 
 type renderedTableRow []string
@@ -765,18 +852,5 @@ func tableAlignment(alignment tw.Align) (asciitable.Alignment, error) {
 		return asciitable.AlignLeft, nil
 	default:
 		return "", fmt.Errorf("unsupported alignment %v", alignment)
-	}
-}
-
-func predicateSpec() asciitable.PredicateSpec[plantree.RowWithPredicates] {
-	return asciitable.PredicateSpec[plantree.RowWithPredicates]{
-		ID: func(row plantree.RowWithPredicates) uint {
-			// Spanner PlanNode indexes are zero-based node positions, so they are
-			// non-negative when used as predicate appendix display IDs.
-			return uint(row.ID)
-		},
-		Predicates: func(row plantree.RowWithPredicates) []string {
-			return row.Predicates
-		},
 	}
 }

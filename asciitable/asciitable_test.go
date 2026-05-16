@@ -146,15 +146,15 @@ func TestRenderTable_InvalidSpec(t *testing.T) {
 	}
 }
 
-func TestRenderPredicates(t *testing.T) {
+func TestRenderAppendix(t *testing.T) {
 	rows := []testRow{
 		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1", "Expression: b"}},
 		{id: 12, text: "Scan", predicates: []string{"Seek Condition: k = 1"}},
 	}
 
-	got, err := asciitable.RenderPredicates(rows, testPredicateSpec())
+	got, err := asciitable.RenderAppendix(rows, testAppendixSpec("Predicates(identified by ID):"))
 	if err != nil {
-		t.Fatalf("RenderPredicates() error = %v", err)
+		t.Fatalf("RenderAppendix() error = %v", err)
 	}
 	want := heredoc.Doc(`
 		Predicates(identified by ID):
@@ -163,39 +163,37 @@ func TestRenderPredicates(t *testing.T) {
 		 12: Seek Condition: k = 1
 	`)
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
+		t.Fatalf("RenderAppendix() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestRenderPredicates_CustomTitle(t *testing.T) {
+func TestRenderAppendix_CustomTitle(t *testing.T) {
 	rows := []testRow{
 		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1"}},
 	}
-	spec := testPredicateSpec()
-	spec.Title = "Filters:"
 
-	got, err := asciitable.RenderPredicates(rows, spec)
+	got, err := asciitable.RenderAppendix(rows, testAppendixSpec("Filters:"))
 	if err != nil {
-		t.Fatalf("RenderPredicates() error = %v", err)
+		t.Fatalf("RenderAppendix() error = %v", err)
 	}
 	want := heredoc.Doc(`
 		Filters:
 		 3: Filter: a = 1
 	`)
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
+		t.Fatalf("RenderAppendix() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestRenderPredicates_MultiDigitIDs(t *testing.T) {
+func TestRenderAppendix_MultiDigitIDs(t *testing.T) {
 	rows := []testRow{
 		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1", "Expression: b"}},
 		{id: 120, text: "Scan", predicates: []string{"Seek Condition: k = 1"}},
 	}
 
-	got, err := asciitable.RenderPredicates(rows, testPredicateSpec())
+	got, err := asciitable.RenderAppendix(rows, testAppendixSpec("Predicates(identified by ID):"))
 	if err != nil {
-		t.Fatalf("RenderPredicates() error = %v", err)
+		t.Fatalf("RenderAppendix() error = %v", err)
 	}
 	want := heredoc.Doc(`
 		Predicates(identified by ID):
@@ -204,41 +202,42 @@ func TestRenderPredicates_MultiDigitIDs(t *testing.T) {
 		 120: Seek Condition: k = 1
 	`)
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
+		t.Fatalf("RenderAppendix() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestRenderPredicates_None(t *testing.T) {
-	got, err := asciitable.RenderPredicates([]testRow{{id: 1, text: "Root"}}, testPredicateSpec())
+func TestRenderAppendix_None(t *testing.T) {
+	got, err := asciitable.RenderAppendix([]testRow{{id: 1, text: "Root"}}, testAppendixSpec("Predicates(identified by ID):"))
 	if err != nil {
-		t.Fatalf("RenderPredicates() error = %v", err)
+		t.Fatalf("RenderAppendix() error = %v", err)
 	}
 	if got != "" {
-		t.Fatalf("RenderPredicates() = %q, want empty", got)
+		t.Fatalf("RenderAppendix() = %q, want empty", got)
 	}
 }
 
-func TestRenderPredicates_ReadsEachRowOnce(t *testing.T) {
+func TestRenderAppendix_ReadsEachRowOnce(t *testing.T) {
 	rows := []testRow{
 		{id: 1, text: "Root"},
 		{id: 2, text: "Filter", predicates: []string{"Filter: true"}},
 	}
 	var idCalls int
 	var predicateCalls int
-	spec := asciitable.PredicateSpec[testRow]{
+	spec := asciitable.AppendixSpec[testRow]{
+		Title: "Predicates(identified by ID):",
 		ID: func(row testRow) uint {
 			idCalls++
 			return row.id
 		},
-		Predicates: func(row testRow) []string {
+		Items: func(row testRow) []string {
 			predicateCalls++
 			return row.predicates
 		},
 	}
 
-	_, err := asciitable.RenderPredicates(rows, spec)
+	_, err := asciitable.RenderAppendix(rows, spec)
 	if err != nil {
-		t.Fatalf("RenderPredicates() error = %v", err)
+		t.Fatalf("RenderAppendix() error = %v", err)
 	}
 	if idCalls != len(rows) {
 		t.Fatalf("ID calls = %d, want %d", idCalls, len(rows))
@@ -248,14 +247,32 @@ func TestRenderPredicates_ReadsEachRowOnce(t *testing.T) {
 	}
 }
 
-func TestRenderPredicates_InvalidSpec(t *testing.T) {
+func TestRenderAppendix_InvalidSpec(t *testing.T) {
 	rows := []testRow{
 		{id: 1, text: "Root", predicates: []string{"Filter: true"}},
 	}
 
-	_, err := asciitable.RenderPredicates(rows, asciitable.PredicateSpec[testRow]{})
+	_, err := asciitable.RenderAppendix(rows, asciitable.AppendixSpec[testRow]{})
 	if err == nil {
-		t.Fatal("RenderPredicates() error = nil, want non-nil")
+		t.Fatal("RenderAppendix() error = nil, want non-nil")
+	}
+}
+
+func TestRenderPredicates_DefaultTitle(t *testing.T) {
+	rows := []testRow{
+		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1"}},
+	}
+
+	got, err := asciitable.RenderPredicates(rows, testPredicateSpec())
+	if err != nil {
+		t.Fatalf("RenderPredicates() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		Predicates(identified by ID):
+		 3: Filter: a = 1
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -285,6 +302,18 @@ func testPredicateSpec() asciitable.PredicateSpec[testRow] {
 			return row.id
 		},
 		Predicates: func(row testRow) []string {
+			return row.predicates
+		},
+	}
+}
+
+func testAppendixSpec(title string) asciitable.AppendixSpec[testRow] {
+	return asciitable.AppendixSpec[testRow]{
+		Title: title,
+		ID: func(row testRow) uint {
+			return row.id
+		},
+		Items: func(row testRow) []string {
 			return row.predicates
 		},
 	}

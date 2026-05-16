@@ -43,6 +43,17 @@ $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singe
 
 Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--mode=AUTO` can detect whether the input has execution statistics or not.
 
+`rendertree` prints predicate-like scalar parameters by default. The `--print` flag can select one or more appendix sections:
+
+- `predicates` prints predicate-like scalar links such as `Condition`, `Residual Condition`, `Seek Condition`, `Search Predicate`, and `Split Range`.
+- `ordering` prints ordering details from `Sort`, `Sort Limit`, `Minor Sort`, and `Minor Sort Limit` operators.
+- `aggregate` prints `Key` and `Agg` details from `Aggregate` operators.
+- `typed` prints all typed scalar links as a raw debug dump.
+- `full` prints all scalar links, including unnamed links, as a raw debug dump.
+
+Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
+`typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
+
 Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.
 
 ```

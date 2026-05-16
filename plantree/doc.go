@@ -15,6 +15,12 @@ which combines tree prefix and node title.
 The TreePart field remains exported for struct literals and cmp.Diff in tests; new code
 should use the accessors above when not constructing rows by hand.
 
+Rows also expose scalar child links in original plan order via
+[RowWithPredicates.ScalarChildLinks]. Callers should group those links at
+rendering time using the parent row's [RowWithPredicates.DisplayName] together
+with each [ScalarChildLink.Type], because the same child-link type can have
+different meanings under different operators.
+
 A []string field would avoid one strings.Join in the renderer and one strings.Split in
 Text, but it is a breaking API change for modules that build [RowWithPredicates] literals
 in tests (for example github.com/apstndb/spanner-mycli). Downstream production code reviewed

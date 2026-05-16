@@ -166,7 +166,7 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 }
 
 func renderPredicatesPart(rendered []plantree.RowWithPredicates) (string, error) {
-	return asciitable.RenderPredicates(rendered, predicateSpec())
+	return asciitable.RenderAppendix(rendered, predicateAppendixSpec())
 }
 
 func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (string, error) {
@@ -222,14 +222,15 @@ func spannerTableSpec(withStats bool) asciitable.TableSpec[plantree.RowWithPredi
 	return spec
 }
 
-func predicateSpec() asciitable.PredicateSpec[plantree.RowWithPredicates] {
-	return asciitable.PredicateSpec[plantree.RowWithPredicates]{
+func predicateAppendixSpec() asciitable.AppendixSpec[plantree.RowWithPredicates] {
+	return asciitable.AppendixSpec[plantree.RowWithPredicates]{
+		Title: "Predicates(identified by ID):",
 		ID: func(row plantree.RowWithPredicates) uint {
 			// Spanner PlanNode indexes are zero-based node positions, so they are
 			// non-negative when used as predicate appendix display IDs.
 			return uint(row.ID)
 		},
-		Predicates: func(row plantree.RowWithPredicates) []string {
+		Items: func(row plantree.RowWithPredicates) []string {
 			return row.Predicates
 		},
 	}

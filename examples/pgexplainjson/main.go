@@ -201,7 +201,7 @@ func renderPlan(rootPlan *planNode, opts renderOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	predicatePart, err := asciitable.RenderPredicates(rows, predicateSpec())
+	predicatePart, err := asciitable.RenderAppendix(rows, predicateAppendixSpec())
 	if err != nil {
 		return "", err
 	}
@@ -356,12 +356,13 @@ func tableSpec() asciitable.TableSpec[renderedRow] {
 	}
 }
 
-func predicateSpec() asciitable.PredicateSpec[renderedRow] {
-	return asciitable.PredicateSpec[renderedRow]{
+func predicateAppendixSpec() asciitable.AppendixSpec[renderedRow] {
+	return asciitable.AppendixSpec[renderedRow]{
+		Title: "Predicates(identified by ID):",
 		ID: func(row renderedRow) uint {
 			return row.id
 		},
-		Predicates: func(row renderedRow) []string {
+		Items: func(row renderedRow) []string {
 			return row.predicates
 		},
 	}
