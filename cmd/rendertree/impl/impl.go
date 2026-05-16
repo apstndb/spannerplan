@@ -177,8 +177,8 @@ var (
 var secsRe = regexp.MustCompile(`secs$`)
 
 var (
-	scalarVariableReferenceRe   = regexp.MustCompile(`\$[A-Za-z0-9_']+`)
-	scalarVariableDescriptionRe = regexp.MustCompile(`^\$[A-Za-z0-9_']+$`)
+	scalarVariableReferenceRe   = regexp.MustCompile(`\$[A-Za-z0-9_']+(?:\.[A-Za-z0-9_']+)*`)
+	scalarVariableDescriptionRe = regexp.MustCompile(`^\$[A-Za-z0-9_']+(?:\.[A-Za-z0-9_']+)*$`)
 )
 
 func secsToS(v any) string {

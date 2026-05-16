@@ -513,6 +513,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 				{Type: "Key", Variable: "sort_count", Description: "$SongCount (DESC)"},
 				{Type: "Key", Variable: "sort_genre", Description: "$group_SongGenre'"},
 				{Type: "Key", Variable: "sort_expression", Description: "$left + $right"},
+				{Type: "Key", Variable: "sort_album", Description: "$v1.AlbumId_1"},
 			},
 		},
 		{
@@ -542,6 +543,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 				{Variable: "SingerId", Description: "SingerId"},
 				{Variable: "left", Description: "$SongGenre"},
 				{Variable: "right", Description: "$SingerId"},
+				{Variable: "v1.AlbumId_1", Description: "AlbumId"},
 			},
 		},
 	}
@@ -555,7 +557,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 	}
 	want := heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: COUNT_FINAL($v1) DESC, $group_SongGenre, $SongGenre + $SingerId
+ 0: Key: COUNT_FINAL($v1) DESC, $group_SongGenre, $SongGenre + $SingerId, AlbumId
 
 Aggregates(identified by ID):
  1: Key: $SongGenre
@@ -577,7 +579,7 @@ Aggregates(identified by ID):
 	}
 	want = heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=$group_SongGenre, $sort_expression=$SongGenre + $SingerId
+ 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=$group_SongGenre, $sort_expression=$SongGenre + $SingerId, $sort_album=AlbumId
 
 Aggregates(identified by ID):
  1: Key: $group_SongGenre'=$SongGenre
@@ -598,7 +600,7 @@ Aggregates(identified by ID):
 	}
 	want = heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: COUNT_FINAL(COUNT()) DESC, SongGenre, SongGenre + SingerId
+ 0: Key: COUNT_FINAL(COUNT()) DESC, SongGenre, SongGenre + SingerId, AlbumId
 
 Aggregates(identified by ID):
  1: Key: SongGenre
