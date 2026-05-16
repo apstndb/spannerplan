@@ -404,7 +404,7 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, false, false, true, tcase.inline, opts)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, false, false, false, true, tcase.inline, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -448,7 +448,7 @@ func TestPrintResult_PrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}, false, false)
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}, false, false, false)
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
@@ -465,7 +465,7 @@ Aggregates(identified by ID):
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, false)
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, false, false)
 	if err != nil {
 		t.Fatalf("printResult(show vars) error = %v", err)
 	}
@@ -524,15 +524,15 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, false, true)
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, false, true, false)
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
 	want := heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: COUNT_FINAL($v1) DESC, SongGenre, SongGenre + SingerId
+ 0: Key: COUNT_FINAL($v1) DESC, $group_SongGenre, $SongGenre + $SingerId
 Aggregates(identified by ID):
- 1: Key: SongGenre
+ 1: Key: $SongGenre
     Agg: COUNT_FINAL($v1)
  2: Key: SongGenre
     Agg: COUNT()
@@ -541,21 +541,38 @@ Aggregates(identified by ID):
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, true)
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, true, false)
 	if err != nil {
 		t.Fatalf("printResult(show vars and resolve vars) error = %v", err)
 	}
 	want = heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=SongGenre, $sort_expression=SongGenre + SingerId
+ 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=$group_SongGenre, $sort_expression=$SongGenre + $SingerId
 Aggregates(identified by ID):
- 1: Key: $group_SongGenre'=SongGenre
+ 1: Key: $group_SongGenre'=$SongGenre
     Agg: $SongCount=COUNT_FINAL($v1)
  2: Key: $group_SongGenre=SongGenre
     Agg: $v1=COUNT()
 `)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("printResult(show vars and resolve vars) mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, false, false, true)
+	if err != nil {
+		t.Fatalf("printResult(resolve vars recursively) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: COUNT_FINAL(COUNT()) DESC, SongGenre, SongGenre + SingerId
+Aggregates(identified by ID):
+ 1: Key: SongGenre
+    Agg: COUNT_FINAL($v1)
+ 2: Key: SongGenre
+    Agg: COUNT()
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(resolve vars recursively) mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -572,7 +589,7 @@ func TestPrintResult_RawPrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped}, false, false)
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped}, false, false, false)
 	if err != nil {
 		t.Fatalf("printResult(typed) error = %v", err)
 	}
@@ -584,7 +601,7 @@ Node Parameters(identified by ID):
 		t.Fatalf("printResult(typed) mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull}, false, false)
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull}, false, false, false)
 	if err != nil {
 		t.Fatalf("printResult(full) error = %v", err)
 	}
@@ -599,7 +616,7 @@ Node Parameters(identified by ID):
 }
 
 func TestPrintResult_UnsupportedPrintSection(t *testing.T) {
-	_, err := printResult(tableRenderDef{}, nil, PrintSections{"broken"}, false, false)
+	_, err := printResult(tableRenderDef{}, nil, PrintSections{"broken"}, false, false, false)
 	if err == nil {
 		t.Fatal("printResult() error = nil, want non-nil")
 	}
