@@ -725,7 +725,7 @@ func renderTablePart(renderDef tableRenderDef, rows []plantree.RowWithPredicates
 		if err != nil {
 			return "", err
 		}
-		tableRows = append(tableRows, values)
+		tableRows = append(tableRows, renderedTableRow(values))
 	}
 
 	spec := asciitable.TableSpec[renderedTableRow]{

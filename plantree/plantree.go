@@ -244,6 +244,8 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 
 	node := qp.GetNodeByChildLink(link)
 	if node == nil {
+		// spannerplan.New rejects nil nodes and out-of-range child links; keep
+		// this guard so ProcessPlan still fails cleanly if that invariant changes.
 		return nil, fmt.Errorf("plan node not found for link: %v", link)
 	}
 	if node.GetIndex() < 0 {
