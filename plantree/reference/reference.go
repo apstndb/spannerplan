@@ -63,10 +63,10 @@ type RenderConfig struct {
 	HangingIndent bool `json:"hangingIndent,omitempty"`
 
 	// PrintSections selects appendix sections printed after the rendered tree table.
-	// A nil slice uses the default [PrintPredicates] section for compatibility.
+	// A nil slice uses the default [PrintPredicates] section.
 	// In JSON config, omit this field or set it to null to use the default; set
 	// it to [] to print no appendix sections.
-	PrintSections PrintSections `json:"printSections"`
+	PrintSections PrintSections `json:"printSections,omitempty"`
 
 	// ShowScalarVars prints scalar assignment variable names in semantic appendix sections.
 	ShowScalarVars bool `json:"showScalarVars,omitempty"`

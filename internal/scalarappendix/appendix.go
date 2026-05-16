@@ -335,11 +335,11 @@ func (r scalarLinkResolver) resolveKeyDescription(desc string, recursive bool) s
 
 func (r scalarLinkResolver) resolveDirectDescriptionVariables(desc string) string {
 	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
-		desc, ok := r.variableToDescription[ref[1:]]
+		resolved, ok := r.variableToDescription[strings.TrimPrefix(ref, "$")]
 		if !ok {
 			return ref
 		}
-		return strings.TrimSpace(desc)
+		return strings.TrimSpace(resolved)
 	})
 }
 
@@ -354,7 +354,7 @@ func (r scalarLinkResolver) lookupVarRecursive(ref string, seen map[string]bool)
 		return ref
 	}
 
-	varName := ref[1:]
+	varName := strings.TrimPrefix(ref, "$")
 	if seen[varName] {
 		return ref
 	}
