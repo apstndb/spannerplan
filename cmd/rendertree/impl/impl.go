@@ -501,7 +501,16 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
-	s, err := renderTreeImpl(planNodes, renderDef, printSections, *showScalarVars, *resolveScalarVars, *resolveScalarVarsRecursive, *disallowUnknownStats, *inlineStats, opts)
+	s, err := renderTreeImpl(planNodes, renderTreeOptions{
+		renderDef:                  renderDef,
+		printSections:              printSections,
+		showScalarVars:             *showScalarVars,
+		resolveScalarVars:          *resolveScalarVars,
+		resolveScalarVarsRecursive: *resolveScalarVarsRecursive,
+		disallowUnknownStats:       *disallowUnknownStats,
+		inlineStats:                *inlineStats,
+		plantreeOptions:            opts,
+	})
 	if err != nil {
 		return err
 	}
@@ -510,10 +519,22 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return err
 }
 
-func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printSections PrintSections, showScalarVars bool, resolveScalarVars bool, resolveScalarVarsRecursive bool, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
-	opts = append(opts,
+type renderTreeOptions struct {
+	renderDef                  tableRenderDef
+	printSections              PrintSections
+	showScalarVars             bool
+	resolveScalarVars          bool
+	resolveScalarVarsRecursive bool
+	disallowUnknownStats       bool
+	inlineStats                bool
+	plantreeOptions            []plantree.Option
+}
+
+func renderTreeImpl(planNodes []*sppb.PlanNode, renderOpts renderTreeOptions) (string, error) {
+	plantreeOptions := slices.Clone(renderOpts.plantreeOptions)
+	plantreeOptions = append(plantreeOptions,
 		plantree.WithQueryPlanOptions(
-			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inline)),
+			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(renderOpts.disallowUnknownStats, renderOpts.renderDef, renderOpts.inlineStats)),
 		))
 
 	qp, err := spannerplan.New(planNodes)
@@ -521,18 +542,22 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printS
 		return "", err
 	}
 
-	rows, err := plantree.ProcessPlan(qp, opts...)
+	rows, err := plantree.ProcessPlan(qp, plantreeOptions...)
 	if err != nil {
 		return "", err
 	}
 
-	s, err := printResult(
-		tableRenderDef{
-			Columns: lo.Filter(renderDef.Columns, func(def columnRenderDef, index int) bool {
-				return !def.shouldInline(inline)
+	s, err := printResult(rows, printResultOptions{
+		renderDef: tableRenderDef{
+			Columns: lo.Filter(renderOpts.renderDef.Columns, func(def columnRenderDef, index int) bool {
+				return !def.shouldInline(renderOpts.inlineStats)
 			}),
 		},
-		rows, printSections, showScalarVars, resolveScalarVars, resolveScalarVarsRecursive)
+		printSections:              renderOpts.printSections,
+		showScalarVars:             renderOpts.showScalarVars,
+		resolveScalarVars:          renderOpts.resolveScalarVars,
+		resolveScalarVarsRecursive: renderOpts.resolveScalarVarsRecursive,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -690,23 +715,31 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 	return tableRenderDef{Columns: columns}, nil
 }
 
-func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections, showScalarVars bool, resolveScalarVars bool, resolveScalarVarsRecursive bool) (string, error) {
+type printResultOptions struct {
+	renderDef                  tableRenderDef
+	printSections              PrintSections
+	showScalarVars             bool
+	resolveScalarVars          bool
+	resolveScalarVarsRecursive bool
+}
+
+func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions) (string, error) {
 	var b strings.Builder
-	resolveVars := resolveScalarVars || resolveScalarVarsRecursive
+	resolveVars := printOpts.resolveScalarVars || printOpts.resolveScalarVarsRecursive
 	var resolver scalarLinkResolver
-	if resolveVars && needsScalarLinkResolver(printSections) {
+	if resolveVars && needsScalarLinkResolver(printOpts.printSections) {
 		resolver = newScalarLinkResolver(rows)
 	}
 
-	if len(rows) > 0 && len(renderDef.Columns) > 0 {
-		tablePart, err := renderTablePart(renderDef, rows)
+	if len(rows) > 0 && len(printOpts.renderDef.Columns) > 0 {
+		tablePart, err := renderTablePart(printOpts.renderDef, rows)
 		if err != nil {
 			return "", err
 		}
 		b.WriteString(tablePart)
 	}
 
-	for _, section := range printSections {
+	for _, section := range printOpts.printSections {
 		var (
 			part string
 			err  error
@@ -729,10 +762,10 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				},
 			))
 		case PrintOrdering:
-			format := semanticScalarLinkFormatter(showScalarVars, scalarLinkDescription)
+			format := semanticScalarLinkFormatter(printOpts.showScalarVars, scalarLinkDescription)
 			if resolveVars {
-				format = semanticScalarLinkFormatter(showScalarVars, func(link plantree.ScalarChildLink) string {
-					return resolver.formatKeyScalarLink(link, resolveScalarVarsRecursive)
+				format = semanticScalarLinkFormatter(printOpts.showScalarVars, func(link plantree.ScalarChildLink) string {
+					return resolver.formatKeyScalarLink(link, printOpts.resolveScalarVarsRecursive)
 				})
 			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
@@ -742,10 +775,10 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				},
 			))
 		case PrintAggregate:
-			format := semanticScalarLinkFormatter(showScalarVars, scalarLinkDescription)
+			format := semanticScalarLinkFormatter(printOpts.showScalarVars, scalarLinkDescription)
 			if resolveVars {
-				format = semanticScalarLinkFormatter(showScalarVars, func(link plantree.ScalarChildLink) string {
-					return resolver.formatAggregateScalarLink(link, resolveScalarVarsRecursive)
+				format = semanticScalarLinkFormatter(printOpts.showScalarVars, func(link plantree.ScalarChildLink) string {
+					return resolver.formatAggregateScalarLink(link, printOpts.resolveScalarVarsRecursive)
 				})
 			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(

@@ -404,7 +404,13 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, false, false, false, true, tcase.inline, opts)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), renderTreeOptions{
+				renderDef:            tcase.renderDef,
+				printSections:        PrintSections{PrintPredicates},
+				disallowUnknownStats: true,
+				inlineStats:          tcase.inline,
+				plantreeOptions:      opts,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -448,7 +454,9 @@ func TestPrintResult_PrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}, false, false, false)
+	got, err := printResult(rows, printResultOptions{
+		printSections: PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+	})
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
@@ -465,7 +473,10 @@ Aggregates(identified by ID):
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, false, false)
+	got, err = printResult(rows, printResultOptions{
+		printSections:  PrintSections{PrintOrdering, PrintAggregate},
+		showScalarVars: true,
+	})
 	if err != nil {
 		t.Fatalf("printResult(show vars) error = %v", err)
 	}
@@ -524,7 +535,10 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, false, true, false)
+	got, err := printResult(rows, printResultOptions{
+		printSections:     PrintSections{PrintOrdering, PrintAggregate},
+		resolveScalarVars: true,
+	})
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
@@ -541,7 +555,11 @@ Aggregates(identified by ID):
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, true, false)
+	got, err = printResult(rows, printResultOptions{
+		printSections:     PrintSections{PrintOrdering, PrintAggregate},
+		showScalarVars:    true,
+		resolveScalarVars: true,
+	})
 	if err != nil {
 		t.Fatalf("printResult(show vars and resolve vars) error = %v", err)
 	}
@@ -558,7 +576,10 @@ Aggregates(identified by ID):
 		t.Fatalf("printResult(show vars and resolve vars) mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, false, false, true)
+	got, err = printResult(rows, printResultOptions{
+		printSections:              PrintSections{PrintOrdering, PrintAggregate},
+		resolveScalarVarsRecursive: true,
+	})
 	if err != nil {
 		t.Fatalf("printResult(resolve vars recursively) error = %v", err)
 	}
@@ -589,7 +610,9 @@ func TestPrintResult_RawPrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped}, false, false, false)
+	got, err := printResult(rows, printResultOptions{
+		printSections: PrintSections{PrintTyped},
+	})
 	if err != nil {
 		t.Fatalf("printResult(typed) error = %v", err)
 	}
@@ -601,7 +624,9 @@ Node Parameters(identified by ID):
 		t.Fatalf("printResult(typed) mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull}, false, false, false)
+	got, err = printResult(rows, printResultOptions{
+		printSections: PrintSections{PrintFull},
+	})
 	if err != nil {
 		t.Fatalf("printResult(full) error = %v", err)
 	}
@@ -616,7 +641,9 @@ Node Parameters(identified by ID):
 }
 
 func TestPrintResult_UnsupportedPrintSection(t *testing.T) {
-	_, err := printResult(tableRenderDef{}, nil, PrintSections{"broken"}, false, false, false)
+	_, err := printResult(nil, printResultOptions{
+		printSections: PrintSections{"broken"},
+	})
 	if err == nil {
 		t.Fatal("printResult() error = nil, want non-nil")
 	}
