@@ -206,6 +206,27 @@ func TestRenderAppendix_MultiDigitIDs(t *testing.T) {
 	}
 }
 
+func TestRenderAppendix_WrapWidth(t *testing.T) {
+	rows := []testRow{
+		{id: 3, text: "Sort", predicates: []string{"Key: alpha, beta, gamma"}},
+	}
+	spec := testAppendixSpec("Ordering(identified by ID):")
+	spec.WrapWidth = 20
+
+	got, err := asciitable.RenderAppendix(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderAppendix() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		Ordering(identified by ID):
+		 3: Key: alpha,
+		    beta, gamma
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderAppendix() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRenderAppendix_None(t *testing.T) {
 	got, err := asciitable.RenderAppendix([]testRow{{id: 1, text: "Root"}}, testAppendixSpec("Predicates(identified by ID):"))
 	if err != nil {

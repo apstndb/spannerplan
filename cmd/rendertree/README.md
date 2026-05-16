@@ -24,6 +24,7 @@ $ cat queryplan.yaml | rendertree --mode=PLAN
 | *3 |       +- FilterScan                     |
 |  4 |          +- Table Scan (Table: Singers) |
 +----+-----------------------------------------+
+
 Predicates(identified by ID):
  0: Split Range: ($SingerId = 1)
  3: Seek Condition: ($SingerId = 1)
@@ -58,7 +59,8 @@ Semantic appendix sections hide scalar assignment variable names by default. Use
 the assignment name itself is useful, for example to inspect what `$v1` is assigned to. Use
 `--resolve-vars` to replace direct scalar variable aliases with their assigned expression in semantic
 appendix sections. `--resolve-vars-recursive` is experimental and recursively traces aliases; it is
-useful for investigation, but can produce noisier expanded expressions.
+useful for investigation, but can produce noisier expanded expressions. Use
+`--appendix-wrap-width` to wrap long appendix lines independently from Operator column wrapping.
 
 For example, the following query has a `WHERE` predicate, aggregation, and ordering:
 
@@ -98,13 +100,16 @@ $ rendertree --mode=PLAN --print=predicates,ordering,aggregate < plan.json
 |  34 |                         +- Filter Scan <Row> (seekable_key_size: 0)                  |
 | *35 |                            +- Table Scan on Songs <Row> (scan_method: Row)           |
 +-----+--------------------------------------------------------------------------------------+
+
 Predicates(identified by ID):
   3: Split Range: STARTS_WITH($SongName, 'A')
   5: Split Range: (($Songs_key_SingerId'3 = $Songs_key_SingerId'2) AND ($Songs_key_AlbumId'3 = $Songs_key_AlbumId'2) AND ($Songs_key_TrackId'3 = $Songs_key_TrackId'2))
  10: Seek Condition: STARTS_WITH($SongName, 'A')
  35: Seek Condition: (($Songs_key_SingerId'3 = $batched_Songs_key_SingerId'3) AND ($Songs_key_AlbumId'3 = $batched_Songs_key_AlbumId'3) AND ($Songs_key_TrackId'3 = $batched_Songs_key_TrackId'3))
+
 Ordering(identified by ID):
   1: Key: $SongCount (DESC), $group_SongGenre'2
+
 Aggregates(identified by ID):
   2: Key: $group_SongGenre'
      Agg: COUNT_FINAL($v1)
@@ -179,6 +184,7 @@ $ rendertree --custom-file custom.example.yaml < profile.yaml
 |  33 |             +- Filter Scan <Row> (seekable_key_size: 0)                  |      |         |
 | *34 |                +- Table Scan on Songs <Row> (scan_method: Row)           | 3069 |    3069 |
 +-----+--------------------------------------------------------------------------+------+---------+
+
 Predicates(identified by ID):
   0: Split Range: (STARTS_WITH($SongName, 'Th') AND ($SongName LIKE 'Th%e'))
   1: Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId) AND ($TrackId' = $TrackId))
@@ -207,6 +213,7 @@ $ rendertree --inline-stats --custom-file custom.example.yaml < profile.yaml
 |  33 |             +- Filter Scan <Row> (seekable_key_size: 0)                                 |      |
 | *34 |                +- Table Scan on Songs <Row> (scan_method: Row, scanned=3069)            | 3069 |
 +-----+-----------------------------------------------------------------------------------------+------+
+
 Predicates(identified by ID):
   0: Split Range: (STARTS_WITH($SongName, 'Th') AND ($SongName LIKE 'Th%e'))
   1: Split Range: (($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId) AND ($TrackId' = $TrackId))
@@ -240,6 +247,7 @@ $ cat distributed_cross_apply_profile.yaml | \
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |          |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      | 0.18 ms  |
 +-----+-------------------------------------------------------------------------------------------+----------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -255,7 +263,9 @@ rendertree supports a compact format and wrapping for limited width environment.
   - Each level of depth in the Query Plan tree adds only one character to its indentation.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.
 - `--wrap-width` specifies the number of characters at which to wrap the content of the Operator column.
-  - The tree won't be broken even when lines are wrapped.
+  - The tree won't be broken even when operator lines are wrapped.
+- `--appendix-wrap-width` specifies the number of characters at which to wrap appendix lines.
+  - This is independent from `--wrap-width` because appendix lines do not include the tree/table layout.
 - `--hanging-indent` enables hanging indent for wrapped lines.
   - Wrapped continuation lines align after node-local prefixes such as `[Input] ` and `[Map] `.
   - Without this flag, wrapped lines keep the original tree-aligned indentation.
@@ -280,6 +290,7 @@ $ rendertree --compact --wrap-width=60 < testdata/distributed_cross_apply.yaml
 |  18 |      +Index Scan on SongsBySongGenre<Row>(Full scan,scan_met |
 |     |       hod:Row)                                               |
 +-----+--------------------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)

@@ -113,6 +113,7 @@ func TestRenderTree(t *testing.T) {
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |
 +-----+-------------------------------------------------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -140,6 +141,7 @@ Predicates(identified by ID):
 | *17 |     +Filter Scan<Row>(seekable_key_size:0)                                  |
 |  18 |      +Index Scan on SongsBySongGenre<Row>(Full scan,scan_method:Row)        |
 +-----+-----------------------------------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -172,6 +174,7 @@ Predicates(identified by ID):
 |  18 |      +Index Scan on SongsBySongGenre<Row |
 |     |       >(Full scan,scan_method:Row)       |
 +-----+------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -205,6 +208,7 @@ Predicates(identified by ID):
 |     |                   Row> (Full scan, scan_method: Ro |
 |     |                   w)                               |
 +-----+----------------------------------------------------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -231,6 +235,7 @@ Predicates(identified by ID):
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |       |         |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |     7 | 0.84 ms |
 +-----+-------------------------------------------------------------------------------------------+------+-------+---------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -274,6 +279,7 @@ Predicates(identified by ID):
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |         |          |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |      63 |       30 |
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -306,6 +312,7 @@ Predicates(identified by ID):
 | *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |         |          |
 |  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |      63 |       30 |
 +-----+-------------------------------------------------------------------------------------------+------+---------+----------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -345,6 +352,7 @@ Predicates(identified by ID):
 |     |                    scan, scan_method: Row, Scanned=63, Filte |      |
 |     |                   red=30)                                    |      |
 +-----+--------------------------------------------------------------+------+
+
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
@@ -463,8 +471,10 @@ func TestPrintResult_PrintSections(t *testing.T) {
 	want := heredoc.Doc(`
 Predicates(identified by ID):
  2: Condition: ($SingerId = $SingerId_1)
+
 Ordering(identified by ID):
  0: Key: $SongGenre
+
 Aggregates(identified by ID):
  1: Key: $SingerId
     Agg: COUNT(*)
@@ -483,12 +493,44 @@ Aggregates(identified by ID):
 	want = heredoc.Doc(`
 Ordering(identified by ID):
  0: Key: $sort_key=$SongGenre
+
 Aggregates(identified by ID):
  1: Key: $group_key=$SingerId
     Agg: $song_count=COUNT(*)
 `)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("printResult(show vars) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrintResult_AppendixWrapWidth(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{
+			ID:          0,
+			DisplayName: "Sort",
+			NodeText:    "Sort",
+			ScalarChildLinks: []plantree.ScalarChildLink{
+				{Type: "Key", Description: "AlphaColumn"},
+				{Type: "Key", Description: "BetaColumn"},
+				{Type: "Key", Description: "GammaColumn"},
+			},
+		},
+	}
+
+	got, err := printResult(rows, printResultOptions{
+		printSections:     PrintSections{PrintOrdering},
+		appendixWrapWidth: 30,
+	})
+	if err != nil {
+		t.Fatalf("printResult() error = %v", err)
+	}
+	want := heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: AlphaColumn,
+    BetaColumn, GammaColumn
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -545,6 +587,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 	want := heredoc.Doc(`
 Ordering(identified by ID):
  0: Key: COUNT_FINAL($v1) DESC, $group_SongGenre, $SongGenre + $SingerId
+
 Aggregates(identified by ID):
  1: Key: $SongGenre
     Agg: COUNT_FINAL($v1)
@@ -566,6 +609,7 @@ Aggregates(identified by ID):
 	want = heredoc.Doc(`
 Ordering(identified by ID):
  0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=$group_SongGenre, $sort_expression=$SongGenre + $SingerId
+
 Aggregates(identified by ID):
  1: Key: $group_SongGenre'=$SongGenre
     Agg: $SongCount=COUNT_FINAL($v1)
@@ -586,6 +630,7 @@ Aggregates(identified by ID):
 	want = heredoc.Doc(`
 Ordering(identified by ID):
  0: Key: COUNT_FINAL(COUNT()) DESC, SongGenre, SongGenre + SingerId
+
 Aggregates(identified by ID):
  1: Key: SongGenre
     Agg: COUNT_FINAL($v1)

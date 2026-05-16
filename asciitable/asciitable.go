@@ -55,6 +55,8 @@ type AppendixSpec[T any] struct {
 	ID func(row T) uint
 	// Items returns the item lines associated with the row.
 	Items func(row T) []string
+	// WrapWidth is the maximum full line width, including the ID prefix. A value of 0 disables wrapping.
+	WrapWidth int
 }
 
 type appendixRows struct {
@@ -131,7 +133,11 @@ func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
 	var sb strings.Builder
 	_, _ = fmt.Fprintln(&sb, spec.Title)
 	for _, row := range resolved.rows {
-		for i, item := range row.items {
+		items := row.items
+		if spec.WrapWidth > 0 {
+			items = wrapAppendixItems(items, spec.WrapWidth-(resolved.maxIDLength+3))
+		}
+		for i, item := range items {
 			idPartStr := ""
 			if i == 0 {
 				idPartStr = strconv.FormatUint(uint64(row.id), 10) + ":"
@@ -142,6 +148,39 @@ func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
 		}
 	}
 	return sb.String(), nil
+}
+
+func wrapAppendixItems(items []string, width int) []string {
+	if width <= 0 {
+		return items
+	}
+
+	var wrapped []string
+	for _, item := range items {
+		for _, line := range strings.Split(item, "\n") {
+			wrapped = append(wrapped, wrapAppendixLine(line, width)...)
+		}
+	}
+	return wrapped
+}
+
+func wrapAppendixLine(line string, width int) []string {
+	if width <= 0 || len(line) <= width {
+		return []string{line}
+	}
+
+	var wrapped []string
+	rest := line
+	for len(rest) > width {
+		cut := width
+		if space := strings.LastIndexAny(rest[:min(len(rest), width+1)], " \t"); space > 0 {
+			cut = space
+		}
+		wrapped = append(wrapped, strings.TrimRight(rest[:cut], " \t"))
+		rest = strings.TrimLeft(rest[cut:], " \t")
+	}
+	wrapped = append(wrapped, rest)
+	return wrapped
 }
 
 func collectAppendixRows[T any](rows []T, spec AppendixSpec[T]) (appendixRows, error) {
