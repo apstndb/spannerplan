@@ -758,6 +758,7 @@ func tableAlignment(alignment tw.Align) (asciitable.Alignment, error) {
 	case tw.AlignCenter:
 		return asciitable.AlignCenter, nil
 	case "", tw.AlignLeft, tw.AlignNone:
+		// tw.AlignDefault is an alias of tw.AlignLeft in tablewriter v1.
 		return asciitable.AlignLeft, nil
 	default:
 		return "", fmt.Errorf("unsupported alignment %v", alignment)
