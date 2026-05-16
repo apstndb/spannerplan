@@ -490,6 +490,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 			ScalarChildLinks: []plantree.ScalarChildLink{
 				{Type: "Key", Variable: "sort_count", Description: "$SongCount (DESC)"},
 				{Type: "Key", Variable: "sort_genre", Description: "$group_SongGenre'"},
+				{Type: "Key", Variable: "sort_expression", Description: "$left + $right"},
 			},
 		},
 		{
@@ -516,6 +517,9 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 			NodeText:    "Scan",
 			ScalarChildLinks: []plantree.ScalarChildLink{
 				{Variable: "SongGenre", Description: "SongGenre"},
+				{Variable: "SingerId", Description: "SingerId"},
+				{Variable: "left", Description: "$SongGenre"},
+				{Variable: "right", Description: "$SingerId"},
 			},
 		},
 	}
@@ -526,7 +530,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 	}
 	want := heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: COUNT_FINAL($v1) DESC, SongGenre
+ 0: Key: COUNT_FINAL($v1) DESC, SongGenre, SongGenre + SingerId
 Aggregates(identified by ID):
  1: Key: SongGenre
     Agg: COUNT_FINAL($v1)
@@ -543,7 +547,7 @@ Aggregates(identified by ID):
 	}
 	want = heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=SongGenre
+ 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=SongGenre, $sort_expression=SongGenre + SingerId
 Aggregates(identified by ID):
  1: Key: $group_SongGenre'=SongGenre
     Agg: $SongCount=COUNT_FINAL($v1)

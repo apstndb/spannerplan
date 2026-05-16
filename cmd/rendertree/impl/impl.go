@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"maps"
 	"os"
 	"regexp"
 	"slices"
@@ -175,6 +176,11 @@ var (
 )
 
 var secsRe = regexp.MustCompile(`secs$`)
+
+var (
+	scalarVariableReferenceRe   = regexp.MustCompile(`\$[A-Za-z0-9_']+`)
+	scalarVariableDescriptionRe = regexp.MustCompile(`^\$[A-Za-z0-9_']+$`)
+)
 
 func secsToS(v any) string {
 	return secsRe.ReplaceAllString(fmt.Sprint(v), "s")
@@ -854,21 +860,13 @@ func (r scalarLinkResolver) formatAggregateScalarLink(link plantree.ScalarChildL
 }
 
 func (r scalarLinkResolver) resolveKeyDescription(desc string) string {
-	return r.resolveKeyDescriptionSeen(desc, map[string]bool{})
+	return normalizeKeyOrderSuffix(r.resolveDescriptionVariables(desc, map[string]bool{}))
 }
 
-func (r scalarLinkResolver) resolveKeyDescriptionSeen(desc string, seen map[string]bool) string {
-	first, last, found := strings.Cut(desc, " ")
-	keyElem := r.lookupVar(strings.TrimSpace(first), seen)
-	if !found {
-		return keyElem
-	}
-
-	suffix := normalizeKeySuffix(last)
-	if suffix == "" {
-		return keyElem
-	}
-	return keyElem + " " + suffix
+func (r scalarLinkResolver) resolveDescriptionVariables(desc string, seen map[string]bool) string {
+	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
+		return r.lookupVar(ref, seen)
+	})
 }
 
 func (r scalarLinkResolver) lookupVar(ref string, seen map[string]bool) string {
@@ -886,17 +884,21 @@ func (r scalarLinkResolver) lookupVar(ref string, seen map[string]bool) string {
 		return ref
 	}
 
-	seen[varName] = true
-	return r.resolveKeyDescriptionSeen(desc, seen)
+	nextSeen := maps.Clone(seen)
+	nextSeen[varName] = true
+	desc = strings.TrimSpace(desc)
+	if scalarVariableDescriptionRe.MatchString(desc) {
+		return r.lookupVar(desc, nextSeen)
+	}
+	return desc
 }
 
-func normalizeKeySuffix(s string) string {
+func normalizeKeyOrderSuffix(s string) string {
 	s = strings.TrimSpace(s)
-	if s == "" {
-		return ""
-	}
-	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
-		return strings.TrimSuffix(strings.TrimPrefix(s, "("), ")")
+	for _, suffix := range []string{"(ASC)", "(DESC)"} {
+		if strings.HasSuffix(s, " "+suffix) {
+			return strings.TrimSuffix(s, " "+suffix) + " " + strings.Trim(suffix, "()")
+		}
 	}
 	return s
 }
