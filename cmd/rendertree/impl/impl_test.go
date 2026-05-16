@@ -503,37 +503,6 @@ Aggregates(identified by ID):
 	}
 }
 
-func TestPrintResult_AppendixWrapWidth(t *testing.T) {
-	rows := []plantree.RowWithPredicates{
-		{
-			ID:          0,
-			DisplayName: "Sort",
-			NodeText:    "Sort",
-			ScalarChildLinks: []plantree.ScalarChildLink{
-				{Type: "Key", Description: "AlphaColumn"},
-				{Type: "Key", Description: "BetaColumn"},
-				{Type: "Key", Description: "GammaColumn"},
-			},
-		},
-	}
-
-	got, err := printResult(rows, printResultOptions{
-		printSections:     PrintSections{PrintOrdering},
-		appendixWrapWidth: 30,
-	})
-	if err != nil {
-		t.Fatalf("printResult() error = %v", err)
-	}
-	want := heredoc.Doc(`
-Ordering(identified by ID):
- 0: Key: AlphaColumn,
-    BetaColumn, GammaColumn
-`)
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
-	}
-}
-
 func TestPrintResult_ResolveScalarVars(t *testing.T) {
 	rows := []plantree.RowWithPredicates{
 		{

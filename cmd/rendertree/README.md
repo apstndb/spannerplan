@@ -59,8 +59,7 @@ Semantic appendix sections hide scalar assignment variable names by default. Use
 the assignment name itself is useful, for example to inspect what `$v1` is assigned to. Use
 `--resolve-vars` to replace direct scalar variable aliases with their assigned expression in semantic
 appendix sections. `--resolve-vars-recursive` is experimental and recursively traces aliases; it is
-useful for investigation, but can produce noisier expanded expressions. Use
-`--appendix-wrap-width` to wrap long appendix lines independently from Operator column wrapping.
+useful for investigation, but can produce noisier expanded expressions.
 
 For example, the following query has a `WHERE` predicate, aggregation, and ordering:
 
@@ -264,8 +263,6 @@ rendertree supports a compact format and wrapping for limited width environment.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.
 - `--wrap-width` specifies the number of characters at which to wrap the content of the Operator column.
   - The tree won't be broken even when operator lines are wrapped.
-- `--appendix-wrap-width` specifies the number of characters at which to wrap appendix lines.
-  - This is independent from `--wrap-width` because appendix lines do not include the tree/table layout.
 - `--hanging-indent` enables hanging indent for wrapped lines.
   - Wrapped continuation lines align after node-local prefixes such as `[Input] ` and `[Map] `.
   - Without this flag, wrapped lines keep the original tree-aligned indentation.

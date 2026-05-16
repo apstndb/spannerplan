@@ -347,7 +347,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	compact := flagSet.Bool("compact", false, "Enable compact format")
 	inlineStats := flagSet.Bool("inline-stats", false, "Enable inline stats")
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
-	appendixWrapWidth := flagSet.Int("appendix-wrap-width", 0, "Number of characters at which to wrap appendix lines. 0 means no wrapping.")
 	hangingIndent := flagSet.Bool("hanging-indent", false, "Enable hanging indent for wrapped lines after node-local prefixes such as [Input] and [Map]")
 
 	var custom stringList
@@ -510,7 +509,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		resolveScalarVarsRecursive: *resolveScalarVarsRecursive,
 		disallowUnknownStats:       *disallowUnknownStats,
 		inlineStats:                *inlineStats,
-		appendixWrapWidth:          *appendixWrapWidth,
 		plantreeOptions:            opts,
 	})
 	if err != nil {
@@ -529,7 +527,6 @@ type renderTreeOptions struct {
 	resolveScalarVarsRecursive bool
 	disallowUnknownStats       bool
 	inlineStats                bool
-	appendixWrapWidth          int
 	plantreeOptions            []plantree.Option
 }
 
@@ -560,7 +557,6 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderOpts renderTreeOptions) (s
 		showScalarVars:             renderOpts.showScalarVars,
 		resolveScalarVars:          renderOpts.resolveScalarVars,
 		resolveScalarVarsRecursive: renderOpts.resolveScalarVarsRecursive,
-		appendixWrapWidth:          renderOpts.appendixWrapWidth,
 	})
 	if err != nil {
 		return "", err
@@ -725,7 +721,6 @@ type printResultOptions struct {
 	showScalarVars             bool
 	resolveScalarVars          bool
 	resolveScalarVarsRecursive bool
-	appendixWrapWidth          int
 }
 
 func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions) (string, error) {
@@ -753,7 +748,6 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 		case PrintFull, PrintTyped:
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Node Parameters(identified by ID):",
-				printOpts.appendixWrapWidth,
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, func(_ plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
 						return section == PrintFull || link.Type != ""
@@ -763,7 +757,6 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 		case PrintPredicates:
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Predicates(identified by ID):",
-				printOpts.appendixWrapWidth,
 				func(row plantree.RowWithPredicates) []string {
 					return row.Predicates
 				},
@@ -777,7 +770,6 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Ordering(identified by ID):",
-				printOpts.appendixWrapWidth,
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, isOrderingScalarLink, format)
 				},
@@ -791,7 +783,6 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Aggregates(identified by ID):",
-				printOpts.appendixWrapWidth,
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, isAggregateScalarLink, format)
 				},
@@ -816,7 +807,7 @@ func needsScalarLinkResolver(printSections PrintSections) bool {
 	return slices.Contains(printSections, PrintOrdering) || slices.Contains(printSections, PrintAggregate)
 }
 
-func scalarAppendixSpec(title string, appendixWrapWidth int, items func(row plantree.RowWithPredicates) []string) asciitable.AppendixSpec[plantree.RowWithPredicates] {
+func scalarAppendixSpec(title string, items func(row plantree.RowWithPredicates) []string) asciitable.AppendixSpec[plantree.RowWithPredicates] {
 	return asciitable.AppendixSpec[plantree.RowWithPredicates]{
 		Title: title,
 		ID: func(row plantree.RowWithPredicates) uint {
@@ -824,8 +815,7 @@ func scalarAppendixSpec(title string, appendixWrapWidth int, items func(row plan
 			// non-negative when used as appendix display IDs.
 			return uint(row.ID)
 		},
-		Items:     items,
-		WrapWidth: appendixWrapWidth,
+		Items: items,
 	}
 }
 
