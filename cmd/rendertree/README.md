@@ -107,7 +107,7 @@ Predicates(identified by ID):
  35: Seek Condition: (($Songs_key_SingerId'3 = $batched_Songs_key_SingerId'3) AND ($Songs_key_AlbumId'3 = $batched_Songs_key_AlbumId'3) AND ($Songs_key_TrackId'3 = $batched_Songs_key_TrackId'3))
 
 Ordering(identified by ID):
-  1: Key: $SongCount (DESC), $group_SongGenre'2
+  1: Key: $SongCount DESC, $group_SongGenre'2
 
 Aggregates(identified by ID):
   2: Key: $group_SongGenre'

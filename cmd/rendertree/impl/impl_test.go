@@ -437,7 +437,7 @@ func TestPrintResult_PrintSections(t *testing.T) {
 			DisplayName: "Sort",
 			NodeText:    "Sort",
 			ScalarChildLinks: []plantree.ScalarChildLink{
-				{Type: "Key", Variable: "sort_key", Description: "$SongGenre"},
+				{Type: "Key", Variable: "sort_key", Description: "$SongGenre (DESC)"},
 				{Type: "Value", Variable: "sort_value", Description: "$SongName"},
 			},
 		},
@@ -473,7 +473,7 @@ Predicates(identified by ID):
  2: Condition: ($SingerId = $SingerId_1)
 
 Ordering(identified by ID):
- 0: Key: $SongGenre
+ 0: Key: $SongGenre DESC
 
 Aggregates(identified by ID):
  1: Key: $SingerId
@@ -492,7 +492,7 @@ Aggregates(identified by ID):
 	}
 	want = heredoc.Doc(`
 Ordering(identified by ID):
- 0: Key: $sort_key=$SongGenre
+ 0: Key: $sort_key=$SongGenre DESC
 
 Aggregates(identified by ID):
  1: Key: $group_key=$SingerId

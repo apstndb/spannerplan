@@ -761,7 +761,7 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 				},
 			))
 		case PrintOrdering:
-			format := semanticScalarLinkFormatter(printOpts.showScalarVars, scalarLinkDescription)
+			format := semanticScalarLinkFormatter(printOpts.showScalarVars, keyScalarLinkDescription)
 			if resolveVars {
 				format = semanticScalarLinkFormatter(printOpts.showScalarVars, func(link plantree.ScalarChildLink) string {
 					return resolver.formatKeyScalarLink(link, printOpts.resolveScalarVarsRecursive)
@@ -862,6 +862,10 @@ func formatRawScalarLink(link plantree.ScalarChildLink) string {
 
 func scalarLinkDescription(link plantree.ScalarChildLink) string {
 	return link.Description
+}
+
+func keyScalarLinkDescription(link plantree.ScalarChildLink) string {
+	return normalizeKeyOrderSuffix(link.Description)
 }
 
 func semanticScalarLinkFormatter(showVars bool, description func(plantree.ScalarChildLink) string) func(plantree.ScalarChildLink) string {
