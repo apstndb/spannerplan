@@ -404,7 +404,7 @@ Predicates(identified by ID):
 
 			opts = append(opts, tcase.opts...)
 
-			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, false, true, tcase.inline, opts)
+			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), tcase.renderDef, PrintSections{PrintPredicates}, false, false, true, tcase.inline, opts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -448,7 +448,7 @@ func TestPrintResult_PrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}, false)
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}, false, false)
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
@@ -463,6 +463,21 @@ Aggregates(identified by ID):
 `)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, false)
+	if err != nil {
+		t.Fatalf("printResult(show vars) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: $sort_key=$SongGenre
+Aggregates(identified by ID):
+ 1: Key: $group_key=$SingerId
+    Agg: $song_count=COUNT(*)
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(show vars) mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -505,7 +520,7 @@ func TestPrintResult_ResolveScalarVars(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true)
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, false, true)
 	if err != nil {
 		t.Fatalf("printResult() error = %v", err)
 	}
@@ -520,6 +535,23 @@ Aggregates(identified by ID):
 `)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("printResult() mismatch (-want +got):\n%s", diff)
+	}
+
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintOrdering, PrintAggregate}, true, true)
+	if err != nil {
+		t.Fatalf("printResult(show vars and resolve vars) error = %v", err)
+	}
+	want = heredoc.Doc(`
+Ordering(identified by ID):
+ 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=SongGenre
+Aggregates(identified by ID):
+ 1: Key: $group_SongGenre'=SongGenre
+    Agg: $SongCount=COUNT_FINAL($v1)
+ 2: Key: $group_SongGenre=SongGenre
+    Agg: $v1=COUNT()
+`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("printResult(show vars and resolve vars) mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -536,7 +568,7 @@ func TestPrintResult_RawPrintSections(t *testing.T) {
 		},
 	}
 
-	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped}, false)
+	got, err := printResult(tableRenderDef{}, rows, PrintSections{PrintTyped}, false, false)
 	if err != nil {
 		t.Fatalf("printResult(typed) error = %v", err)
 	}
@@ -548,7 +580,7 @@ Node Parameters(identified by ID):
 		t.Fatalf("printResult(typed) mismatch (-want +got):\n%s", diff)
 	}
 
-	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull}, false)
+	got, err = printResult(tableRenderDef{}, rows, PrintSections{PrintFull}, false, false)
 	if err != nil {
 		t.Fatalf("printResult(full) error = %v", err)
 	}

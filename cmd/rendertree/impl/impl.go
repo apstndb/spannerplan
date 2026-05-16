@@ -330,6 +330,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printSectionsStr := flagSet.String("print", "predicates", "print appendix sections: predicates, ordering, aggregate, typed, full (comma-separated; typed/full are raw debug dumps)")
+	showScalarVars := flagSet.Bool("show-vars", false, "show scalar variable assignments in semantic appendix sections")
 	resolveScalarVars := flagSet.Bool("resolve-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
 	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
@@ -493,7 +494,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		renderDef = withStatsToRenderDefMap[withStats]
 	}
 
-	s, err := renderTreeImpl(planNodes, renderDef, printSections, *resolveScalarVars, *disallowUnknownStats, *inlineStats, opts)
+	s, err := renderTreeImpl(planNodes, renderDef, printSections, *showScalarVars, *resolveScalarVars, *disallowUnknownStats, *inlineStats, opts)
 	if err != nil {
 		return err
 	}
@@ -502,7 +503,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return err
 }
 
-func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printSections PrintSections, resolveScalarVars bool, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
+func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printSections PrintSections, showScalarVars bool, resolveScalarVars bool, disallowUnknownStats bool, inline bool, opts []plantree.Option) (string, error) {
 	opts = append(opts,
 		plantree.WithQueryPlanOptions(
 			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(disallowUnknownStats, renderDef, inline)),
@@ -524,7 +525,7 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderDef tableRenderDef, printS
 				return !def.shouldInline(inline)
 			}),
 		},
-		rows, printSections, resolveScalarVars)
+		rows, printSections, showScalarVars, resolveScalarVars)
 	if err != nil {
 		return "", err
 	}
@@ -682,7 +683,7 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 	return tableRenderDef{Columns: columns}, nil
 }
 
-func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections, resolveScalarVars bool) (string, error) {
+func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printSections PrintSections, showScalarVars bool, resolveScalarVars bool) (string, error) {
 	var b strings.Builder
 	resolver := newScalarLinkResolver(rows)
 
@@ -717,9 +718,9 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				},
 			))
 		case PrintOrdering:
-			format := formatSemanticScalarLink
+			format := semanticScalarLinkFormatter(showScalarVars, scalarLinkDescription)
 			if resolveScalarVars {
-				format = resolver.formatKeyScalarLink
+				format = semanticScalarLinkFormatter(showScalarVars, resolver.formatKeyScalarLink)
 			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Ordering(identified by ID):",
@@ -728,9 +729,9 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 				},
 			))
 		case PrintAggregate:
-			format := formatSemanticScalarLink
+			format := semanticScalarLinkFormatter(showScalarVars, scalarLinkDescription)
 			if resolveScalarVars {
-				format = resolver.formatAggregateScalarLink
+				format = semanticScalarLinkFormatter(showScalarVars, resolver.formatAggregateScalarLink)
 			}
 			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
 				"Aggregates(identified by ID):",
@@ -801,8 +802,18 @@ func formatRawScalarLink(link plantree.ScalarChildLink) string {
 	return link.Description
 }
 
-func formatSemanticScalarLink(link plantree.ScalarChildLink) string {
+func scalarLinkDescription(link plantree.ScalarChildLink) string {
 	return link.Description
+}
+
+func semanticScalarLinkFormatter(showVars bool, description func(plantree.ScalarChildLink) string) func(plantree.ScalarChildLink) string {
+	return func(link plantree.ScalarChildLink) string {
+		desc := description(link)
+		if showVars && link.Variable != "" {
+			return fmt.Sprintf("$%s=%s", link.Variable, desc)
+		}
+		return desc
+	}
 }
 
 type scalarLinkResolver struct {
