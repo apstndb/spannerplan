@@ -37,10 +37,9 @@ type RowWithPredicates struct {
 	DisplayName string
 	// Predicates contains filter predicate text associated with this row.
 	Predicates []string
-	// Keys contains key metadata associated with this row.
+	// Keys contains scalar child descriptions grouped by ChildLink type.
 	//
-	// Deprecated: this field is kept for source compatibility and contains scalar
-	// child descriptions grouped by ChildLink type.
+	// Deprecated: this field is kept for source compatibility.
 	// Use [RowWithPredicates.ScalarChildLinks] and filter by [ScalarChildLink.Type] instead.
 	Keys map[string][]string
 	// ExecutionStats contains execution statistics associated with this row.
