@@ -28,6 +28,16 @@ func TestParseSections(t *testing.T) {
 			want:  Sections{SectionPredicates, SectionOrdering, SectionAggregate},
 		},
 		{
+			name:  "empty means no sections",
+			input: "",
+			want:  Sections{},
+		},
+		{
+			name:  "blank means no sections",
+			input: " \t ",
+			want:  Sections{},
+		},
+		{
 			name:    "empty element",
 			input:   "predicates,",
 			wantErr: "print section must not be empty",

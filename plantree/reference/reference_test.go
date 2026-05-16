@@ -410,6 +410,11 @@ func TestParsePrintSections(t *testing.T) {
 			want:  PrintSections{PrintPredicates, PrintOrdering},
 		},
 		{
+			name:  "empty means no sections",
+			input: "",
+			want:  PrintSections{},
+		},
+		{
 			name:    "unknown",
 			input:   "broken",
 			wantErr: "unknown print section: broken",

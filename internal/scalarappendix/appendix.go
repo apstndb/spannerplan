@@ -71,7 +71,12 @@ func ParseSection(s string) (Section, error) {
 }
 
 // ParseSections parses a comma-separated print-section list.
+// An empty string returns an empty list, which renders no appendix sections.
 func ParseSections(s string) (Sections, error) {
+	if strings.TrimSpace(s) == "" {
+		return Sections{}, nil
+	}
+
 	var sections Sections
 	for _, raw := range strings.Split(s, ",") {
 		if strings.TrimSpace(raw) == "" {
