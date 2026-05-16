@@ -20,6 +20,7 @@ import (
 
 	"github.com/apstndb/spannerplan"
 	"github.com/apstndb/spannerplan/asciitable"
+	"github.com/apstndb/spannerplan/internal/scalarappendix"
 	"github.com/apstndb/spannerplan/plantree"
 	"github.com/apstndb/spannerplan/stats"
 )
@@ -176,11 +177,6 @@ var (
 
 var secsRe = regexp.MustCompile(`secs$`)
 
-var (
-	scalarVariableReferenceRe   = regexp.MustCompile(`\$[A-Za-z0-9_']+(?:\.[A-Za-z0-9_']+)*`)
-	scalarVariableDescriptionRe = regexp.MustCompile(`^\$[A-Za-z0-9_']+(?:\.[A-Za-z0-9_']+)*$`)
-)
-
 func secsToS(v any) string {
 	return secsRe.ReplaceAllString(fmt.Sprint(v), "s")
 }
@@ -264,47 +260,11 @@ const (
 type PrintSections []PrintSection
 
 func parsePrintSections(s string) (PrintSections, error) {
-	var sections PrintSections
-	seen := map[PrintSection]bool{}
-	for _, raw := range strings.Split(s, ",") {
-		part := strings.TrimSpace(strings.ToLower(raw))
-		if part == "" {
-			return nil, fmt.Errorf("print section must not be empty")
-		}
-
-		var section PrintSection
-		switch part {
-		case string(PrintPredicates):
-			section = PrintPredicates
-		case string(PrintOrdering):
-			section = PrintOrdering
-		case string(PrintAggregate):
-			section = PrintAggregate
-		case string(PrintTyped):
-			section = PrintTyped
-		case string(PrintFull):
-			section = PrintFull
-		default:
-			return nil, fmt.Errorf("unknown print section: %s", raw)
-		}
-
-		if seen[section] {
-			return nil, fmt.Errorf("duplicate print section: %s", section)
-		}
-		seen[section] = true
-		sections = append(sections, section)
+	sections, err := scalarappendix.ParseSections(s)
+	if err != nil {
+		return nil, err
 	}
-
-	if len(sections) == 0 {
-		return nil, fmt.Errorf("print section must not be empty")
-	}
-
-	for _, section := range sections {
-		if (section == PrintTyped || section == PrintFull) && len(sections) > 1 {
-			return nil, fmt.Errorf("print section %q cannot be combined with other sections", section)
-		}
-	}
-	return sections, nil
+	return printSectionsFromScalarAppendix(sections), nil
 }
 
 type explainMode string
@@ -724,11 +684,6 @@ type printResultOptions struct {
 
 func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions) (string, error) {
 	var b strings.Builder
-	resolveVars := printOpts.resolveScalarVars || printOpts.resolveScalarVarsRecursive
-	var resolver scalarLinkResolver
-	if resolveVars && needsScalarLinkResolver(printOpts.printSections) {
-		resolver = newScalarLinkResolver(rows)
-	}
 
 	if len(rows) > 0 && len(printOpts.renderDef.Columns) > 0 {
 		tablePart, err := renderTablePart(printOpts.renderDef, rows)
@@ -738,245 +693,39 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 		b.WriteString(tablePart)
 	}
 
-	for _, section := range printOpts.printSections {
-		var (
-			part string
-			err  error
-		)
-		switch section {
-		case PrintFull, PrintTyped:
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
-				"Node Parameters(identified by ID):",
-				func(row plantree.RowWithPredicates) []string {
-					return scalarLinkLines(row, func(_ plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
-						return section == PrintFull || link.Type != ""
-					}, formatRawScalarLink)
-				},
-			))
-		case PrintPredicates:
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
-				"Predicates(identified by ID):",
-				func(row plantree.RowWithPredicates) []string {
-					return row.Predicates
-				},
-			))
-		case PrintOrdering:
-			format := semanticScalarLinkFormatter(printOpts.showScalarVars, keyScalarLinkDescription)
-			if resolveVars {
-				format = semanticScalarLinkFormatter(printOpts.showScalarVars, func(link plantree.ScalarChildLink) string {
-					return resolver.formatKeyScalarLink(link, printOpts.resolveScalarVarsRecursive)
-				})
-			}
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
-				"Ordering(identified by ID):",
-				func(row plantree.RowWithPredicates) []string {
-					return scalarLinkLines(row, isOrderingScalarLink, format)
-				},
-			))
-		case PrintAggregate:
-			format := semanticScalarLinkFormatter(printOpts.showScalarVars, scalarLinkDescription)
-			if resolveVars {
-				format = semanticScalarLinkFormatter(printOpts.showScalarVars, func(link plantree.ScalarChildLink) string {
-					return resolver.formatAggregateScalarLink(link, printOpts.resolveScalarVarsRecursive)
-				})
-			}
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
-				"Aggregates(identified by ID):",
-				func(row plantree.RowWithPredicates) []string {
-					return scalarLinkLines(row, isAggregateScalarLink, format)
-				},
-			))
-		default:
-			return "", fmt.Errorf("unsupported print section: %s", section)
+	sections := scalarAppendixSections(printOpts.printSections)
+	appendixPart, err := scalarappendix.Render(rows, scalarappendix.Options{
+		Sections:                   &sections,
+		ShowScalarVars:             printOpts.showScalarVars,
+		ResolveScalarVars:          printOpts.resolveScalarVars,
+		ResolveScalarVarsRecursive: printOpts.resolveScalarVarsRecursive,
+	})
+	if err != nil {
+		return "", err
+	}
+	if appendixPart != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
 		}
-		if err != nil {
-			return "", err
-		}
-		if part != "" {
-			if b.Len() > 0 {
-				b.WriteString("\n")
-			}
-			b.WriteString(part)
-		}
+		b.WriteString(appendixPart)
 	}
 	return b.String(), nil
 }
 
-func needsScalarLinkResolver(printSections PrintSections) bool {
-	return slices.Contains(printSections, PrintOrdering) || slices.Contains(printSections, PrintAggregate)
-}
-
-func scalarAppendixSpec(title string, items func(row plantree.RowWithPredicates) []string) asciitable.AppendixSpec[plantree.RowWithPredicates] {
-	return asciitable.AppendixSpec[plantree.RowWithPredicates]{
-		Title: title,
-		ID: func(row plantree.RowWithPredicates) uint {
-			// Spanner PlanNode indexes are zero-based node positions, so they are
-			// non-negative when used as appendix display IDs.
-			return uint(row.ID)
-		},
-		Items: items,
+func scalarAppendixSections(sections PrintSections) scalarappendix.Sections {
+	converted := make(scalarappendix.Sections, 0, len(sections))
+	for _, section := range sections {
+		converted = append(converted, scalarappendix.Section(section))
 	}
+	return converted
 }
 
-type scalarLinkGroup struct {
-	typ    string
-	values []string
-}
-
-func scalarLinkLines(row plantree.RowWithPredicates, include func(plantree.RowWithPredicates, plantree.ScalarChildLink) bool, format func(plantree.ScalarChildLink) string) []string {
-	groupByType := map[string]int{}
-	var groups []scalarLinkGroup
-
-	for _, link := range row.ScalarChildLinks {
-		if !include(row, link) {
-			continue
-		}
-
-		groupIndex, ok := groupByType[link.Type]
-		if !ok {
-			groupIndex = len(groups)
-			groupByType[link.Type] = groupIndex
-			groups = append(groups, scalarLinkGroup{typ: link.Type})
-		}
-		groups[groupIndex].values = append(groups[groupIndex].values, format(link))
+func printSectionsFromScalarAppendix(sections scalarappendix.Sections) PrintSections {
+	converted := make(PrintSections, 0, len(sections))
+	for _, section := range sections {
+		converted = append(converted, PrintSection(section))
 	}
-
-	lines := make([]string, 0, len(groups))
-	for _, group := range groups {
-		joined := strings.Join(group.values, ", ")
-		if joined == "" {
-			continue
-		}
-		typePartStr := lo.Ternary(group.typ != "", group.typ+": ", "")
-		lines = append(lines, typePartStr+joined)
-	}
-	return lines
-}
-
-func formatRawScalarLink(link plantree.ScalarChildLink) string {
-	if link.Variable != "" {
-		return fmt.Sprintf("$%s=%s", link.Variable, link.Description)
-	}
-	return link.Description
-}
-
-func scalarLinkDescription(link plantree.ScalarChildLink) string {
-	return link.Description
-}
-
-func keyScalarLinkDescription(link plantree.ScalarChildLink) string {
-	return normalizeKeyOrderSuffix(link.Description)
-}
-
-func semanticScalarLinkFormatter(showVars bool, description func(plantree.ScalarChildLink) string) func(plantree.ScalarChildLink) string {
-	return func(link plantree.ScalarChildLink) string {
-		desc := description(link)
-		if showVars && link.Variable != "" {
-			return fmt.Sprintf("$%s=%s", link.Variable, desc)
-		}
-		return desc
-	}
-}
-
-type scalarLinkResolver struct {
-	variableToDescription map[string]string
-}
-
-func newScalarLinkResolver(rows []plantree.RowWithPredicates) scalarLinkResolver {
-	variableToDescription := map[string]string{}
-	for _, row := range rows {
-		for _, link := range row.ScalarChildLinks {
-			if link.Variable == "" {
-				continue
-			}
-			variableToDescription[link.Variable] = link.Description
-		}
-	}
-	return scalarLinkResolver{variableToDescription: variableToDescription}
-}
-
-func (r scalarLinkResolver) formatKeyScalarLink(link plantree.ScalarChildLink, recursive bool) string {
-	return r.resolveKeyDescription(link.Description, recursive)
-}
-
-func (r scalarLinkResolver) formatAggregateScalarLink(link plantree.ScalarChildLink, recursive bool) string {
-	if link.Type == "Key" {
-		return r.resolveKeyDescription(link.Description, recursive)
-	}
-	return link.Description
-}
-
-func (r scalarLinkResolver) resolveKeyDescription(desc string, recursive bool) string {
-	if !recursive {
-		return normalizeKeyOrderSuffix(r.resolveDirectDescriptionVariables(desc))
-	}
-	return normalizeKeyOrderSuffix(r.resolveDescriptionVariables(desc, map[string]bool{}))
-}
-
-func (r scalarLinkResolver) resolveDirectDescriptionVariables(desc string) string {
-	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
-		desc, ok := r.variableToDescription[strings.TrimPrefix(ref, "$")]
-		if !ok {
-			return ref
-		}
-		return strings.TrimSpace(desc)
-	})
-}
-
-func (r scalarLinkResolver) resolveDescriptionVariables(desc string, seen map[string]bool) string {
-	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
-		return r.lookupVarRecursive(ref, seen)
-	})
-}
-
-func (r scalarLinkResolver) lookupVarRecursive(ref string, seen map[string]bool) string {
-	if !strings.HasPrefix(ref, "$") {
-		return ref
-	}
-
-	varName := strings.TrimPrefix(ref, "$")
-	if seen[varName] {
-		return ref
-	}
-
-	desc, ok := r.variableToDescription[varName]
-	if !ok {
-		return ref
-	}
-
-	seen[varName] = true
-	defer delete(seen, varName)
-
-	desc = strings.TrimSpace(desc)
-	if scalarVariableDescriptionRe.MatchString(desc) {
-		return r.lookupVarRecursive(desc, seen)
-	}
-	return r.resolveDescriptionVariables(desc, seen)
-}
-
-func normalizeKeyOrderSuffix(s string) string {
-	s = strings.TrimSpace(s)
-	for _, suffix := range []string{"(ASC)", "(DESC)"} {
-		if strings.HasSuffix(s, " "+suffix) {
-			return strings.TrimSuffix(s, " "+suffix) + " " + strings.Trim(suffix, "()")
-		}
-	}
-	return s
-}
-
-func isOrderingScalarLink(row plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
-	switch row.DisplayName {
-	case "Sort", "Sort Limit":
-		return link.Type == "Key"
-	case "Minor Sort", "Minor Sort Limit":
-		return link.Type == "MajorKey" || link.Type == "MinorKey"
-	default:
-		return false
-	}
-}
-
-func isAggregateScalarLink(row plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
-	return row.DisplayName == "Aggregate" && (link.Type == "Key" || link.Type == "Agg")
+	return converted
 }
 
 type renderedTableRow []string

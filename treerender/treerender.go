@@ -73,6 +73,7 @@ const (
 // RenderOptions configures the optional wrapping behavior of [RenderTreeWithOptions].
 type RenderOptions[T any] struct {
 	// GetContinuationAnchor returns the node-local prefix used for hanging continuation lines.
+	// It is required when [ContinuationIndentAnchor] is selected and [WrapWidth] is positive.
 	GetContinuationAnchor func(*T) string
 	// WrapWidth sets the maximum total rendered line width. A non-positive value disables wrapping.
 	WrapWidth int
@@ -167,7 +168,8 @@ func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildre
 }
 
 // RenderTreeWithOptions renders a tree with optional wrapping and continuation-indent behavior.
-// It returns an error if opts contains an invalid [ContinuationIndent].
+// It returns an error if opts contains an invalid [ContinuationIndent], or if hanging-indent
+// wrapping is requested without [RenderOptions.GetContinuationAnchor].
 func RenderTreeWithOptions[T any](
 	root *T,
 	style Style,
@@ -206,7 +208,7 @@ func resolveRenderOptions[T any](opts RenderOptions[T]) (resolvedRenderOptions[T
 	if err := validateContinuationIndent(opts.ContinuationIndent); err != nil {
 		return resolvedRenderOptions[T]{}, err
 	}
-	if opts.ContinuationIndent == ContinuationIndentAnchor && opts.GetContinuationAnchor == nil {
+	if opts.ContinuationIndent == ContinuationIndentAnchor && opts.WrapWidth > 0 && opts.GetContinuationAnchor == nil {
 		return resolvedRenderOptions[T]{}, fmt.Errorf("GetContinuationAnchor is required with ContinuationIndentAnchor")
 	}
 	resolved.continuationIndent = opts.ContinuationIndent

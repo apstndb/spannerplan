@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -28,6 +29,59 @@ func loadWrappedPlan(t *testing.T) string {
 		t.Fatalf("failed to read wrapped plan fixture: %v", err)
 	}
 	return string(b)
+}
+
+func scalarAppendixPlanNodes() []*sppb.PlanNode {
+	return []*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Sort",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 1, Type: "Key", Variable: "sort_count"},
+				{ChildIndex: 2, Type: "Key", Variable: "sort_genre"},
+				{ChildIndex: 3},
+			},
+		},
+		scalarPlanNode(1, "$SongCount (DESC)"),
+		scalarPlanNode(2, "$group_SongGenre'"),
+		{
+			Index:       3,
+			DisplayName: "Aggregate",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 4, Type: "Key", Variable: "group_SongGenre'"},
+				{ChildIndex: 5, Type: "Agg", Variable: "SongCount"},
+				{ChildIndex: 6},
+			},
+		},
+		scalarPlanNode(4, "$group_SongGenre"),
+		scalarPlanNode(5, "COUNT_FINAL($v1)"),
+		{
+			Index:       6,
+			DisplayName: "Scan",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 7, Variable: "group_SongGenre"},
+				{ChildIndex: 8, Variable: "SongGenre"},
+				{ChildIndex: 9, Variable: "v1"},
+			},
+		},
+		scalarPlanNode(7, "$SongGenre"),
+		scalarPlanNode(8, "SongGenre"),
+		scalarPlanNode(9, "COUNT()"),
+	}
+}
+
+func scalarPlanNode(index int32, description string) *sppb.PlanNode {
+	return &sppb.PlanNode{
+		Index:       index,
+		DisplayName: "Reference",
+		Kind:        sppb.PlanNode_SCALAR,
+		ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+			Description: description,
+		},
+	}
 }
 
 func Test_RenderTreeTable_withRealPlan_ALL_MODES_AND_FORMATS(t *testing.T) {
@@ -333,6 +387,67 @@ func TestParseFormat(t *testing.T) {
 	}
 }
 
+func TestParsePrintSections(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    PrintSections
+		wantErr string
+	}{
+		{
+			name:  "single section",
+			input: "predicates",
+			want:  PrintSections{PrintPredicates},
+		},
+		{
+			name:  "multiple sections",
+			input: "predicates,ordering,aggregate",
+			want:  PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+		},
+		{
+			name:  "case and space",
+			input: " Predicates, Ordering ",
+			want:  PrintSections{PrintPredicates, PrintOrdering},
+		},
+		{
+			name:    "unknown",
+			input:   "broken",
+			wantErr: "unknown print section: broken",
+		},
+		{
+			name:    "duplicate",
+			input:   "predicates,predicates",
+			wantErr: "duplicate print section: predicates",
+		},
+		{
+			name:    "raw dump cannot be combined",
+			input:   "predicates,full",
+			wantErr: `print section "full" cannot be combined with other sections`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParsePrintSections(tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("ParsePrintSections() error = nil, want non-nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("ParsePrintSections() error = %q, want substring %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParsePrintSections() error = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("ParsePrintSections() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestRenderTreeTable_InvalidMode(t *testing.T) {
 	// Create minimal valid plan nodes
 	planNodes := []*sppb.PlanNode{{}}
@@ -384,6 +499,147 @@ func TestRenderTreeTable_InputValidation(t *testing.T) {
 				t.Errorf("expected error to contain %q, got: %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestRenderTreeTableWithOptions_PrintSections(t *testing.T) {
+	got, err := RenderTreeTableWithOptions(
+		scalarAppendixPlanNodes(),
+		RenderModePlan,
+		FormatCurrent,
+		WithPrintSections(PrintOrdering, PrintAggregate),
+		WithResolveScalarVarsRecursive(),
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"Ordering(identified by ID):",
+		" 0: Key: COUNT_FINAL(COUNT()) DESC, SongGenre",
+		"Aggregates(identified by ID):",
+		" 3: Key: SongGenre",
+		"    Agg: COUNT_FINAL($v1)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("RenderTreeTableWithOptions() output does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Predicates(identified by ID):") {
+		t.Fatalf("RenderTreeTableWithOptions() output contains predicates despite explicit sections:\n%s", got)
+	}
+}
+
+func TestRenderTreeTableWithConfig_PrintSections(t *testing.T) {
+	got, err := RenderTreeTableWithConfig(
+		scalarAppendixPlanNodes(),
+		RenderModePlan,
+		FormatCurrent,
+		RenderConfig{
+			PrintSections:     PrintSections{PrintOrdering, PrintAggregate},
+			ShowScalarVars:    true,
+			ResolveScalarVars: true,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithConfig() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"Ordering(identified by ID):",
+		" 0: Key: $sort_count=COUNT_FINAL($v1) DESC, $sort_genre=$group_SongGenre",
+		"Aggregates(identified by ID):",
+		" 3: Key: $group_SongGenre'=$SongGenre",
+		"    Agg: $SongCount=COUNT_FINAL($v1)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("RenderTreeTableWithConfig() output does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderTreeTableWithOptions_RawPrintSections(t *testing.T) {
+	got, err := RenderTreeTableWithOptions(
+		scalarAppendixPlanNodes(),
+		RenderModePlan,
+		FormatCurrent,
+		WithPrintSections(PrintFull),
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions(PrintFull) error = %v", err)
+	}
+	for _, want := range []string{
+		"Node Parameters(identified by ID):",
+		" 0: Key: $sort_count=$SongCount (DESC), $sort_genre=$group_SongGenre'",
+		" 3: Key: $group_SongGenre'=$group_SongGenre",
+		"    Agg: $SongCount=COUNT_FINAL($v1)",
+		" 6: $group_SongGenre=$SongGenre, $SongGenre=SongGenre, $v1=COUNT()",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("RenderTreeTableWithOptions(PrintFull) output does not contain %q:\n%s", want, got)
+		}
+	}
+
+	got, err = RenderTreeTableWithOptions(
+		scalarAppendixPlanNodes(),
+		RenderModePlan,
+		FormatCurrent,
+		WithPrintSections(PrintTyped),
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions(PrintTyped) error = %v", err)
+	}
+	if strings.Contains(got, "$group_SongGenre=$SongGenre") {
+		t.Fatalf("RenderTreeTableWithOptions(PrintTyped) output contains untyped scalar link:\n%s", got)
+	}
+}
+
+func TestRenderTreeTableWithOptions_PrintSectionValidation(t *testing.T) {
+	_, err := RenderTreeTableWithOptions(
+		scalarAppendixPlanNodes(),
+		RenderModePlan,
+		FormatCurrent,
+		WithPrintSections(PrintPredicates, PrintFull),
+	)
+	if err == nil {
+		t.Fatal("RenderTreeTableWithOptions() error = nil, want non-nil")
+	}
+	if got, want := err.Error(), `print section "full" cannot be combined with other sections`; got != want {
+		t.Fatalf("RenderTreeTableWithOptions() error = %q, want %q", got, want)
+	}
+
+	got, err := RenderTreeTableWithOptions(
+		scalarAppendixPlanNodes(),
+		RenderModePlan,
+		FormatCurrent,
+		WithPrintSections(),
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions(WithPrintSections()) error = %v", err)
+	}
+	if strings.Contains(got, "identified by ID") {
+		t.Fatalf("RenderTreeTableWithOptions(WithPrintSections()) output contains appendix:\n%s", got)
+	}
+}
+
+func TestRenderConfigPrintSectionsJSONRoundTrip(t *testing.T) {
+	b, err := json.Marshal(RenderConfig{PrintSections: PrintSections{}})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if !strings.Contains(string(b), `"printSections":[]`) {
+		t.Fatalf("json.Marshal() = %s, want printSections to preserve explicit empty slice", b)
+	}
+
+	var got RenderConfig
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if got.PrintSections == nil {
+		t.Fatal("json round trip left PrintSections nil, want explicit empty slice")
+	}
+	if len(got.PrintSections) != 0 {
+		t.Fatalf("json round trip PrintSections = %#v, want empty", got.PrintSections)
 	}
 }
 
@@ -460,6 +716,41 @@ func TestRenderTreeTableWithOptions_HangingIndent(t *testing.T) {
 	}
 	if strings.Contains(hangingLine, "|  method: Row)") {
 		t.Fatalf("hanging line = %q, want node-prefix hanging indent", hangingLine)
+	}
+}
+
+func TestRenderTreeTableWithOptions_HangingIndentNoopsWithoutWrapWidth(t *testing.T) {
+	input := loadWrappedPlan(t)
+	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
+	if err != nil {
+		t.Fatalf("Failed to extract query plan: %v", err)
+	}
+
+	planNodes := stats.GetQueryPlan().GetPlanNodes()
+	base, err := RenderTreeTable(planNodes, RenderModePlan, FormatCurrent, 0)
+	if err != nil {
+		t.Fatalf("RenderTreeTable() error = %v", err)
+	}
+
+	withOption, err := RenderTreeTableWithOptions(planNodes, RenderModePlan, FormatCurrent, WithHangingIndent())
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions(WithHangingIndent) error = %v", err)
+	}
+	if diff := cmp.Diff(base, withOption); diff != "" {
+		t.Fatalf("RenderTreeTableWithOptions(WithHangingIndent) mismatch without wrap width (-want +got):\n%s", diff)
+	}
+
+	withConfig, err := RenderTreeTableWithConfig(
+		planNodes,
+		RenderModePlan,
+		FormatCurrent,
+		RenderConfig{HangingIndent: true},
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithConfig(HangingIndent) error = %v", err)
+	}
+	if diff := cmp.Diff(base, withConfig); diff != "" {
+		t.Fatalf("RenderTreeTableWithConfig(HangingIndent) mismatch without wrap width (-want +got):\n%s", diff)
 	}
 }
 

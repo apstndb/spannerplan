@@ -40,8 +40,12 @@ const (
 )
 
 type options struct {
-	wrapWidth     int
-	hangingIndent bool
+	wrapWidth                  int
+	hangingIndent              bool
+	printSections              *PrintSections
+	showScalarVars             bool
+	resolveScalarVars          bool
+	resolveScalarVarsRecursive bool
 }
 
 // RenderConfig configures optional rendering behavior using serialization-friendly fields.
@@ -57,6 +61,21 @@ type RenderConfig struct {
 	// HangingIndent hangs wrapped continuation lines after node-local prefixes such as
 	// `[Input] ` and `[Map] ` instead of keeping the default tree-aligned indentation.
 	HangingIndent bool `json:"hangingIndent,omitempty"`
+
+	// PrintSections selects appendix sections printed after the rendered tree table.
+	// A nil slice uses the default [PrintPredicates] section for compatibility.
+	// In JSON config, omit this field or set it to null to use the default; set
+	// it to [] to print no appendix sections.
+	PrintSections PrintSections `json:"printSections"`
+
+	// ShowScalarVars prints scalar assignment variable names in semantic appendix sections.
+	ShowScalarVars bool `json:"showScalarVars,omitempty"`
+
+	// ResolveScalarVars replaces direct scalar variable aliases in semantic appendix sections.
+	ResolveScalarVars bool `json:"resolveScalarVars,omitempty"`
+
+	// ResolveScalarVarsRecursive recursively resolves scalar variable aliases in semantic appendix sections.
+	ResolveScalarVarsRecursive bool `json:"resolveScalarVarsRecursive,omitempty"`
 }
 
 // Option configures optional rendering behavior for [RenderTreeTableWithOptions].
@@ -75,6 +94,37 @@ func WithWrapWidth(width int) Option {
 func WithHangingIndent() Option {
 	return func(o *options) {
 		o.hangingIndent = true
+	}
+}
+
+// WithPrintSections selects appendix sections printed after the rendered tree table.
+// If this option is omitted, [PrintPredicates] is printed for compatibility.
+// Passing no sections suppresses appendices.
+func WithPrintSections(sections ...PrintSection) Option {
+	return func(o *options) {
+		copied := append(PrintSections{}, sections...)
+		o.printSections = &copied
+	}
+}
+
+// WithShowScalarVars prints scalar assignment variable names in semantic appendix sections.
+func WithShowScalarVars() Option {
+	return func(o *options) {
+		o.showScalarVars = true
+	}
+}
+
+// WithResolveScalarVars replaces direct scalar variable aliases in semantic appendix sections.
+func WithResolveScalarVars() Option {
+	return func(o *options) {
+		o.resolveScalarVars = true
+	}
+}
+
+// WithResolveScalarVarsRecursive recursively resolves scalar variable aliases in semantic appendix sections.
+func WithResolveScalarVarsRecursive() Option {
+	return func(o *options) {
+		o.resolveScalarVarsRecursive = true
 	}
 }
 
@@ -120,10 +170,18 @@ func RenderTreeTableWithOptions(planNodes []*sppb.PlanNode, mode RenderMode, for
 }
 
 func optionsFromConfig(config RenderConfig) options {
-	return options{
-		wrapWidth:     config.WrapWidth,
-		hangingIndent: config.HangingIndent,
+	o := options{
+		wrapWidth:                  config.WrapWidth,
+		hangingIndent:              config.HangingIndent,
+		showScalarVars:             config.ShowScalarVars,
+		resolveScalarVars:          config.ResolveScalarVars,
+		resolveScalarVarsRecursive: config.ResolveScalarVarsRecursive,
 	}
+	if config.PrintSections != nil {
+		copied := append(PrintSections{}, config.PrintSections...)
+		o.printSections = &copied
+	}
+	return o
 }
 
 func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format, o options) (string, error) {
@@ -157,16 +215,12 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", err
 	}
 
-	predPart, err := renderPredicatesPart(rendered)
+	appendixPart, err := renderAppendices(rendered, printOptionsFromOptions(o))
 	if err != nil {
 		return "", err
 	}
 
-	return tablePart + predPart, nil
-}
-
-func renderPredicatesPart(rendered []plantree.RowWithPredicates) (string, error) {
-	return asciitable.RenderAppendix(rendered, predicateAppendixSpec())
+	return tablePart + appendixPart, nil
 }
 
 func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (string, error) {
@@ -220,20 +274,6 @@ func spannerTableSpec(withStats bool) asciitable.TableSpec[plantree.RowWithPredi
 		},
 	)
 	return spec
-}
-
-func predicateAppendixSpec() asciitable.AppendixSpec[plantree.RowWithPredicates] {
-	return asciitable.AppendixSpec[plantree.RowWithPredicates]{
-		Title: "Predicates(identified by ID):",
-		ID: func(row plantree.RowWithPredicates) uint {
-			// Spanner PlanNode indexes are zero-based node positions, so they are
-			// non-negative when used as predicate appendix display IDs.
-			return uint(row.ID)
-		},
-		Items: func(row plantree.RowWithPredicates) []string {
-			return row.Predicates
-		},
-	}
 }
 
 // Format specifies the formatting style for the query plan output.
