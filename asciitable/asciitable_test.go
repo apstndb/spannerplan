@@ -222,7 +222,7 @@ func TestRenderAppendix_ReadsEachRowOnce(t *testing.T) {
 		{id: 2, text: "Filter", predicates: []string{"Filter: true"}},
 	}
 	var idCalls int
-	var predicateCalls int
+	var itemsCalls int
 	spec := asciitable.AppendixSpec[testRow]{
 		Title: "Predicates(identified by ID):",
 		ID: func(row testRow) uint {
@@ -230,7 +230,7 @@ func TestRenderAppendix_ReadsEachRowOnce(t *testing.T) {
 			return row.id
 		},
 		Items: func(row testRow) []string {
-			predicateCalls++
+			itemsCalls++
 			return row.predicates
 		},
 	}
@@ -242,8 +242,8 @@ func TestRenderAppendix_ReadsEachRowOnce(t *testing.T) {
 	if idCalls != len(rows) {
 		t.Fatalf("ID calls = %d, want %d", idCalls, len(rows))
 	}
-	if predicateCalls != len(rows) {
-		t.Fatalf("Predicates calls = %d, want %d", predicateCalls, len(rows))
+	if itemsCalls != len(rows) {
+		t.Fatalf("Items calls = %d, want %d", itemsCalls, len(rows))
 	}
 }
 

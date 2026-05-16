@@ -915,9 +915,6 @@ func (r scalarLinkResolver) resolveKeyDescription(desc string, recursive bool) s
 
 func (r scalarLinkResolver) resolveDirectDescriptionVariables(desc string) string {
 	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
-		if !strings.HasPrefix(ref, "$") {
-			return ref
-		}
 		desc, ok := r.variableToDescription[strings.TrimPrefix(ref, "$")]
 		if !ok {
 			return ref
