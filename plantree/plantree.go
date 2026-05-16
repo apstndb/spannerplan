@@ -49,7 +49,7 @@ type RowWithPredicates struct {
 	//
 	// Deprecated: use [RowWithPredicates.ScalarChildLinks] for ordered scalar child-link metadata.
 	ChildLinks map[string][]*spannerplan.ResolvedChildLink
-	// ScalarChildLinks contains this row's scalar child links in original ChildLinks order.
+	// ScalarChildLinks contains this row's scalar child links in original PlanNode.ChildLinks order.
 	ScalarChildLinks []ScalarChildLink
 }
 

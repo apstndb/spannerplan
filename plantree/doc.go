@@ -15,14 +15,15 @@ which combines tree prefix and node title.
 The TreePart field remains exported for struct literals and cmp.Diff in tests; new code
 should use the accessors above when not constructing rows by hand.
 
-Rows also expose scalar child links in original plan order via
+Rows also expose scalar child links in original PlanNode.ChildLinks order via
 [RowWithPredicates.ScalarChildLinks]. Callers should group those links at
 rendering time using the parent row's [RowWithPredicates.DisplayName] together
 with each [ScalarChildLink.Type], because the same child-link type can have
 different meanings under different operators.
 [RowWithPredicates.ChildLinks] remains available for compatibility with older
 callers, but new code should prefer [RowWithPredicates.ScalarChildLinks] because
-it preserves Spanner's original child-link order.
+it preserves Spanner's original PlanNode.ChildLinks order after filtering to
+scalar child links.
 [RowWithPredicates.Keys] is also kept for compatibility and contains scalar
 child descriptions grouped by child-link type; new code should use
 [RowWithPredicates.ScalarChildLinks] when it needs variables, child indexes, or

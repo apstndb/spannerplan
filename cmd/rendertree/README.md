@@ -54,6 +54,12 @@ Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--m
 Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
 `typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
 
+Semantic appendix sections hide scalar assignment variable names by default. Use `--show-vars` when
+the assignment name itself is useful, for example to inspect what `$v1` is assigned to. Use
+`--resolve-vars` to replace direct scalar variable aliases with their assigned expression in semantic
+appendix sections. `--resolve-vars-recursive` is experimental and recursively traces aliases; it is
+useful for investigation, but can produce noisier expanded expressions.
+
 For example, the following query has a `WHERE` predicate, aggregation, and ordering:
 
 ```sql
