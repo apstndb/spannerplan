@@ -39,7 +39,8 @@ type RowWithPredicates struct {
 	Predicates []string
 	// Keys contains key metadata associated with this row.
 	//
-	// Deprecated: this field is kept for source compatibility and is not populated.
+	// Deprecated: this field is kept for source compatibility and contains scalar
+	// child descriptions grouped by ChildLink type.
 	// Use [RowWithPredicates.ScalarChildLinks] and filter by [ScalarChildLink.Type] instead.
 	Keys map[string][]string
 	// ExecutionStats contains execution statistics associated with this row.
@@ -77,6 +78,7 @@ type renderedNode struct {
 	NodeText           string
 	DisplayName        string
 	Predicates         []string
+	Keys               map[string][]string
 	ExecutionStats     stats.ExecutionStats
 	ChildLinks         map[string][]*spannerplan.ResolvedChildLink
 	ScalarChildLinks   []ScalarChildLink
@@ -256,6 +258,7 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			ID:               node.ID,
 			DisplayName:      node.DisplayName,
 			Predicates:       node.Predicates,
+			Keys:             node.Keys,
 			ChildLinks:       node.ChildLinks,
 			ScalarChildLinks: node.ScalarChildLinks,
 			TreePart:         row.TreePart,
@@ -309,6 +312,11 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
 		return item.ChildLink.GetType()
 	})
+	keys := lo.MapValues(childLinks, func(items []*spannerplan.ResolvedChildLink, _ string) []string {
+		return lo.Map(items, func(item *spannerplan.ResolvedChildLink, _ int) string {
+			return item.Child.GetShortRepresentation().GetDescription()
+		})
+	})
 
 	renderedScalarChildLinks := lo.Map(scalarChildLinks, func(item *spannerplan.ResolvedChildLink, _ int) ScalarChildLink {
 		return ScalarChildLink{
@@ -332,6 +340,7 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		NodeText:           nodeText,
 		DisplayName:        node.GetDisplayName(),
 		Predicates:         predicates,
+		Keys:               keys,
 		ExecutionStats:     *executionStats,
 		ChildLinks:         childLinks,
 		ScalarChildLinks:   renderedScalarChildLinks,

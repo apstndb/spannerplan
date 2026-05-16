@@ -426,6 +426,13 @@ func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T)
 	if diff := cmp.Diff(wantSortLinks, sortRow.ScalarChildLinks); diff != "" {
 		t.Fatalf("sort ScalarChildLinks mismatch (-want +got):\n%s", diff)
 	}
+	wantSortKeys := map[string][]string{
+		"Key":   {"$SongGenre"},
+		"Value": {"$SongName"},
+	}
+	if diff := cmp.Diff(wantSortKeys, sortRow.Keys); diff != "" {
+		t.Fatalf("sort deprecated Keys mismatch (-want +got):\n%s", diff)
+	}
 	if got := sortRow.ChildLinks["Key"]; len(got) != 1 || got[0].ChildLink.GetVariable() != "sort_key" {
 		t.Fatalf("sort deprecated ChildLinks[Key] = %v, want sort_key", got)
 	}
@@ -437,6 +444,13 @@ func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T)
 	}
 	if diff := cmp.Diff(wantAggregateLinks, aggregateRow.ScalarChildLinks); diff != "" {
 		t.Fatalf("aggregate ScalarChildLinks mismatch (-want +got):\n%s", diff)
+	}
+	wantAggregateKeys := map[string][]string{
+		"Key": {"$SingerId"},
+		"Agg": {"COUNT(*)"},
+	}
+	if diff := cmp.Diff(wantAggregateKeys, aggregateRow.Keys); diff != "" {
+		t.Fatalf("aggregate deprecated Keys mismatch (-want +got):\n%s", diff)
 	}
 	if got := aggregateRow.ChildLinks["Agg"]; len(got) != 1 || got[0].ChildLink.GetVariable() != "song_count" {
 		t.Fatalf("aggregate deprecated ChildLinks[Agg] = %v, want song_count", got)

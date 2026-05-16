@@ -23,6 +23,10 @@ different meanings under different operators.
 [RowWithPredicates.ChildLinks] remains available for compatibility with older
 callers, but new code should prefer [RowWithPredicates.ScalarChildLinks] because
 it preserves Spanner's original child-link order.
+[RowWithPredicates.Keys] is also kept for compatibility and contains scalar
+child descriptions grouped by child-link type; new code should use
+[RowWithPredicates.ScalarChildLinks] when it needs variables, child indexes, or
+stable ordering.
 
 A []string field would avoid one strings.Join in the renderer and one strings.Split in
 Text, but it is a breaking API change for modules that build [RowWithPredicates] literals
