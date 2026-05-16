@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"maps"
 	"os"
 	"regexp"
 	"slices"
@@ -904,16 +903,32 @@ func (r scalarLinkResolver) formatAggregateScalarLink(link plantree.ScalarChildL
 }
 
 func (r scalarLinkResolver) resolveKeyDescription(desc string, recursive bool) string {
-	return normalizeKeyOrderSuffix(r.resolveDescriptionVariables(desc, map[string]bool{}, recursive))
+	if !recursive {
+		return normalizeKeyOrderSuffix(r.resolveDirectDescriptionVariables(desc))
+	}
+	return normalizeKeyOrderSuffix(r.resolveDescriptionVariables(desc, map[string]bool{}))
 }
 
-func (r scalarLinkResolver) resolveDescriptionVariables(desc string, seen map[string]bool, recursive bool) string {
+func (r scalarLinkResolver) resolveDirectDescriptionVariables(desc string) string {
 	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
-		return r.lookupVar(ref, seen, recursive)
+		if !strings.HasPrefix(ref, "$") {
+			return ref
+		}
+		desc, ok := r.variableToDescription[strings.TrimPrefix(ref, "$")]
+		if !ok {
+			return ref
+		}
+		return strings.TrimSpace(desc)
 	})
 }
 
-func (r scalarLinkResolver) lookupVar(ref string, seen map[string]bool, recursive bool) string {
+func (r scalarLinkResolver) resolveDescriptionVariables(desc string, seen map[string]bool) string {
+	return scalarVariableReferenceRe.ReplaceAllStringFunc(desc, func(ref string) string {
+		return r.lookupVarRecursive(ref, seen)
+	})
+}
+
+func (r scalarLinkResolver) lookupVarRecursive(ref string, seen map[string]bool) string {
 	if !strings.HasPrefix(ref, "$") {
 		return ref
 	}
@@ -928,16 +943,14 @@ func (r scalarLinkResolver) lookupVar(ref string, seen map[string]bool, recursiv
 		return ref
 	}
 
-	nextSeen := maps.Clone(seen)
-	nextSeen[varName] = true
+	seen[varName] = true
+	defer delete(seen, varName)
+
 	desc = strings.TrimSpace(desc)
-	if !recursive {
-		return desc
-	}
 	if scalarVariableDescriptionRe.MatchString(desc) {
-		return r.lookupVar(desc, nextSeen, true)
+		return r.lookupVarRecursive(desc, seen)
 	}
-	return r.resolveDescriptionVariables(desc, nextSeen, true)
+	return r.resolveDescriptionVariables(desc, seen)
 }
 
 func normalizeKeyOrderSuffix(s string) string {
