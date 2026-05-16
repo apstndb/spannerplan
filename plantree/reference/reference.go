@@ -21,12 +21,9 @@ import (
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/apstndb/go-tabwrap"
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/renderer"
-	"github.com/olekukonko/tablewriter/tw"
 
 	queryplan "github.com/apstndb/spannerplan"
+	"github.com/apstndb/spannerplan/asciitable"
 	"github.com/apstndb/spannerplan/plantree"
 )
 
@@ -160,100 +157,82 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", err
 	}
 
-	predPart := renderPredicatesPart(rendered)
+	predPart, err := renderPredicatesPart(rendered)
+	if err != nil {
+		return "", err
+	}
 
 	return tablePart + predPart, nil
 }
 
-// hasPredicates checks if any row contains predicates.
-func hasPredicates(rows []plantree.RowWithPredicates) bool {
-	for _, row := range rows {
-		if len(row.Predicates) > 0 {
-			return true
-		}
-	}
-	return false
+func renderPredicatesPart(rendered []plantree.RowWithPredicates) (string, error) {
+	return asciitable.RenderPredicates(rendered, predicateSpec())
 }
 
-// renderPredicatesPart formats predicates section for rows with associated predicates.
-func renderPredicatesPart(rendered []plantree.RowWithPredicates) string {
-	// Early return if no predicates exist
-	if !hasPredicates(rendered) {
-		return ""
-	}
-
-	// Find the maximum ID value first, then format it once to get the width
-	var maxID int32
-	for _, row := range rendered {
-		if row.ID > maxID {
-			maxID = row.ID
-		}
-	}
-	maxIDLength := len(fmt.Sprint(maxID))
-
-	var sb strings.Builder
-	_, _ = fmt.Fprintln(&sb, "Predicates(identified by ID):")
-	for _, row := range rendered {
-		for i, predicate := range row.Predicates {
-			var idPartStr string
-			if i == 0 {
-				idPartStr = fmt.Sprint(row.ID) + ":"
-			}
-
-			// +1 is for the colon after ID
-			prefix := tabwrap.FillLeft(idPartStr, maxIDLength+1)
-			_, _ = fmt.Fprintf(&sb, " %s %s\n", prefix, predicate)
-		}
-	}
-	return sb.String()
-}
-
-// getColumnAlignments returns the column alignment configuration based on whether stats are shown.
-func getColumnAlignments(withStats bool) []tw.Align {
-	if withStats {
-		// ID, Operator, Rows, Exec., Total Latency
-		return []tw.Align{tw.AlignRight, tw.AlignLeft, tw.AlignRight, tw.AlignRight, tw.AlignLeft}
-	}
-	// ID, Operator
-	return []tw.Align{tw.AlignRight, tw.AlignLeft}
-}
-
-// renderTablePart renders the main table showing the query plan tree structure.
 func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (string, error) {
-	var sb strings.Builder
-	table := tablewriter.NewTable(&sb,
-		tablewriter.WithRenderer(
-			renderer.NewBlueprint(tw.Rendition{Symbols: tw.NewSymbols(tw.StyleASCII)}),
-		),
-		tablewriter.WithTrimSpace(tw.Off),
-		tablewriter.WithHeaderAutoFormat(tw.Off),
-		tablewriter.WithHeaderAlignment(tw.AlignLeft),
-		tablewriter.WithRowAlignmentConfig(tw.CellAlignment{PerColumn: getColumnAlignments(withStats)}),
+	return asciitable.RenderTable(rendered, spannerTableSpec(withStats))
+}
+
+func spannerTableSpec(withStats bool) asciitable.TableSpec[plantree.RowWithPredicates] {
+	spec := asciitable.TableSpec[plantree.RowWithPredicates]{
+		Columns: []asciitable.Column[plantree.RowWithPredicates]{
+			{
+				Header:    "ID",
+				Alignment: asciitable.AlignRight,
+				Cell: func(row plantree.RowWithPredicates, _ int) string {
+					return row.FormatID()
+				},
+			},
+			{
+				Header:    "Operator",
+				Alignment: asciitable.AlignLeft,
+				Cell: func(row plantree.RowWithPredicates, _ int) string {
+					return row.Text()
+				},
+			},
+		},
+	}
+	if !withStats {
+		return spec
+	}
+
+	spec.Columns = append(spec.Columns,
+		asciitable.Column[plantree.RowWithPredicates]{
+			Header:    "Rows",
+			Alignment: asciitable.AlignRight,
+			Cell: func(row plantree.RowWithPredicates, _ int) string {
+				return row.ExecutionStats.Rows.Total
+			},
+		},
+		asciitable.Column[plantree.RowWithPredicates]{
+			Header:    "Exec.",
+			Alignment: asciitable.AlignRight,
+			Cell: func(row plantree.RowWithPredicates, _ int) string {
+				return row.ExecutionStats.ExecutionSummary.NumExecutions
+			},
+		},
+		asciitable.Column[plantree.RowWithPredicates]{
+			Header:    "Total Latency",
+			Alignment: asciitable.AlignLeft,
+			Cell: func(row plantree.RowWithPredicates, _ int) string {
+				return row.ExecutionStats.Latency.String()
+			},
+		},
 	)
+	return spec
+}
 
-	var header []string
-	if withStats {
-		header = []string{"ID", "Operator", "Rows", "Exec.", "Total Latency"}
-	} else {
-		header = []string{"ID", "Operator"}
+func predicateSpec() asciitable.PredicateSpec[plantree.RowWithPredicates] {
+	return asciitable.PredicateSpec[plantree.RowWithPredicates]{
+		ID: func(row plantree.RowWithPredicates) uint {
+			// Spanner PlanNode indexes are zero-based node positions, so they are
+			// non-negative when used as predicate appendix display IDs.
+			return uint(row.ID)
+		},
+		Predicates: func(row plantree.RowWithPredicates) []string {
+			return row.Predicates
+		},
 	}
-	table.Header(header)
-
-	for _, n := range rendered {
-		rowData := []string{n.FormatID(), n.Text()}
-		if withStats {
-			rowData = append(rowData, n.ExecutionStats.Rows.Total, n.ExecutionStats.ExecutionSummary.NumExecutions, n.ExecutionStats.Latency.String())
-		}
-
-		if err := table.Append(rowData); err != nil {
-			return "", fmt.Errorf("failed to append row %d: %w", n.ID, err)
-		}
-	}
-
-	if err := table.Render(); err != nil {
-		return "", fmt.Errorf("failed to render table: %w", err)
-	}
-	return sb.String(), nil
 }
 
 // Format specifies the formatting style for the query plan output.

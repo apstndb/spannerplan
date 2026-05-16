@@ -10,8 +10,8 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spannerplan"
-	"github.com/apstndb/spannerplan/internal/treerender"
 	"github.com/apstndb/spannerplan/stats"
+	"github.com/apstndb/spannerplan/treerender"
 )
 
 var defaultWrapCondition = newDefaultWrapCondition()
@@ -22,18 +22,25 @@ func newDefaultWrapCondition() *tabwrap.Condition {
 	return c
 }
 
+// RowWithPredicates is one rendered plan row plus predicate and execution metadata.
 type RowWithPredicates struct {
+	// ID is the Spanner PlanNode index for this row.
 	ID int32
 	// TreePart stores everything rendered before NodeText on each visual line: the ASCII tree prefix
 	// plus any continuation padding inserted by the renderer for wrapping / hanging indent.
 	// Prefer [RowWithPredicates.TreePartString] or [RowWithPredicates.TreePartLines] instead of
 	// reading this field directly, so callers stay decoupled if the storage shape changes.
-	TreePart       string
-	NodeText       string
-	Predicates     []string
-	Keys           map[string][]string
+	TreePart string
+	// NodeText is the rendered operator title, possibly split across visual lines.
+	NodeText string
+	// Predicates contains filter predicate text associated with this row.
+	Predicates []string
+	// Keys contains key metadata associated with this row.
+	Keys map[string][]string
+	// ExecutionStats contains execution statistics associated with this row.
 	ExecutionStats stats.ExecutionStats
-	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
+	// ChildLinks contains resolved child-link metadata associated with this row.
+	ChildLinks map[string][]*spannerplan.ResolvedChildLink
 }
 
 type renderedNode struct {
@@ -46,18 +53,9 @@ type renderedNode struct {
 	Children           []*renderedNode
 }
 
+// Text returns the full rendered row text, with the tree prefix prepended to each node text line.
 func (r RowWithPredicates) Text() string {
-	treeLines := r.TreePartLines()
-	nodeLines := strings.Split(r.NodeText, "\n")
-	var sb strings.Builder
-	for i, line := range nodeLines {
-		if len(treeLines) > i {
-			sb.WriteString(strings.TrimSuffix(treeLines[i], "\n"))
-		}
-		sb.WriteString(line)
-		sb.WriteRune('\n')
-	}
-	return strings.TrimSuffix(sb.String(), "\n")
+	return treerender.Row{TreePart: r.TreePart, NodeText: r.NodeText}.Text()
 }
 
 // TreePartString returns the full tree-prefix string (newline-separated lines), matching the
@@ -66,11 +64,12 @@ func (r RowWithPredicates) TreePartString() string {
 	return r.TreePart
 }
 
-// TreePartLines returns the tree prefix as one string per line of [RowWithPredicates.NodeText].
+// TreePartLines splits [RowWithPredicates.TreePartString] into one prefix per visual line.
 func (r RowWithPredicates) TreePartLines() []string {
-	return strings.Split(r.TreePartString(), "\n")
+	return treerender.Row{TreePart: r.TreePartString()}.TreePartLines()
 }
 
+// FormatID returns the display ID, prefixed with "*" when the row has predicates.
 func (r RowWithPredicates) FormatID() string {
 	return lo.Ternary(len(r.Predicates) != 0, "*", "") + strconv.Itoa(int(r.ID))
 }
@@ -86,6 +85,7 @@ type options struct {
 	wrapper              *tabwrap.Condition
 }
 
+// Option configures [ProcessPlan].
 type Option func(*options)
 
 // ContinuationIndent controls how wrapped continuation lines are aligned.
@@ -105,12 +105,14 @@ const (
 	ContinuationIndentNodePrefix
 )
 
+// DisallowUnknownStats makes [ProcessPlan] fail on unknown execution-stat keys.
 func DisallowUnknownStats() Option {
 	return func(o *options) {
 		o.disallowUnknownStats = true
 	}
 }
 
+// WithQueryPlanOptions forwards node-title formatting options to the underlying query plan renderer.
 func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 	return func(o *options) {
 		o.queryplanOptions = append(o.queryplanOptions, opts...)
@@ -159,6 +161,7 @@ func WithContinuationIndent(indent ContinuationIndent) Option {
 	}
 }
 
+// ProcessPlan converts a query plan into rendered tree rows with predicate and execution metadata.
 func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredicates, err error) {
 	o := options{
 		style:   treerender.DefaultStyle(),
@@ -240,6 +243,14 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	sep := lo.Ternary(!opts.compact, " ", "")
 
 	node := qp.GetNodeByChildLink(link)
+	if node == nil {
+		// spannerplan.New rejects nil nodes and out-of-range child links; keep
+		// this guard so ProcessPlan still fails cleanly if that invariant changes.
+		return nil, fmt.Errorf("plan node not found for link: %v", link)
+	}
+	if node.GetIndex() < 0 {
+		return nil, fmt.Errorf("plan node index cannot be negative: %d", node.GetIndex())
+	}
 	linkType := qp.GetLinkType(link)
 	continuationAnchor := lo.Ternary(linkType != "", "["+linkType+"]"+sep, "")
 	nodeText := continuationAnchor + spannerplan.NodeTitle(node, opts.queryplanOptions...)

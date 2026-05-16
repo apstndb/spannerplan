@@ -13,6 +13,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spannerplan"
+	"github.com/apstndb/spannerplan/asciitable"
 	"github.com/apstndb/spannerplan/plantree"
 )
 
@@ -60,6 +61,16 @@ func Test_customColumnListToTableRenderDef(t *testing.T) {
 	}
 	if got, want := trd.Columns[0].Inline, inlineTypeAlways; got != want {
 		t.Fatalf("inline = %q, want %q", got, want)
+	}
+}
+
+func TestTableAlignmentTreatsDefaultAsLeft(t *testing.T) {
+	got, err := tableAlignment(tw.AlignDefault)
+	if err != nil {
+		t.Fatalf("tableAlignment(tw.AlignDefault) error = %v", err)
+	}
+	if got != asciitable.AlignLeft {
+		t.Fatalf("tableAlignment(tw.AlignDefault) = %v, want %v", got, asciitable.AlignLeft)
 	}
 }
 

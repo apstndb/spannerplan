@@ -1,3 +1,4 @@
+// Package treerender renders generic ASCII operator trees with optional wrapping.
 package treerender
 
 import (
@@ -14,42 +15,88 @@ var defaultWrapCondition = func() *tabwrap.Condition {
 	return cond
 }()
 
+// Node is one vertex in a logical tree rendered as ASCII edges.
 type Node struct {
-	Text     string
+	// Text is the node label rendered after the tree prefix.
+	Text string
+	// Children are the child nodes rendered below this node.
 	Children []*Node
 }
 
+// Row is one rendered tree row: a tree prefix per visual line plus node text lines.
 type Row struct {
 	// TreePart is everything rendered before NodeText on each visual line: the ASCII tree drawing
 	// plus any continuation padding added by the renderer (for example, hanging-indent spacing).
 	// It is joined with newlines using the same line structure as strings.Split(NodeText, "\n").
 	TreePart string
+	// NodeText is the rendered node label, possibly split across visual lines.
 	NodeText string
 }
 
+// Text returns the full rendered row text, with the tree prefix prepended to each node text line.
+// If a manually constructed row has mismatched tree and node line counts, all lines are preserved.
+func (r Row) Text() string {
+	treeLines := r.TreePartLines()
+	nodeLines := strings.Split(r.NodeText, "\n")
+	var sb strings.Builder
+	numLines := max(len(treeLines), len(nodeLines))
+	for i := 0; i < numLines; i++ {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		if i < len(treeLines) {
+			sb.WriteString(treeLines[i])
+		}
+		if i < len(nodeLines) {
+			sb.WriteString(nodeLines[i])
+		}
+	}
+	return sb.String()
+}
+
+// TreePartLines splits [Row.TreePart] into one prefix per visual line. Rows produced by
+// this package align these prefixes with the lines in [Row.NodeText].
+func (r Row) TreePartLines() []string {
+	return strings.Split(r.TreePart, "\n")
+}
+
+// ContinuationIndent selects how wrapped continuation lines align to the tree rail.
 type ContinuationIndent int
 
 const (
+	// ContinuationIndentTree keeps wrapped lines aligned only under the tree prefix.
 	ContinuationIndentTree ContinuationIndent = iota
+	// ContinuationIndentAnchor hangs continuation lines after a node-local prefix.
 	ContinuationIndentAnchor
 )
 
 // RenderOptions configures the optional wrapping behavior of [RenderTreeWithOptions].
 type RenderOptions[T any] struct {
+	// GetContinuationAnchor returns the node-local prefix used for hanging continuation lines.
 	GetContinuationAnchor func(*T) string
-	WrapWidth             int
-	WrapCondition         *tabwrap.Condition
-	ContinuationIndent    ContinuationIndent
+	// WrapWidth sets the maximum total rendered line width. A non-positive value disables wrapping.
+	WrapWidth int
+	// WrapCondition controls display-width calculation and truncation for wrapped text.
+	WrapCondition *tabwrap.Condition
+	// ContinuationIndent selects how wrapped continuation lines align.
+	ContinuationIndent ContinuationIndent
 }
 
+// Style configures ASCII edge glyphs and indentation between rails.
 type Style struct {
-	EdgeLink      string
-	EdgeMid       string
-	EdgeEnd       string
+	// EdgeLink is the ancestor rail glyph used for rows that have following siblings.
+	EdgeLink string
+	// EdgeMid is the edge glyph used for non-last children.
+	EdgeMid string
+	// EdgeEnd is the edge glyph used for last children.
+	EdgeEnd string
+	// EdgeSeparator is inserted between an edge glyph and node text.
 	EdgeSeparator string
-	IndentSize    int
+	// IndentSize is the number of spaces between ancestor rails.
+	IndentSize int
 }
 
+// DefaultStyle returns the default "+-" / "|" tree drawing style.
 func DefaultStyle() Style {
 	return Style{
 		EdgeLink:      "|",
@@ -60,6 +107,7 @@ func DefaultStyle() Style {
 	}
 }
 
+// CompactStyle returns a compact tree style with minimal edge glyphs.
 func CompactStyle() Style {
 	return Style{
 		EdgeLink:   "|",
@@ -112,7 +160,8 @@ func Render(root *Node, style Style) []Row {
 	return RenderTree(root, style, func(n *Node) string { return n.Text }, func(n *Node) []*Node { return n.Children })
 }
 
-// RenderTree walks an existing tree without copying it into [Node], using the supplied accessors.
+// RenderTree walks an existing tree without copying it into [Node], using accessors for *T values.
+// A *Node root infers T as Node, so accessors receive *Node rather than **Node.
 func RenderTree[T any](root *T, style Style, getText func(*T) string, getChildren func(*T) []*T) []Row {
 	return renderTree(root, style, getText, getChildren, defaultRenderOptions[T]())
 }
@@ -156,6 +205,9 @@ func resolveRenderOptions[T any](opts RenderOptions[T]) (resolvedRenderOptions[T
 	}
 	if err := validateContinuationIndent(opts.ContinuationIndent); err != nil {
 		return resolvedRenderOptions[T]{}, err
+	}
+	if opts.ContinuationIndent == ContinuationIndentAnchor && opts.GetContinuationAnchor == nil {
+		return resolvedRenderOptions[T]{}, fmt.Errorf("GetContinuationAnchor is required with ContinuationIndentAnchor")
 	}
 	resolved.continuationIndent = opts.ContinuationIndent
 	return resolved, nil
@@ -398,11 +450,4 @@ func (p PrefixMetrics) MaxWidthForDepth(depth int) int {
 	firstLine := ancestorWide + max(sw.wMid, sw.wEnd) + sw.wSep
 	contLine := ancestorWide + segWide
 	return max(firstLine, contLine)
-}
-
-// MaxPrefixWidthForDepth returns the maximum display width of the prefix added by [RenderTree]
-// for a node at the given depth. This includes the tree edges and the separator.
-// For hot paths, prefer [NewPrefixMetrics] and [PrefixMetrics.MaxWidthForDepth].
-func MaxPrefixWidthForDepth(style Style, depth int) int {
-	return NewPrefixMetrics(style).MaxWidthForDepth(depth)
 }
