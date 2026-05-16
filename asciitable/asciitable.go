@@ -33,21 +33,25 @@ type CellFunc[T any] func(row T, index int) string
 
 // Column defines one rendered table column.
 type Column[T any] struct {
+	// Header is the column header text.
 	Header string
 	// Alignment controls the cell alignment. The zero value uses [AlignLeft].
 	Alignment Alignment
-	Cell      CellFunc[T]
+	// Cell returns the rendered cell text for each row.
+	Cell CellFunc[T]
 }
 
 // TableSpec defines the columns of an ASCII table.
 type TableSpec[T any] struct {
+	// Columns is the ordered list of table columns.
 	Columns []Column[T]
 }
 
 // PredicateSpec defines how predicate appendices read row IDs and predicate lines.
 type PredicateSpec[T any] struct {
 	// ID returns the non-negative display ID used in the predicate appendix.
-	ID         func(row T) uint
+	ID func(row T) uint
+	// Predicates returns the predicate lines associated with the row.
 	Predicates func(row T) []string
 }
 

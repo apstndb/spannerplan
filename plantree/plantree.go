@@ -22,18 +22,25 @@ func newDefaultWrapCondition() *tabwrap.Condition {
 	return c
 }
 
+// RowWithPredicates is one rendered plan row plus predicate and execution metadata.
 type RowWithPredicates struct {
+	// ID is the Spanner PlanNode index for this row.
 	ID int32
 	// TreePart stores everything rendered before NodeText on each visual line: the ASCII tree prefix
 	// plus any continuation padding inserted by the renderer for wrapping / hanging indent.
 	// Prefer [RowWithPredicates.TreePartString] or [RowWithPredicates.TreePartLines] instead of
 	// reading this field directly, so callers stay decoupled if the storage shape changes.
-	TreePart       string
-	NodeText       string
-	Predicates     []string
-	Keys           map[string][]string
+	TreePart string
+	// NodeText is the rendered operator title, possibly split across visual lines.
+	NodeText string
+	// Predicates contains filter predicate text associated with this row.
+	Predicates []string
+	// Keys contains key metadata associated with this row.
+	Keys map[string][]string
+	// ExecutionStats contains execution statistics associated with this row.
 	ExecutionStats stats.ExecutionStats
-	ChildLinks     map[string][]*spannerplan.ResolvedChildLink
+	// ChildLinks contains resolved child-link metadata associated with this row.
+	ChildLinks map[string][]*spannerplan.ResolvedChildLink
 }
 
 type renderedNode struct {
@@ -46,6 +53,7 @@ type renderedNode struct {
 	Children           []*renderedNode
 }
 
+// Text returns the full rendered row text, with the tree prefix prepended to each node text line.
 func (r RowWithPredicates) Text() string {
 	return treerender.Row{TreePart: r.TreePart, NodeText: r.NodeText}.Text()
 }
@@ -61,6 +69,7 @@ func (r RowWithPredicates) TreePartLines() []string {
 	return treerender.Row{TreePart: r.TreePartString()}.TreePartLines()
 }
 
+// FormatID returns the display ID, prefixed with "*" when the row has predicates.
 func (r RowWithPredicates) FormatID() string {
 	return lo.Ternary(len(r.Predicates) != 0, "*", "") + strconv.Itoa(int(r.ID))
 }
@@ -76,6 +85,7 @@ type options struct {
 	wrapper              *tabwrap.Condition
 }
 
+// Option configures [ProcessPlan].
 type Option func(*options)
 
 // ContinuationIndent controls how wrapped continuation lines are aligned.
@@ -95,12 +105,14 @@ const (
 	ContinuationIndentNodePrefix
 )
 
+// DisallowUnknownStats makes [ProcessPlan] fail on unknown execution-stat keys.
 func DisallowUnknownStats() Option {
 	return func(o *options) {
 		o.disallowUnknownStats = true
 	}
 }
 
+// WithQueryPlanOptions forwards node-title formatting options to the underlying query plan renderer.
 func WithQueryPlanOptions(opts ...spannerplan.Option) Option {
 	return func(o *options) {
 		o.queryplanOptions = append(o.queryplanOptions, opts...)
@@ -149,6 +161,7 @@ func WithContinuationIndent(indent ContinuationIndent) Option {
 	}
 }
 
+// ProcessPlan converts a query plan into rendered tree rows with predicate and execution metadata.
 func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredicates, err error) {
 	o := options{
 		style:   treerender.DefaultStyle(),

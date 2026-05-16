@@ -17,7 +17,9 @@ var defaultWrapCondition = func() *tabwrap.Condition {
 
 // Node is one vertex in a logical tree rendered as ASCII edges.
 type Node struct {
-	Text     string
+	// Text is the node label rendered after the tree prefix.
+	Text string
+	// Children are the child nodes rendered below this node.
 	Children []*Node
 }
 
@@ -27,6 +29,7 @@ type Row struct {
 	// plus any continuation padding added by the renderer (for example, hanging-indent spacing).
 	// It is joined with newlines using the same line structure as strings.Split(NodeText, "\n").
 	TreePart string
+	// NodeText is the rendered node label, possibly split across visual lines.
 	NodeText string
 }
 
@@ -69,19 +72,28 @@ const (
 
 // RenderOptions configures the optional wrapping behavior of [RenderTreeWithOptions].
 type RenderOptions[T any] struct {
+	// GetContinuationAnchor returns the node-local prefix used for hanging continuation lines.
 	GetContinuationAnchor func(*T) string
-	WrapWidth             int
-	WrapCondition         *tabwrap.Condition
-	ContinuationIndent    ContinuationIndent
+	// WrapWidth sets the maximum total rendered line width. A value of 0 disables wrapping.
+	WrapWidth int
+	// WrapCondition controls display-width calculation and truncation for wrapped text.
+	WrapCondition *tabwrap.Condition
+	// ContinuationIndent selects how wrapped continuation lines align.
+	ContinuationIndent ContinuationIndent
 }
 
 // Style configures ASCII edge glyphs and indentation between rails.
 type Style struct {
-	EdgeLink      string
-	EdgeMid       string
-	EdgeEnd       string
+	// EdgeLink is the ancestor rail glyph used for rows that have following siblings.
+	EdgeLink string
+	// EdgeMid is the edge glyph used for non-last children.
+	EdgeMid string
+	// EdgeEnd is the edge glyph used for last children.
+	EdgeEnd string
+	// EdgeSeparator is inserted between an edge glyph and node text.
 	EdgeSeparator string
-	IndentSize    int
+	// IndentSize is the number of spaces between ancestor rails.
+	IndentSize int
 }
 
 // DefaultStyle returns the default "+-" / "|" tree drawing style.
