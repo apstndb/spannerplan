@@ -16,12 +16,11 @@ import (
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/goccy/go-yaml"
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/renderer"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spannerplan"
+	"github.com/apstndb/spannerplan/asciitable"
 	"github.com/apstndb/spannerplan/plantree"
 	"github.com/apstndb/spannerplan/stats"
 )
@@ -54,22 +53,6 @@ func (e *usageError) Unwrap() error {
 
 type tableRenderDef struct {
 	Columns []columnRenderDef
-}
-
-func (tdef tableRenderDef) ColumnNames() []string {
-	var columnNames []string
-	for _, s := range tdef.Columns {
-		columnNames = append(columnNames, s.Name)
-	}
-	return columnNames
-}
-
-func (tdef tableRenderDef) ColumnAlignments() []tw.Align {
-	var alignments []tw.Align
-	for _, s := range tdef.Columns {
-		alignments = append(alignments, s.Alignment)
-	}
-	return alignments
 }
 
 func (tdef tableRenderDef) ColumnMapFunc(row plantree.RowWithPredicates) ([]string, error) {
@@ -667,36 +650,13 @@ func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
 
 func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, printMode PrintMode) (string, error) {
 	var b strings.Builder
-	table := tablewriter.NewTable(&b,
-		tablewriter.WithRenderer(
-			renderer.NewBlueprint(tw.Rendition{Symbols: tw.NewSymbols(tw.StyleASCII)})),
-		tablewriter.WithHeaderAlignment(tw.AlignLeft),
-		tablewriter.WithTrimSpace(tw.Off),
-	)
 
-	// Some config can't be correctly configured by tablewriter.Option.
-	table.Configure(func(config *tablewriter.Config) {
-		config.Row.Alignment.PerColumn = renderDef.ColumnAlignments()
-		config.Row.Formatting.AutoWrap = tw.WrapNone
-		config.Header.Formatting.AutoFormat = tw.Off
-	})
-
-	table.Header(renderDef.ColumnNames())
-
-	for _, row := range rows {
-		values, err := renderDef.ColumnMapFunc(row)
+	if len(rows) > 0 && len(renderDef.Columns) > 0 {
+		tablePart, err := renderTablePart(renderDef, rows)
 		if err != nil {
 			return "", err
 		}
-		if err = table.Append(values); err != nil {
-			return "", err
-		}
-	}
-
-	if len(rows) > 0 {
-		if err := table.Render(); err != nil {
-			return "", err
-		}
+		b.WriteString(tablePart)
 	}
 
 	var maxIDLength int
@@ -706,19 +666,9 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 		}
 	}
 
-	var predicates []string
 	var parameters []string
 	for _, row := range rows {
 		var prefix string
-		for i, predicate := range row.Predicates {
-			if i == 0 {
-				prefix = fmt.Sprintf("%*d:", maxIDLength, row.ID)
-			} else {
-				prefix = strings.Repeat(" ", maxIDLength+1)
-			}
-			predicates = append(predicates, fmt.Sprintf("%s %s", prefix, predicate))
-		}
-
 		i := 0
 		for _, t := range sortedChildLinkEntries(row.ChildLinks) {
 			typ, childLinks := t.Key, t.Value
@@ -757,12 +707,72 @@ func printResult(renderDef tableRenderDef, rows []plantree.RowWithPredicates, pr
 			}
 		}
 	case PrintPredicates:
-		if len(predicates) > 0 {
-			fmt.Fprintln(&b, "Predicates(identified by ID):")
-			for _, s := range predicates {
-				fmt.Fprintf(&b, " %s\n", s)
-			}
+		predPart, err := asciitable.RenderPredicates(rows, predicateSpec())
+		if err != nil {
+			return "", err
 		}
+		b.WriteString(predPart)
 	}
 	return b.String(), nil
+}
+
+type renderedTableRow []string
+
+func renderTablePart(renderDef tableRenderDef, rows []plantree.RowWithPredicates) (string, error) {
+	tableRows := make([]renderedTableRow, 0, len(rows))
+	for _, row := range rows {
+		values, err := renderDef.ColumnMapFunc(row)
+		if err != nil {
+			return "", err
+		}
+		tableRows = append(tableRows, values)
+	}
+
+	spec := asciitable.TableSpec[renderedTableRow]{
+		Columns: make([]asciitable.Column[renderedTableRow], 0, len(renderDef.Columns)),
+	}
+	for i, col := range renderDef.Columns {
+		alignment, err := tableAlignment(col.Alignment)
+		if err != nil {
+			return "", fmt.Errorf("column %d (%q): %w", i, col.Name, err)
+		}
+		index := i
+		spec.Columns = append(spec.Columns, asciitable.Column[renderedTableRow]{
+			Header:    col.Name,
+			Alignment: alignment,
+			Cell: func(row renderedTableRow, _ int) string {
+				if index >= len(row) {
+					return ""
+				}
+				return row[index]
+			},
+		})
+	}
+	return asciitable.RenderTable(tableRows, spec)
+}
+
+func tableAlignment(alignment tw.Align) (asciitable.Alignment, error) {
+	switch alignment {
+	case tw.AlignRight:
+		return asciitable.AlignRight, nil
+	case tw.AlignCenter:
+		return asciitable.AlignCenter, nil
+	case "", tw.AlignLeft, tw.AlignNone:
+		return asciitable.AlignLeft, nil
+	default:
+		return "", fmt.Errorf("unsupported alignment %v", alignment)
+	}
+}
+
+func predicateSpec() asciitable.PredicateSpec[plantree.RowWithPredicates] {
+	return asciitable.PredicateSpec[plantree.RowWithPredicates]{
+		ID: func(row plantree.RowWithPredicates) uint {
+			// Spanner PlanNode indexes are zero-based node positions, so they are
+			// non-negative when used as predicate appendix display IDs.
+			return uint(row.ID)
+		},
+		Predicates: func(row plantree.RowWithPredicates) []string {
+			return row.Predicates
+		},
+	}
 }
