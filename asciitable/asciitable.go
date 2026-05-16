@@ -49,9 +49,7 @@ type TableSpec[T any] struct {
 
 // AppendixSpec defines how appendices read row IDs and item lines.
 type AppendixSpec[T any] struct {
-	// Title is printed before item lines. It must be non-empty; callers that want
-	// the predicate default title can use [PredicateSpec] or provide
-	// "Predicates(identified by ID):".
+	// Title is printed before item lines. It must be non-empty.
 	Title string
 	// ID returns the non-negative display ID used in the appendix.
 	ID func(row T) uint
@@ -68,19 +66,6 @@ type appendixRows struct {
 type appendixRow struct {
 	id    uint
 	items []string
-}
-
-// PredicateSpec defines how predicate appendices read row IDs and predicate lines.
-//
-// Deprecated: use [AppendixSpec] with [RenderAppendix].
-type PredicateSpec[T any] struct {
-	// Title is printed before predicate lines. The zero value uses
-	// "Predicates(identified by ID):".
-	Title string
-	// ID returns the non-negative display ID used in the predicate appendix.
-	ID func(row T) uint
-	// Predicates returns the predicate lines associated with the row.
-	Predicates func(row T) []string
 }
 
 // RenderTable renders rows using spec.
@@ -157,21 +142,6 @@ func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
 		}
 	}
 	return sb.String(), nil
-}
-
-// RenderPredicates formats the predicate appendix for rows with predicates.
-//
-// Deprecated: use [RenderAppendix].
-func RenderPredicates[T any](rows []T, spec PredicateSpec[T]) (string, error) {
-	title := spec.Title
-	if title == "" {
-		title = "Predicates(identified by ID):"
-	}
-	return RenderAppendix(rows, AppendixSpec[T]{
-		Title: title,
-		ID:    spec.ID,
-		Items: spec.Predicates,
-	})
 }
 
 func collectAppendixRows[T any](rows []T, spec AppendixSpec[T]) (appendixRows, error) {

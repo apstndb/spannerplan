@@ -258,24 +258,6 @@ func TestRenderAppendix_InvalidSpec(t *testing.T) {
 	}
 }
 
-func TestRenderPredicates_DefaultTitle(t *testing.T) {
-	rows := []testRow{
-		{id: 3, text: "Filter", predicates: []string{"Filter: a = 1"}},
-	}
-
-	got, err := asciitable.RenderPredicates(rows, testPredicateSpec())
-	if err != nil {
-		t.Fatalf("RenderPredicates() error = %v", err)
-	}
-	want := heredoc.Doc(`
-		Predicates(identified by ID):
-		 3: Filter: a = 1
-	`)
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("RenderPredicates() mismatch (-want +got):\n%s", diff)
-	}
-}
-
 func idColumn() asciitable.Column[testRow] {
 	return asciitable.Column[testRow]{
 		Header:    "ID",
@@ -292,17 +274,6 @@ func operatorColumn() asciitable.Column[testRow] {
 		Alignment: asciitable.AlignLeft,
 		Cell: func(row testRow, _ int) string {
 			return row.text
-		},
-	}
-}
-
-func testPredicateSpec() asciitable.PredicateSpec[testRow] {
-	return asciitable.PredicateSpec[testRow]{
-		ID: func(row testRow) uint {
-			return row.id
-		},
-		Predicates: func(row testRow) []string {
-			return row.predicates
 		},
 	}
 }
