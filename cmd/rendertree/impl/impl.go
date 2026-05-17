@@ -288,13 +288,15 @@ func parseExplainMode(s string) (explainMode, error) {
 	}
 }
 
+const printFlagUsage = "print appendix preset (basic, enhanced, full, none; empty value suppresses appendices) or comma-separated sections (predicates, ordering, aggregate, typed, full); presets are standalone; typed/full cannot be combined"
+
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flagSet := flag.NewFlagSet("rendertree", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
 
 	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
-	printSectionsStr := flagSet.String("print", "basic", "print appendix preset or sections: basic, enhanced, full, none, or comma-separated predicates, ordering, aggregate, typed, full")
+	printSectionsStr := flagSet.String("print", "basic", printFlagUsage)
 	showScalarVars := flagSet.Bool("show-vars", false, "show scalar variable assignments in semantic appendix sections")
 	resolveScalarVars := flagSet.Bool("resolve-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
 	resolveScalarVarsRecursive := flagSet.Bool("resolve-vars-recursive", false, "EXPERIMENTAL: recursively resolve scalar variable aliases in semantic appendix sections")
