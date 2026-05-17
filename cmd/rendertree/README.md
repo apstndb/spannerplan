@@ -1,4 +1,8 @@
+# rendertree
+
 This tool render YAML or JSON representation of Cloud Spanner query plan as ascii format.
+
+## Input and modes
 
 It can read various types.
 * [QueryPlan](https://cloud.google.com/spanner/docs/reference/rest/v1/ResultSetStats?hl=en#QueryPlan)
@@ -11,6 +15,8 @@ It can read various types.
   * Output of `gcloud spanner databases execute-sql` and [execspansql](https://github.com/apstndb/execspansql)
 
 It can render both PLAN or PROFILE.
+
+## Basic usage
 
 ```
 # from file
@@ -44,6 +50,8 @@ $ gcloud spanner databases execute-sql ${DATABASE_ID} --sql="SELECT * FROM Singe
 
 Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--mode=AUTO` can detect whether the input has execution statistics or not.
 
+## Scalar appendices
+
 `rendertree` prints predicate-like scalar parameters by default. The `--print` flag can select one or more appendix sections:
 
 - `predicates` prints predicate-like scalar links such as `Condition`, `Residual Condition`, `Seek Condition`, `Search Predicate`, and `Split Range`.
@@ -55,11 +63,15 @@ Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--m
 Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
 `typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
 
+### Scalar variable display
+
 Semantic appendix sections hide scalar assignment variable names by default. Use `--show-vars` when
 the assignment name itself is useful, for example to inspect what `$v1` is assigned to. Use
 `--resolve-vars` to replace direct scalar variable aliases with their assigned expression in semantic
 appendix sections. `--resolve-vars-recursive` is experimental and recursively traces aliases; it is
 useful for investigation, but can produce noisier expanded expressions.
+
+### Example
 
 For example, the following query has a `WHERE` predicate, aggregation, and ordering:
 
@@ -118,6 +130,8 @@ Aggregates(identified by ID):
      Agg: COUNT()
 ```
 
+## Custom stats columns
+
 Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.
 
 ```
@@ -141,6 +155,8 @@ $ cat custom.yaml
   alignment: RIGHT
   inline: ALWAYS
 ```
+
+### Inline stats
 
 `inline` field in the custom configuration and the `--inline-stats` command-line flag together control how execution statistics are rendered.
 Inline stats are particularly useful for displaying *sparse* statistics (those that only appear on a few operators) without adding many empty columns to the main table, thus improving readability.
@@ -221,6 +237,8 @@ Predicates(identified by ID):
  34: Seek Condition: (($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId) AND ($TrackId' = $batched_TrackId))
 ```
 
+### Repeatable custom columns
+
 You can also use repeatable `--custom-column` flags. Each flag value is a single column definition in JSON or flow-style YAML, using the same schema as `--custom-file`.
 
 ```
@@ -252,9 +270,11 @@ Predicates(identified by ID):
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
 ```
 
+### Deprecated custom syntax
+
 The older `--custom=<name>:<template>[:<align>[:<inline_type>]]` form is still accepted for compatibility, but it is deprecated because the delimiter-based mini-language cannot represent all valid template strings robustly.
 
-## Options for narrower width
+## Narrow width output
 
 rendertree supports a compact format and wrapping for limited width environment.
 
