@@ -4,6 +4,8 @@
 
 Spanner QueryPlan manipulation module.
 
+This is a v0 module, so breaking changes are possible across all packages before v1.
+
 ## Directory overview
 
 - [`asciitable`](./asciitable): Generic ASCII table and appendix rendering helpers.
@@ -15,7 +17,7 @@ Spanner QueryPlan manipulation module.
 - [`lab`](./lab): Small ad hoc scripts and experiments.
 - [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives.
 - [`plantree/reference`](./plantree/reference): High-level reference renderer API for Go, browser, and WebAssembly callers.
-- [`protoyaml`](./protoyaml) (project-internal helper): YAML and JSON helpers used by this module for decoding protobuf query plan data; external use is not recommended.
+- [`protoyaml`](./protoyaml) (project-internal helper): YAML and JSON helpers used by this module for decoding protobuf query plan data. External use is not recommended; it is especially likely to be removed or moved behind unexported/internal helpers because it exists for internal use rather than as a supported public API.
 - [`stats`](./stats): Execution statistics types and extraction helpers.
 - [`treerender`](./treerender): Generic ASCII tree renderer with wrapping support.
 
