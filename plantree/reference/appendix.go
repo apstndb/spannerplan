@@ -70,7 +70,7 @@ func ParsePrintSection(s string) (PrintSection, error) {
 }
 
 // ParsePrintSections parses a named preset or a comma-separated print-section list.
-// An empty string returns a non-nil empty list that suppresses appendices when used explicitly.
+// Empty or blank input returns a non-nil empty list that suppresses appendices when used explicitly.
 func ParsePrintSections(s string) (PrintSections, error) {
 	sections, err := scalarappendix.ParseSections(s)
 	if err != nil {

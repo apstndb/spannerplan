@@ -119,7 +119,7 @@ func ParseSection(s string) (Section, error) {
 }
 
 // ParseSections parses a named preset or a comma-separated print-section list.
-// An empty string returns a non-nil empty list, which renders no appendix sections.
+// Empty or blank input returns a non-nil empty list, which renders no appendix sections.
 func ParseSections(s string) (Sections, error) {
 	s = strings.TrimSpace(s)
 	var sections Sections
@@ -141,6 +141,8 @@ func ParseSections(s string) (Sections, error) {
 			sections = Sections{section}
 		}
 	} else {
+		// Comma-separated input is section-list syntax. Unknown tokens intentionally keep
+		// the section-list error shape used before presets were added.
 		for _, raw := range strings.Split(s, ",") {
 			token := strings.TrimSpace(raw)
 			if token == "" {

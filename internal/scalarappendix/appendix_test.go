@@ -109,13 +109,54 @@ func TestParseSections(t *testing.T) {
 	}
 }
 
-func TestParsePresetEmptyIsNotPreset(t *testing.T) {
-	_, err := ParsePreset("")
-	if err == nil {
-		t.Fatal("ParsePreset() error = nil, want non-nil")
+func TestParsePreset(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    Preset
+		wantErr string
+	}{
+		{
+			name:  "basic",
+			input: " BASIC ",
+			want:  PresetBasic,
+		},
+		{
+			name:    "empty is not preset",
+			input:   "",
+			wantErr: `unknown print preset: ""`,
+		},
+		{
+			name:    "unknown",
+			input:   "broken",
+			wantErr: `unknown print preset: "broken"`,
+		},
+		{
+			name:    "comma-separated list is not preset",
+			input:   "enhanced,ordering",
+			wantErr: `unknown print preset: "enhanced,ordering"`,
+		},
 	}
-	if got, want := err.Error(), `unknown print preset: ""`; got != want {
-		t.Fatalf("ParsePreset() error = %q, want %q", got, want)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParsePreset(tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("ParsePreset() error = nil, want non-nil")
+				}
+				if got := err.Error(); got != tt.wantErr {
+					t.Fatalf("ParsePreset() error = %q, want %q", got, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParsePreset() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("ParsePreset() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
