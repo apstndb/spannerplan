@@ -294,7 +294,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
-	printSectionsStr := flagSet.String("print", "predicates", "print appendix sections: predicates, ordering, aggregate, typed, full (comma-separated; typed/full are raw debug dumps)")
+	printSectionsStr := flagSet.String("print", "predicates", "print appendix preset or sections: basic, enhanced, full, none, or comma-separated predicates, ordering, aggregate, typed, full")
 	showScalarVars := flagSet.Bool("show-vars", false, "show scalar variable assignments in semantic appendix sections")
 	resolveScalarVars := flagSet.Bool("resolve-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
 	resolveScalarVarsRecursive := flagSet.Bool("resolve-vars-recursive", false, "EXPERIMENTAL: recursively resolve scalar variable aliases in semantic appendix sections")

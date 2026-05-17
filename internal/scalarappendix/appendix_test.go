@@ -28,6 +28,26 @@ func TestParseSections(t *testing.T) {
 			want:  Sections{SectionPredicates, SectionOrdering, SectionAggregate},
 		},
 		{
+			name:  "basic preset",
+			input: "basic",
+			want:  Sections{SectionPredicates},
+		},
+		{
+			name:  "enhanced preset",
+			input: " Enhanced ",
+			want:  Sections{SectionPredicates, SectionOrdering, SectionAggregate},
+		},
+		{
+			name:  "full preset",
+			input: "full",
+			want:  Sections{SectionFull},
+		},
+		{
+			name:  "none preset",
+			input: "none",
+			want:  Sections{},
+		},
+		{
 			name:  "empty means no sections",
 			input: "",
 			want:  Sections{},
@@ -73,6 +93,9 @@ func TestParseSections(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("ParseSections() error = %v", err)
+			}
+			if tt.want != nil && got == nil {
+				t.Fatal("ParseSections() returned nil, want non-nil explicit sections")
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("ParseSections() mismatch (-want +got):\n%s", diff)

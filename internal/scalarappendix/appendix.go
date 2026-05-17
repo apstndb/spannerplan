@@ -34,6 +34,20 @@ const (
 // Sections is an ordered list of appendix sections.
 type Sections []Section
 
+// Preset selects an intent-based appendix section set.
+type Preset string
+
+const (
+	// PresetBasic prints predicate-like scalar links.
+	PresetBasic Preset = "basic"
+	// PresetEnhanced prints predicate, ordering, and aggregate sections.
+	PresetEnhanced Preset = "enhanced"
+	// PresetFull prints all scalar links, including unnamed links.
+	PresetFull Preset = "full"
+	// PresetNone suppresses appendix sections.
+	PresetNone Preset = "none"
+)
+
 // Options configures appendix rendering.
 type Options struct {
 	// Sections selects appendix sections.
@@ -49,6 +63,39 @@ type Options struct {
 
 	// ResolveScalarVarsRecursive recursively resolves scalar variable aliases in semantic appendix sections.
 	ResolveScalarVarsRecursive bool
+}
+
+// ParsePreset parses one print preset name.
+// Valid values are "basic", "enhanced", "full", and "none" (case-insensitive).
+func ParsePreset(s string) (Preset, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case string(PresetBasic):
+		return PresetBasic, nil
+	case string(PresetEnhanced):
+		return PresetEnhanced, nil
+	case string(PresetFull):
+		return PresetFull, nil
+	case string(PresetNone):
+		return PresetNone, nil
+	default:
+		return "", fmt.Errorf("unknown print preset: %s", s)
+	}
+}
+
+// Sections returns the appendix sections for p.
+func (p Preset) Sections() (Sections, error) {
+	switch p {
+	case PresetBasic:
+		return Sections{SectionPredicates}, nil
+	case PresetEnhanced:
+		return Sections{SectionPredicates, SectionOrdering, SectionAggregate}, nil
+	case PresetFull:
+		return Sections{SectionFull}, nil
+	case PresetNone:
+		return Sections{}, nil
+	default:
+		return nil, fmt.Errorf("unsupported print preset: %s", p)
+	}
 }
 
 // ParseSection parses one print-section name.
@@ -70,11 +117,17 @@ func ParseSection(s string) (Section, error) {
 	}
 }
 
-// ParseSections parses a comma-separated print-section list.
-// An empty string returns an empty list, which renders no appendix sections.
+// ParseSections parses a named preset or a comma-separated print-section list.
+// An empty string returns a non-nil empty list, which renders no appendix sections.
 func ParseSections(s string) (Sections, error) {
 	if strings.TrimSpace(s) == "" {
 		return Sections{}, nil
+	}
+	if !strings.Contains(s, ",") {
+		preset, err := ParsePreset(s)
+		if err == nil {
+			return preset.Sections()
+		}
 	}
 
 	var sections Sections

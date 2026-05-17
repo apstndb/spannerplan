@@ -410,6 +410,26 @@ func TestParsePrintSections(t *testing.T) {
 			want:  PrintSections{PrintPredicates, PrintOrdering},
 		},
 		{
+			name:  "basic preset",
+			input: "basic",
+			want:  PrintSections{PrintPredicates},
+		},
+		{
+			name:  "enhanced preset",
+			input: " Enhanced ",
+			want:  PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+		},
+		{
+			name:  "full preset",
+			input: "full",
+			want:  PrintSections{PrintFull},
+		},
+		{
+			name:  "none preset",
+			input: "none",
+			want:  PrintSections{},
+		},
+		{
 			name:  "empty means no sections",
 			input: "",
 			want:  PrintSections{},
@@ -446,8 +466,43 @@ func TestParsePrintSections(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParsePrintSections() error = %v", err)
 			}
+			if tt.want != nil && got == nil {
+				t.Fatal("ParsePrintSections() returned nil, want non-nil explicit sections")
+			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("ParsePrintSections() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestPrintPresetSections(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  PrintSections
+	}{
+		{name: "basic", input: "basic", want: PrintSections{PrintPredicates}},
+		{name: "enhanced", input: "enhanced", want: PrintSections{PrintPredicates, PrintOrdering, PrintAggregate}},
+		{name: "full", input: "full", want: PrintSections{PrintFull}},
+		{name: "none", input: "none", want: PrintSections{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			preset, err := ParsePrintPreset(tt.input)
+			if err != nil {
+				t.Fatalf("ParsePrintPreset() error = %v", err)
+			}
+			got, err := preset.Sections()
+			if err != nil {
+				t.Fatalf("PrintPreset.Sections() error = %v", err)
+			}
+			if got == nil {
+				t.Fatal("PrintPreset.Sections() returned nil, want non-nil sections")
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("PrintPreset.Sections() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -541,7 +596,7 @@ func TestRenderTreeTableWithConfig_PrintSections(t *testing.T) {
 		RenderModePlan,
 		FormatCurrent,
 		RenderConfig{
-			PrintSections:     printSectionsPtr(PrintOrdering, PrintAggregate),
+			PrintSections:     NewPrintSections(PrintOrdering, PrintAggregate),
 			ShowScalarVars:    true,
 			ResolveScalarVars: true,
 		},
@@ -627,13 +682,8 @@ func TestRenderTreeTableWithOptions_PrintSectionValidation(t *testing.T) {
 	}
 }
 
-func printSectionsPtr(sections ...PrintSection) *PrintSections {
-	copied := append(PrintSections{}, sections...)
-	return &copied
-}
-
 func TestRenderConfigPrintSectionsJSONRoundTripEmptySlice(t *testing.T) {
-	b, err := json.Marshal(RenderConfig{PrintSections: printSectionsPtr()})
+	b, err := json.Marshal(RenderConfig{PrintSections: NewPrintSections()})
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
 	}

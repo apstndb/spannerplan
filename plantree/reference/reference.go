@@ -66,6 +66,9 @@ type RenderConfig struct {
 	// A nil pointer uses the default [PrintPredicates] section.
 	// In JSON config, omit this field or set it to null to use the default; set
 	// it to [] to print no appendix sections.
+	// Use [NewPrintSections] with [PrintPreset.Sections] when converting preset
+	// names such as [PrintPresetBasic], [PrintPresetEnhanced], [PrintPresetFull],
+	// and [PrintPresetNone] into config values.
 	PrintSections *PrintSections `json:"printSections,omitempty"`
 
 	// ShowScalarVars prints scalar assignment variable names in semantic appendix sections.

@@ -691,6 +691,26 @@ func TestParsePrintSections(t *testing.T) {
 			want:  PrintSections{PrintPredicates, PrintOrdering},
 		},
 		{
+			name:  "basic preset",
+			input: "basic",
+			want:  PrintSections{PrintPredicates},
+		},
+		{
+			name:  "enhanced preset",
+			input: " Enhanced ",
+			want:  PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+		},
+		{
+			name:  "full preset",
+			input: "full",
+			want:  PrintSections{PrintFull},
+		},
+		{
+			name:  "none preset",
+			input: "none",
+			want:  PrintSections{},
+		},
+		{
 			name:  "empty means no sections",
 			input: "",
 			want:  PrintSections{},
@@ -726,6 +746,9 @@ func TestParsePrintSections(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("parsePrintSections() error = %v", err)
+			}
+			if tt.want != nil && got == nil {
+				t.Fatal("parsePrintSections() returned nil, want non-nil explicit sections")
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("parsePrintSections() mismatch (-want +got):\n%s", diff)
