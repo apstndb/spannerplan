@@ -1,20 +1,20 @@
 # rendertree
 
-This tool render YAML or JSON representation of Cloud Spanner query plan as ascii format.
+`rendertree` renders YAML or JSON representations of Cloud Spanner query plans as ASCII tables.
 
 ## Input and modes
 
-It can read various types.
+Supported input formats:
 * [QueryPlan](https://cloud.google.com/spanner/docs/reference/rest/v1/ResultSetStats?hl=en#QueryPlan)
-  * Can get easily by client libraries
+  * Available from client libraries:
     * [AnalyzeQuery()](https://pkg.go.dev/cloud.google.com/go/spanner#ReadOnlyTransaction.AnalyzeQuery)
     * [RowIterator.QueryPlan](https://pkg.go.dev/cloud.google.com/go/spanner#RowIterator)
 * [ResultSetStats](https://cloud.google.com/spanner/docs/reference/rest/v1/ResultSetStats?hl=en)
-  * Output of DOWNLOAD JSON in [the official query plan visualizer](https://cloud.google.com/spanner/docs/tune-query-with-visualizer?hl=en)
+  * Output from DOWNLOAD JSON in [the official query plan visualizer](https://cloud.google.com/spanner/docs/tune-query-with-visualizer?hl=en)
 * [ResultSet](https://cloud.google.com/spanner/docs/reference/rest/v1/ResultSet?hl=en)
-  * Output of `gcloud spanner databases execute-sql` and [execspansql](https://github.com/apstndb/execspansql)
+  * Output from `gcloud spanner databases execute-sql` and [execspansql](https://github.com/apstndb/execspansql)
 
-It can render both PLAN or PROFILE.
+It can render both PLAN and PROFILE inputs.
 
 ## Basic usage
 
@@ -276,7 +276,7 @@ The older `--custom=<name>:<template>[:<align>[:<inline_type>]]` form is still a
 
 ## Narrow width output
 
-rendertree supports a compact format and wrapping for limited width environment.
+`rendertree` supports compact formatting and wrapping for limited-width environments.
 
 - `--compact` enables the compact format:
   - Each level of depth in the Query Plan tree adds only one character to its indentation.
