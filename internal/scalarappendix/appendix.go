@@ -67,6 +67,7 @@ type Options struct {
 
 // ParsePreset parses one print preset name.
 // Valid values are "basic", "enhanced", "full", and "none" (case-insensitive).
+// Empty input is not a preset; use [ParseSections] for explicit-empty appendix semantics.
 func ParsePreset(s string) (Preset, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case string(PresetBasic):
@@ -78,7 +79,7 @@ func ParsePreset(s string) (Preset, error) {
 	case string(PresetNone):
 		return PresetNone, nil
 	default:
-		return "", fmt.Errorf("unknown print preset: %s", s)
+		return "", fmt.Errorf("unknown print preset: %q", s)
 	}
 }
 
@@ -94,7 +95,7 @@ func (p Preset) Sections() (Sections, error) {
 	case PresetNone:
 		return Sections{}, nil
 	default:
-		return nil, fmt.Errorf("unsupported print preset: %s", p)
+		return nil, fmt.Errorf("unsupported print preset: %q", p)
 	}
 }
 
@@ -135,7 +136,7 @@ func ParseSections(s string) (Sections, error) {
 		} else {
 			section, sectionErr := ParseSection(s)
 			if sectionErr != nil {
-				return nil, fmt.Errorf("unknown print preset or section: %s", s)
+				return nil, fmt.Errorf("unknown print preset or section: %q", s)
 			}
 			sections = Sections{section}
 		}

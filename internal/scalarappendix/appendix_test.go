@@ -65,7 +65,7 @@ func TestParseSections(t *testing.T) {
 		{
 			name:    "unknown",
 			input:   "broken",
-			wantErr: "unknown print preset or section: broken",
+			wantErr: `unknown print preset or section: "broken"`,
 		},
 		{
 			name:    "preset cannot be combined",
@@ -106,6 +106,16 @@ func TestParseSections(t *testing.T) {
 				t.Fatalf("ParseSections() mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestParsePresetEmptyIsNotPreset(t *testing.T) {
+	_, err := ParsePreset("")
+	if err == nil {
+		t.Fatal("ParsePreset() error = nil, want non-nil")
+	}
+	if got, want := err.Error(), `unknown print preset: ""`; got != want {
+		t.Fatalf("ParsePreset() error = %q, want %q", got, want)
 	}
 }
 
