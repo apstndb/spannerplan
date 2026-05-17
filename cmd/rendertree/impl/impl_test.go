@@ -718,7 +718,7 @@ func TestParsePrintSections(t *testing.T) {
 		{
 			name:    "unknown",
 			input:   "broken",
-			wantErr: "unknown print section: broken",
+			wantErr: "unknown print preset or section: broken",
 		},
 		{
 			name:    "duplicate",
@@ -841,7 +841,7 @@ func TestRun_UsageErrors(t *testing.T) {
 		{
 			name:        "invalid print",
 			args:        []string{"-print", "broken"},
-			wantErrText: "unknown print section: broken",
+			wantErrText: "unknown print preset or section: broken",
 			postCheck: func(t *testing.T, stderr string, err error) {
 				t.Helper()
 				if !strings.Contains(stderr, "Invalid value for -print flag:") {

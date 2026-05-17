@@ -437,7 +437,7 @@ func TestParsePrintSections(t *testing.T) {
 		{
 			name:    "unknown",
 			input:   "broken",
-			wantErr: "unknown print section: broken",
+			wantErr: "unknown print preset or section: broken",
 		},
 		{
 			name:    "duplicate",
