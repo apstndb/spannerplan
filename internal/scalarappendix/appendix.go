@@ -121,32 +121,40 @@ func ParseSection(s string) (Section, error) {
 // An empty string returns a non-nil empty list, which renders no appendix sections.
 func ParseSections(s string) (Sections, error) {
 	s = strings.TrimSpace(s)
+	var sections Sections
 	if s == "" {
-		return Sections{}, nil
-	}
-	if !strings.Contains(s, ",") {
+		sections = Sections{}
+	} else if !strings.Contains(s, ",") {
 		preset, presetErr := ParsePreset(s)
 		if presetErr == nil {
-			return preset.Sections()
+			var err error
+			sections, err = preset.Sections()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			section, sectionErr := ParseSection(s)
+			if sectionErr != nil {
+				return nil, fmt.Errorf("unknown print preset or section: %s", s)
+			}
+			sections = Sections{section}
 		}
-		section, sectionErr := ParseSection(s)
-		if sectionErr == nil {
-			return Sections{section}, nil
-		}
-		return nil, fmt.Errorf("unknown print preset or section: %s", s)
-	}
+	} else {
+		for _, raw := range strings.Split(s, ",") {
+			token := strings.TrimSpace(raw)
+			if token == "" {
+				return nil, fmt.Errorf("print section must not be empty")
+			}
 
-	var sections Sections
-	for _, raw := range strings.Split(s, ",") {
-		if strings.TrimSpace(raw) == "" {
-			return nil, fmt.Errorf("print section must not be empty")
+			section, err := ParseSection(token)
+			if err != nil {
+				if _, presetErr := ParsePreset(token); presetErr == nil {
+					return nil, fmt.Errorf("print preset %q cannot be combined with section list", token)
+				}
+				return nil, err
+			}
+			sections = append(sections, section)
 		}
-
-		section, err := ParseSection(raw)
-		if err != nil {
-			return nil, err
-		}
-		sections = append(sections, section)
 	}
 
 	if err := ValidateSections(sections); err != nil {

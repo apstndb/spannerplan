@@ -440,6 +440,11 @@ func TestParsePrintSections(t *testing.T) {
 			wantErr: "unknown print preset or section: broken",
 		},
 		{
+			name:    "preset cannot be combined",
+			input:   "basic,ordering",
+			wantErr: `print preset "basic" cannot be combined with section list`,
+		},
+		{
 			name:    "duplicate",
 			input:   "predicates,predicates",
 			wantErr: "duplicate print section: predicates",

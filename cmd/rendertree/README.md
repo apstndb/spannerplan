@@ -68,6 +68,7 @@ The `--print` flag can also select one or more low-level appendix sections:
 - `full` prints all scalar links, including unnamed links, as a raw debug dump.
 
 Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
+Preset names are standalone choices and cannot be mixed into section lists.
 `typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
 
 ### Scalar variable display
