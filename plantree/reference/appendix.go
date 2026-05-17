@@ -24,6 +24,44 @@ const (
 // PrintSections is an ordered list of appendix sections.
 type PrintSections []PrintSection
 
+// PrintPreset selects an intent-based appendix section set.
+type PrintPreset string
+
+const (
+	// PrintPresetBasic prints predicate-like scalar links.
+	PrintPresetBasic PrintPreset = "basic"
+	// PrintPresetEnhanced prints predicate, ordering, and aggregate sections.
+	PrintPresetEnhanced PrintPreset = "enhanced"
+	// PrintPresetFull prints all scalar links, including unnamed links.
+	PrintPresetFull PrintPreset = "full"
+	// PrintPresetNone suppresses appendix sections.
+	PrintPresetNone PrintPreset = "none"
+)
+
+// NewPrintSections returns a config-ready print section pointer.
+// Passing no sections returns an explicit empty section list that suppresses appendices.
+// Use nil to keep the default [PrintPresetBasic] behavior in [RenderConfig].
+func NewPrintSections(sections ...PrintSection) *PrintSections {
+	copied := append(PrintSections{}, sections...)
+	return &copied
+}
+
+// ParsePrintPreset parses one print preset name.
+// Valid values are "basic", "enhanced", "full", and "none" (case-insensitive).
+func ParsePrintPreset(s string) (PrintPreset, error) {
+	preset, err := scalarappendix.ParsePreset(s)
+	return PrintPreset(preset), err
+}
+
+// Sections returns the appendix sections for p.
+func (p PrintPreset) Sections() (PrintSections, error) {
+	sections, err := scalarappendix.Preset(p).Sections()
+	if err != nil {
+		return nil, err
+	}
+	return printSectionsFromScalarAppendix(sections), nil
+}
+
 // ParsePrintSection parses one print-section name.
 // Valid values are "predicates", "ordering", "aggregate", "typed", and "full" (case-insensitive).
 func ParsePrintSection(s string) (PrintSection, error) {
@@ -31,7 +69,8 @@ func ParsePrintSection(s string) (PrintSection, error) {
 	return PrintSection(section), err
 }
 
-// ParsePrintSections parses a comma-separated print-section list.
+// ParsePrintSections parses a named preset or a comma-separated print-section list.
+// Empty or blank input returns a non-nil empty list that suppresses appendices when used explicitly.
 func ParsePrintSections(s string) (PrintSections, error) {
 	sections, err := scalarappendix.ParseSections(s)
 	if err != nil {

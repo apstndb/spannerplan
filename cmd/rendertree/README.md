@@ -52,7 +52,14 @@ Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--m
 
 ## Scalar appendices
 
-`rendertree` prints predicate-like scalar parameters by default. The `--print` flag can select one or more appendix sections:
+`rendertree` prints predicate-like scalar parameters by default. The `--print` flag accepts intent-based presets:
+
+- `basic` prints predicate-like scalar links. This is the default when `--print` is omitted.
+- `enhanced` prints predicates, ordering details, and aggregate details.
+- `full` prints all scalar links, including unnamed links, as a raw debug dump.
+- `none` suppresses appendix output. An explicit empty value, `--print=""`, also suppresses appendix output.
+
+The `--print` flag can also select one or more low-level appendix sections:
 
 - `predicates` prints predicate-like scalar links such as `Condition`, `Residual Condition`, `Seek Condition`, `Search Predicate`, and `Split Range`.
 - `ordering` prints ordering details from `Sort`, `Sort Limit`, `Minor Sort`, and `Minor Sort Limit` operators.
@@ -61,6 +68,7 @@ Note: `--mode=PLAN` and `--mode=PROFILE` can be omitted because the default `--m
 - `full` prints all scalar links, including unnamed links, as a raw debug dump.
 
 Use a comma-separated list for focused sections, for example `--print=predicates,ordering`.
+Preset names are standalone choices and cannot be mixed into section lists.
 `typed` and `full` are intentionally noisy debug dumps and cannot be combined with other sections.
 
 ### Scalar variable display

@@ -691,6 +691,26 @@ func TestParsePrintSections(t *testing.T) {
 			want:  PrintSections{PrintPredicates, PrintOrdering},
 		},
 		{
+			name:  "basic preset",
+			input: "basic",
+			want:  PrintSections{PrintPredicates},
+		},
+		{
+			name:  "enhanced preset",
+			input: " Enhanced ",
+			want:  PrintSections{PrintPredicates, PrintOrdering, PrintAggregate},
+		},
+		{
+			name:  "full preset",
+			input: "full",
+			want:  PrintSections{PrintFull},
+		},
+		{
+			name:  "none preset",
+			input: "none",
+			want:  PrintSections{},
+		},
+		{
 			name:  "empty means no sections",
 			input: "",
 			want:  PrintSections{},
@@ -698,7 +718,12 @@ func TestParsePrintSections(t *testing.T) {
 		{
 			name:    "unknown",
 			input:   "broken",
-			wantErr: "unknown print section: broken",
+			wantErr: `unknown print preset or section: "broken"`,
+		},
+		{
+			name:    "preset cannot be combined",
+			input:   "basic,ordering",
+			wantErr: `print preset "basic" cannot be combined with section list`,
 		},
 		{
 			name:    "duplicate",
@@ -726,6 +751,9 @@ func TestParsePrintSections(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("parsePrintSections() error = %v", err)
+			}
+			if tt.want != nil && got == nil {
+				t.Fatal("parsePrintSections() returned nil, want non-nil explicit sections")
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("parsePrintSections() mismatch (-want +got):\n%s", diff)
@@ -818,7 +846,7 @@ func TestRun_UsageErrors(t *testing.T) {
 		{
 			name:        "invalid print",
 			args:        []string{"-print", "broken"},
-			wantErrText: "unknown print section: broken",
+			wantErrText: `unknown print preset or section: "broken"`,
 			postCheck: func(t *testing.T, stderr string, err error) {
 				t.Helper()
 				if !strings.Contains(stderr, "Invalid value for -print flag:") {

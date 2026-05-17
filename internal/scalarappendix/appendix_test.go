@@ -28,6 +28,26 @@ func TestParseSections(t *testing.T) {
 			want:  Sections{SectionPredicates, SectionOrdering, SectionAggregate},
 		},
 		{
+			name:  "basic preset",
+			input: "basic",
+			want:  Sections{SectionPredicates},
+		},
+		{
+			name:  "enhanced preset",
+			input: " Enhanced ",
+			want:  Sections{SectionPredicates, SectionOrdering, SectionAggregate},
+		},
+		{
+			name:  "full preset",
+			input: "full",
+			want:  Sections{SectionFull},
+		},
+		{
+			name:  "none preset",
+			input: "none",
+			want:  Sections{},
+		},
+		{
 			name:  "empty means no sections",
 			input: "",
 			want:  Sections{},
@@ -45,7 +65,12 @@ func TestParseSections(t *testing.T) {
 		{
 			name:    "unknown",
 			input:   "broken",
-			wantErr: "unknown print section: broken",
+			wantErr: `unknown print preset or section: "broken"`,
+		},
+		{
+			name:    "preset cannot be combined",
+			input:   "basic,ordering",
+			wantErr: `print preset "basic" cannot be combined with section list`,
 		},
 		{
 			name:    "duplicate",
@@ -74,8 +99,62 @@ func TestParseSections(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseSections() error = %v", err)
 			}
+			if tt.want != nil && got == nil {
+				t.Fatal("ParseSections() returned nil, want non-nil explicit sections")
+			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("ParseSections() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestParsePreset(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    Preset
+		wantErr string
+	}{
+		{
+			name:  "basic",
+			input: " BASIC ",
+			want:  PresetBasic,
+		},
+		{
+			name:    "empty is not preset",
+			input:   "",
+			wantErr: `unknown print preset: ""`,
+		},
+		{
+			name:    "unknown",
+			input:   "broken",
+			wantErr: `unknown print preset: "broken"`,
+		},
+		{
+			name:    "comma-separated list is not preset",
+			input:   "enhanced,ordering",
+			wantErr: `unknown print preset: "enhanced,ordering"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParsePreset(tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("ParsePreset() error = nil, want non-nil")
+				}
+				if got := err.Error(); got != tt.wantErr {
+					t.Fatalf("ParsePreset() error = %q, want %q", got, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParsePreset() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("ParsePreset() = %q, want %q", got, tt.want)
 			}
 		})
 	}
