@@ -4,6 +4,21 @@
 
 Spanner QueryPlan manipulation module.
 
+## Directory overview
+
+- [`asciitable`](./asciitable): Generic ASCII table and appendix rendering helpers.
+- [`cmd/lintplan`](./cmd/lintplan): CLI for printing heuristic warnings about expensive plan operators.
+- [`cmd/rendertree`](./cmd/rendertree): CLI for rendering Spanner query plans and profiles as ASCII tables.
+- [`examples/pgexplainjson`](./examples/pgexplainjson): Example renderer for PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` output.
+- [`examples/wasm/render`](./examples/wasm/render): Minimal WebAssembly wrapper around the reference renderer.
+- [`internal`](./internal): Internal subpackages that are not recommended for external use.
+- [`lab`](./lab): Small ad hoc scripts and experiments.
+- [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives.
+- [`plantree/reference`](./plantree/reference): High-level reference renderer API for Go, browser, and WebAssembly callers.
+- [`protoyaml`](./protoyaml) (internal): YAML and JSON helpers for decoding protobuf query plan data; external use is not recommended.
+- [`stats`](./stats): Execution statistics types and extraction helpers.
+- [`treerender`](./treerender): Generic ASCII tree renderer with wrapping support.
+
 ## Browser and WASM embedding
 
 For browser-facing renderers, use `github.com/apstndb/spannerplan/plantree/reference`
@@ -39,21 +54,6 @@ if (result.error) {
 
 console.log(result.output)
 ```
-
-## Directory overview
-
-- [`asciitable`](./asciitable): Generic ASCII table and appendix rendering helpers.
-- [`cmd/lintplan`](./cmd/lintplan): CLI for printing heuristic warnings about expensive plan operators.
-- [`cmd/rendertree`](./cmd/rendertree): CLI for rendering Spanner query plans and profiles as ASCII tables.
-- [`examples/pgexplainjson`](./examples/pgexplainjson): Example renderer for PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` output.
-- [`examples/wasm/render`](./examples/wasm/render): Minimal WebAssembly wrapper around the reference renderer.
-- [`internal/scalarappendix`](./internal/scalarappendix): Shared scalar appendix parsing and rendering used by CLI and reference renderers.
-- [`lab`](./lab): Small ad hoc scripts and experiments.
-- [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives.
-- [`plantree/reference`](./plantree/reference): High-level reference renderer API for Go, browser, and WebAssembly callers.
-- [`protoyaml`](./protoyaml): YAML and JSON helpers for decoding protobuf query plan data.
-- [`stats`](./stats): Execution statistics types and extraction helpers.
-- [`treerender`](./treerender): Generic ASCII tree renderer with wrapping support.
 
 ## Disclaimer
 
