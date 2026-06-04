@@ -286,6 +286,9 @@ The older `--custom=<name>:<template>[:<align>[:<inline_type>]]` form is still a
 
 `rendertree` supports compact formatting and wrapping for limited-width environments.
 
+- `--layout=tableless` removes the ASCII table grid and renders rows as `ID|Operator` lines.
+  - `--tableless` is a shortcut for `--layout=tableless`.
+  - This layout can be combined with `--compact`, `--wrap-width`, and `--inline-stats`.
 - `--compact` enables the compact format:
   - Each level of depth in the Query Plan tree adds only one character to its indentation.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.
@@ -319,6 +322,15 @@ $ rendertree --compact --wrap-width=60 < testdata/distributed_cross_apply.yaml
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+```
+
+```
+$ rendertree --tableless --compact --wrap-width=40 < testdata/distributed_cross_apply.yaml
+  0|Distributed Union on AlbumsByAlbumTitle<
+   |Row>
+ *1|+Distributed Cross Apply<Row>
+  2| +[Input]Create Batch<Row>
+...
 ```
 
 ```

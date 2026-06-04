@@ -89,6 +89,69 @@ func TestRenderTable_RowIndex(t *testing.T) {
 	}
 }
 
+func TestRenderTableless(t *testing.T) {
+	rows := []testRow{
+		{id: 1, idText: "1", text: "Root", rows: "10"},
+		{id: 12, idText: "*12", text: "+- Child", rows: "3"},
+	}
+	spec := asciitable.TableSpec[testRow]{
+		Columns: []asciitable.Column[testRow]{
+			idColumn(),
+			operatorColumn(),
+			{
+				Header:    "Rows",
+				Alignment: asciitable.AlignRight,
+				Cell: func(row testRow, _ int) string {
+					return row.rows
+				},
+			},
+		},
+	}
+
+	got, err := asciitable.RenderTableless(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderTableless() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		  1|Root|10
+		*12|+- Child|3
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTableless() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTableless_PreservesMultilineCells(t *testing.T) {
+	rows := []testRow{
+		{id: 1, idText: "1", text: "Root\n+- Child"},
+	}
+	spec := asciitable.TableSpec[testRow]{
+		Columns: []asciitable.Column[testRow]{
+			idColumn(),
+			operatorColumn(),
+			{
+				Header:    "Rows",
+				Alignment: asciitable.AlignRight,
+				Cell: func(row testRow, _ int) string {
+					return row.rows
+				},
+			},
+		},
+	}
+
+	got, err := asciitable.RenderTableless(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderTableless() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		1|Root
+		 |+- Child
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTableless() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRenderTable_PreservesMultilineCells(t *testing.T) {
 	rows := []testRow{
 		{id: 1, idText: "1", text: "Root\n+- Child"},

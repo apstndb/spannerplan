@@ -9,8 +9,8 @@
 // For browser or WebAssembly embeddings, this package is the recommended
 // high-level renderer entrypoint: decode serialized query plan JSON into
 // spannerpb.QueryPlan with protojson, parse string inputs with [ParseRenderMode]
-// and [ParseFormat], then call [RenderTreeTableWithConfig] with
-// plan.GetPlanNodes().
+// and [ParseFormat] (and [ParseLayout] when accepting layout strings), then call
+// [RenderTreeTableWithConfig] with plan.GetPlanNodes().
 // The repository's examples/wasm/render example shows a small syscall/js wrapper
 // with that flow.
 package reference
@@ -42,6 +42,7 @@ const (
 type options struct {
 	wrapWidth                  int
 	hangingIndent              bool
+	layout                     Layout
 	printSections              *PrintSections
 	showScalarVars             bool
 	resolveScalarVars          bool
@@ -61,6 +62,9 @@ type RenderConfig struct {
 	// HangingIndent hangs wrapped continuation lines after node-local prefixes such as
 	// `[Input] ` and `[Map] ` instead of keeping the default tree-aligned indentation.
 	HangingIndent bool `json:"hangingIndent,omitempty"`
+
+	// Layout selects the rendered table layout. Empty uses [LayoutTable].
+	Layout Layout `json:"layout,omitempty"`
 
 	// PrintSections selects appendix sections printed after the rendered tree table.
 	// A nil pointer uses the default [PrintPredicates] section.
@@ -104,6 +108,13 @@ func WithWrapWidth(width int) Option {
 func WithHangingIndent() Option {
 	return func(o *options) {
 		o.hangingIndent = true
+	}
+}
+
+// WithLayout selects the rendered table layout.
+func WithLayout(layout Layout) Option {
+	return func(o *options) {
+		o.layout = layout
 	}
 }
 
@@ -183,6 +194,7 @@ func optionsFromConfig(config RenderConfig) options {
 	o := options{
 		wrapWidth:                  config.WrapWidth,
 		hangingIndent:              config.HangingIndent,
+		layout:                     config.Layout,
 		showScalarVars:             config.ShowScalarVars,
 		resolveScalarVars:          config.ResolveScalarVars,
 		resolveScalarVarsRecursive: config.ResolveScalarVarsRecursive,
@@ -202,6 +214,10 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 	if o.wrapWidth < 0 {
 		return "", fmt.Errorf("wrapWidth cannot be negative: %d", o.wrapWidth)
 	}
+	resolvedLayout, err := normalizeLayout(o.layout)
+	if err != nil {
+		return "", err
+	}
 
 	var withStats bool
 	switch mode {
@@ -220,7 +236,7 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", err
 	}
 
-	tablePart, err := renderTablePart(rendered, withStats)
+	tablePart, err := renderTablePart(rendered, withStats, resolvedLayout)
 	if err != nil {
 		return "", err
 	}
@@ -233,8 +249,16 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 	return tablePart + appendixPart, nil
 }
 
-func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool) (string, error) {
-	return asciitable.RenderTable(rendered, spannerTableSpec(withStats))
+func renderTablePart(rendered []plantree.RowWithPredicates, withStats bool, layout Layout) (string, error) {
+	spec := spannerTableSpec(withStats)
+	switch layout {
+	case LayoutTable:
+		return asciitable.RenderTable(rendered, spec)
+	case LayoutTableless:
+		return asciitable.RenderTableless(rendered, spec)
+	default:
+		return "", fmt.Errorf("unsupported layout: %s", layout)
+	}
 }
 
 func spannerTableSpec(withStats bool) asciitable.TableSpec[plantree.RowWithPredicates] {
@@ -284,6 +308,36 @@ func spannerTableSpec(withStats bool) asciitable.TableSpec[plantree.RowWithPredi
 		},
 	)
 	return spec
+}
+
+// Layout specifies how the rendered table rows are laid out.
+type Layout string
+
+const (
+	// LayoutTable renders rows as an ASCII table grid.
+	LayoutTable Layout = "TABLE"
+	// LayoutTableless renders rows without a table grid, as pipe-separated lines.
+	LayoutTableless Layout = "TABLELESS"
+)
+
+// ParseLayout parses a string into a Layout.
+// Valid values are "TABLE" and "TABLELESS" (case-insensitive).
+func ParseLayout(str string) (Layout, error) {
+	switch strings.ToUpper(str) {
+	case string(LayoutTable):
+		return LayoutTable, nil
+	case string(LayoutTableless):
+		return LayoutTableless, nil
+	default:
+		return "", fmt.Errorf("unknown layout: %s", str)
+	}
+}
+
+func normalizeLayout(layout Layout) (Layout, error) {
+	if layout == "" {
+		return LayoutTable, nil
+	}
+	return ParseLayout(string(layout))
 }
 
 // Format specifies the formatting style for the query plan output.

@@ -8,7 +8,7 @@ This is a v0 module, so breaking changes are possible across all packages before
 
 ## Directory overview
 
-- [`asciitable`](./asciitable): Generic ASCII table and appendix rendering helpers.
+- [`asciitable`](./asciitable): Generic ASCII table, tableless row, and appendix rendering helpers.
 - [`cmd/lintplan`](./cmd/lintplan): CLI for printing heuristic warnings about expensive plan operators.
 - [`cmd/rendertree`](./cmd/rendertree): CLI for rendering Spanner query plans and profiles as ASCII tables.
 - [`examples/pgexplainjson`](./examples/pgexplainjson): Example renderer for PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` output.
@@ -47,7 +47,7 @@ const result = globalThis.spannerplanRenderTreeTable(
   queryPlanJson,
   "AUTO",
   "CURRENT",
-  {wrapWidth: 80, hangingIndent: true},
+  {wrapWidth: 80, hangingIndent: true, layout: "tableless"},
 )
 
 if (result.error) {

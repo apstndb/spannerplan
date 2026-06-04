@@ -70,22 +70,9 @@ type appendixRow struct {
 
 // RenderTable renders rows using spec.
 func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
-	if len(spec.Columns) == 0 {
-		return "", fmt.Errorf("table spec must contain at least one column")
-	}
-
-	headers := make([]string, 0, len(spec.Columns))
-	alignments := make([]tw.Align, 0, len(spec.Columns))
-	for i, col := range spec.Columns {
-		if col.Cell == nil {
-			return "", fmt.Errorf("table spec column %d (%q) has nil Cell", i, col.Header)
-		}
-		alignment, err := mapAlignment(col.Alignment)
-		if err != nil {
-			return "", fmt.Errorf("table spec column %d (%q): %w", i, col.Header, err)
-		}
-		headers = append(headers, col.Header)
-		alignments = append(alignments, alignment)
+	tableRows, headers, alignments, err := collectTableRows(rows, spec)
+	if err != nil {
+		return "", err
 	}
 
 	var sb strings.Builder
@@ -101,12 +88,7 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 	)
 	table.Header(headers)
 
-	for i, row := range rows {
-		rowData := make([]string, len(spec.Columns))
-		for j, col := range spec.Columns {
-			rowData[j] = col.Cell(row, i)
-		}
-
+	for i, rowData := range tableRows {
 		if err := table.Append(rowData); err != nil {
 			return "", fmt.Errorf("failed to append row at index %d: %w", i, err)
 		}
@@ -114,6 +96,33 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 
 	if err := table.Render(); err != nil {
 		return "", fmt.Errorf("failed to render table: %w", err)
+	}
+	return sb.String(), nil
+}
+
+// RenderTableless renders rows without a table grid, using "|" as a one-character column separator.
+func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
+	tableRows, _, alignments, err := collectTableRows(rows, spec)
+	if err != nil {
+		return "", err
+	}
+
+	firstColumnWidth := maxTableColumnLineWidth(tableRows, 0)
+
+	var sb strings.Builder
+	for _, row := range tableRows {
+		lines := splitTableRowLines(row)
+		for _, line := range lines {
+			line[0] = alignTablelessFirstCell(line[0], firstColumnWidth, alignments[0])
+			for len(line) > 0 && line[len(line)-1] == "" {
+				line = line[:len(line)-1]
+			}
+			if len(line) == 0 {
+				continue
+			}
+			sb.WriteString(strings.Join(line, "|"))
+			sb.WriteByte('\n')
+		}
 	}
 	return sb.String(), nil
 }
@@ -142,6 +151,86 @@ func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
 		}
 	}
 	return sb.String(), nil
+}
+
+func collectTableRows[T any](rows []T, spec TableSpec[T]) ([][]string, []string, []tw.Align, error) {
+	if len(spec.Columns) == 0 {
+		return nil, nil, nil, fmt.Errorf("table spec must contain at least one column")
+	}
+
+	headers := make([]string, 0, len(spec.Columns))
+	alignments := make([]tw.Align, 0, len(spec.Columns))
+	for i, col := range spec.Columns {
+		if col.Cell == nil {
+			return nil, nil, nil, fmt.Errorf("table spec column %d (%q) has nil Cell", i, col.Header)
+		}
+		alignment, err := mapAlignment(col.Alignment)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("table spec column %d (%q): %w", i, col.Header, err)
+		}
+		headers = append(headers, col.Header)
+		alignments = append(alignments, alignment)
+	}
+
+	tableRows := make([][]string, 0, len(rows))
+	for i, row := range rows {
+		rowData := make([]string, len(spec.Columns))
+		for j, col := range spec.Columns {
+			rowData[j] = col.Cell(row, i)
+		}
+		tableRows = append(tableRows, rowData)
+	}
+	return tableRows, headers, alignments, nil
+}
+
+func maxTableColumnLineWidth(rows [][]string, column int) int {
+	var width int
+	for _, row := range rows {
+		if column >= len(row) {
+			continue
+		}
+		for _, line := range strings.Split(row[column], "\n") {
+			width = max(width, tabwrap.StringWidth(line))
+		}
+	}
+	return width
+}
+
+func splitTableRowLines(row []string) [][]string {
+	height := 1
+	splitCells := make([][]string, 0, len(row))
+	for _, cell := range row {
+		lines := strings.Split(cell, "\n")
+		height = max(height, len(lines))
+		splitCells = append(splitCells, lines)
+	}
+
+	result := make([][]string, 0, height)
+	for i := range height {
+		line := make([]string, len(splitCells))
+		for j, cellLines := range splitCells {
+			if i < len(cellLines) {
+				line[j] = cellLines[i]
+			}
+		}
+		result = append(result, line)
+	}
+	return result
+}
+
+func alignTablelessFirstCell(s string, width int, alignment tw.Align) string {
+	if alignment == tw.AlignRight {
+		return leftPadDisplay(s, width)
+	}
+	return s
+}
+
+func leftPadDisplay(s string, width int) string {
+	currentWidth := tabwrap.StringWidth(s)
+	if currentWidth >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-currentWidth) + s
 }
 
 func collectAppendixRows[T any](rows []T, spec AppendixSpec[T]) (appendixRows, error) {

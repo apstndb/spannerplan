@@ -88,6 +88,7 @@ func TestRenderTree(t *testing.T) {
 		desc      string
 		input     []byte
 		renderDef tableRenderDef
+		layout    layout
 		inline    bool
 		opts      []plantree.Option
 		want      string
@@ -174,6 +175,36 @@ Predicates(identified by ID):
 |  18 |      +Index Scan on SongsBySongGenre<Row |
 |     |       >(Full scan,scan_method:Row)       |
 +-----+------------------------------------------+
+
+Predicates(identified by ID):
+  1: Split Range: ($AlbumId = $AlbumId_1)
+ 17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+`),
+		},
+		{
+			desc:      "tableless wrapped compact PLAN",
+			input:     dcaYAML,
+			renderDef: withStatsToRenderDefMap[false],
+			layout:    layoutTableless,
+			opts:      sliceOf(plantree.EnableCompact(), plantree.WithWrapWidth(40)),
+			want: heredoc.Doc(`
+  0|Distributed Union on AlbumsByAlbumTitle<
+   |Row>
+ *1|+Distributed Cross Apply<Row>
+  2| +[Input]Create Batch<Row>
+  3| |+Local Distributed Union<Row>
+  4| | +Compute Struct<Row>
+  5| |  +Index Scan on AlbumsByAlbumTitle<Ro
+   | |   w>(Full scan,scan_method:Automatic)
+ 11| +[Map]Serialize Result<Row>
+ 12|  +Cross Apply<Row>
+ 13|   +[Input]Batch Scan on $v2<Row>(scan_m
+   |   |ethod:Row)
+ 16|   +[Map]Local Distributed Union<Row>
+*17|    +Filter Scan<Row>(seekable_key_size:
+   |     0)
+ 18|     +Index Scan on SongsBySongGenre<Row
+   |      >(Full scan,scan_method:Row)
 
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
@@ -414,6 +445,7 @@ Predicates(identified by ID):
 
 			got, err := renderTreeImpl(stats.GetQueryPlan().GetPlanNodes(), renderTreeOptions{
 				renderDef:            tcase.renderDef,
+				layout:               tcase.layout,
 				printSections:        PrintSections{PrintPredicates},
 				disallowUnknownStats: true,
 				inlineStats:          tcase.inline,
@@ -916,6 +948,28 @@ func TestRun_UsageErrors(t *testing.T) {
 			},
 		},
 		{
+			name:        "invalid layout",
+			args:        []string{"-layout", "broken"},
+			wantErrText: "invalid input: broken",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "Invalid value for -layout flag:") {
+					t.Fatalf("stderr = %q, want invalid layout message", stderr)
+				}
+			},
+		},
+		{
+			name:        "tableless and table layout are mutually exclusive",
+			args:        []string{"-layout", "table", "-tableless"},
+			wantErrText: "--tableless and --layout=table are mutually exclusive",
+			postCheck: func(t *testing.T, stderr string, err error) {
+				t.Helper()
+				if !strings.Contains(stderr, "--tableless and --layout=table are mutually exclusive") {
+					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
+				}
+			},
+		},
+		{
 			name:        "invalid hanging-indent",
 			args:        []string{"-hanging-indent=broken"},
 			wantErrText: "invalid boolean value \"broken\" for -hanging-indent",
@@ -946,6 +1000,68 @@ func TestRun_UsageErrors(t *testing.T) {
 				t.Fatalf("stdout = %q, want empty", stdout.String())
 			}
 		})
+	}
+}
+
+func TestRun_TablelessShortcutMatchesLayout(t *testing.T) {
+	t.Parallel()
+
+	args := []string{"-mode", "plan", "-print", "none"}
+	var layoutStdout bytes.Buffer
+	var layoutStderr bytes.Buffer
+	if err := run(append(args, "-layout", "tableless"), bytes.NewReader(deleteYAML), &layoutStdout, &layoutStderr); err != nil {
+		t.Fatalf("run(-layout tableless) error = %v", err)
+	}
+
+	var shortcutStdout bytes.Buffer
+	var shortcutStderr bytes.Buffer
+	if err := run(append(args, "-tableless"), bytes.NewReader(deleteYAML), &shortcutStdout, &shortcutStderr); err != nil {
+		t.Fatalf("run(-tableless) error = %v", err)
+	}
+
+	if got := layoutStderr.String() + shortcutStderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+	if diff := cmp.Diff(layoutStdout.String(), shortcutStdout.String()); diff != "" {
+		t.Fatalf("-tableless output mismatch (-layout +shortcut):\n%s", diff)
+	}
+	if strings.Contains(shortcutStdout.String(), "+----") || strings.Contains(shortcutStdout.String(), "| ID ") {
+		t.Fatalf("stdout contains table border/header:\n%s", shortcutStdout.String())
+	}
+	if !strings.Contains(shortcutStdout.String(), "0|Apply Mutations on MutationTest <Row>") {
+		t.Fatalf("stdout = %q, want tableless ID/operator separator", shortcutStdout.String())
+	}
+}
+
+func TestRun_TablelessInlineStatsWrappedProfile(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"-mode", "profile",
+		"-print", "none",
+		"-layout", "tableless",
+		"-compact",
+		"-inline-stats",
+		"-wrap-width", "40",
+	}, bytes.NewReader(dcaProfileYAML), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run(tableless inline profile) error = %v", err)
+	}
+
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+	out := stdout.String()
+	if strings.Contains(out, "+-----") || strings.Contains(out, "| ID ") {
+		t.Fatalf("stdout contains table border/header:\n%s", out)
+	}
+	if !strings.Contains(out, "  0|Distributed Union on AlbumsByAlbumTitle<\n   |Row>(Rows=33,Exec.=1,Latency=1.92 ms)") {
+		t.Fatalf("stdout = %q, want wrapped inline stats in Operator column", out)
+	}
+	if !strings.Contains(out, "*17|    +Filter Scan<Row>(seekable_key_size:") {
+		t.Fatalf("stdout = %q, want predicate marker alignment", out)
 	}
 }
 
