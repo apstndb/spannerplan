@@ -114,7 +114,7 @@ func TestRenderTableless(t *testing.T) {
 	}
 	want := heredoc.Doc(`
 		  1|Root|10
-		*12|+- Child|3
+		*12|+- Child| 3
 	`)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("RenderTableless() mismatch (-want +got):\n%s", diff)

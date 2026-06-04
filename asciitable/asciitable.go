@@ -101,15 +101,15 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 }
 
 // RenderTableless renders rows without a table grid, using "|" as a one-character column separator.
-// Only the first column's alignment is applied so ID-like columns stay readable without padding
-// every subsequent column.
+// Right-aligned columns are left-padded to their own maximum content width; left-aligned columns
+// are not padded, so wide text columns do not reintroduce table-grid width.
 func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
 	tableRows, _, alignments, err := collectTableRows(rows, spec)
 	if err != nil {
 		return "", err
 	}
 
-	firstColumnWidth := maxTableColumnLineWidth(tableRows, 0)
+	columnWidths := maxTableColumnLineWidths(tableRows, len(alignments))
 
 	var sb strings.Builder
 	for _, row := range tableRows {
@@ -121,7 +121,9 @@ func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
 			if len(line) == 0 {
 				continue
 			}
-			line[0] = alignTablelessFirstCell(line[0], firstColumnWidth, alignments[0])
+			for i := range line {
+				line[i] = alignTablelessCell(line[i], columnWidths[i], alignments[i])
+			}
 			sb.WriteString(strings.Join(line, "|"))
 			sb.WriteByte('\n')
 		}
@@ -185,17 +187,19 @@ func collectTableRows[T any](rows []T, spec TableSpec[T]) ([][]string, []string,
 	return tableRows, headers, alignments, nil
 }
 
-func maxTableColumnLineWidth(rows [][]string, column int) int {
-	var width int
+func maxTableColumnLineWidths(rows [][]string, columns int) []int {
+	widths := make([]int, columns)
 	for _, row := range rows {
-		if column >= len(row) {
-			continue
-		}
-		for _, line := range strings.Split(row[column], "\n") {
-			width = max(width, tabwrap.StringWidth(line))
+		for i, cell := range row {
+			if i >= len(widths) {
+				break
+			}
+			for _, line := range strings.Split(cell, "\n") {
+				widths[i] = max(widths[i], tabwrap.StringWidth(line))
+			}
 		}
 	}
-	return width
+	return widths
 }
 
 func splitTableRowLines(row []string) [][]string {
@@ -220,7 +224,7 @@ func splitTableRowLines(row []string) [][]string {
 	return result
 }
 
-func alignTablelessFirstCell(s string, width int, alignment tw.Align) string {
+func alignTablelessCell(s string, width int, alignment tw.Align) string {
 	if alignment == tw.AlignRight {
 		return leftPadDisplay(s, width)
 	}
