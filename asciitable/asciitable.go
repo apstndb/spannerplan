@@ -101,6 +101,8 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 }
 
 // RenderTableless renders rows without a table grid, using "|" as a one-character column separator.
+// Only the first column's alignment is applied so ID-like columns stay readable without padding
+// every subsequent column.
 func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
 	tableRows, _, alignments, err := collectTableRows(rows, spec)
 	if err != nil {
@@ -113,13 +115,13 @@ func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
 	for _, row := range tableRows {
 		lines := splitTableRowLines(row)
 		for _, line := range lines {
-			line[0] = alignTablelessFirstCell(line[0], firstColumnWidth, alignments[0])
 			for len(line) > 0 && line[len(line)-1] == "" {
 				line = line[:len(line)-1]
 			}
 			if len(line) == 0 {
 				continue
 			}
+			line[0] = alignTablelessFirstCell(line[0], firstColumnWidth, alignments[0])
 			sb.WriteString(strings.Join(line, "|"))
 			sb.WriteByte('\n')
 		}

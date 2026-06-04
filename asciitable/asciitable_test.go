@@ -152,6 +152,31 @@ func TestRenderTableless_PreservesMultilineCells(t *testing.T) {
 	}
 }
 
+func TestRenderTableless_SkipsAllEmptyLinesBeforeAlignment(t *testing.T) {
+	rows := []testRow{
+		{idText: "12", text: "Root"},
+		{idText: "", text: "\nChild"},
+	}
+	spec := asciitable.TableSpec[testRow]{
+		Columns: []asciitable.Column[testRow]{
+			idColumn(),
+			operatorColumn(),
+		},
+	}
+
+	got, err := asciitable.RenderTableless(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderTableless() error = %v", err)
+	}
+	want := heredoc.Doc(`
+		12|Root
+		  |Child
+	`)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTableless() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRenderTable_PreservesMultilineCells(t *testing.T) {
 	rows := []testRow{
 		{id: 1, idText: "1", text: "Root\n+- Child"},
