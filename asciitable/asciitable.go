@@ -102,7 +102,8 @@ func RenderTable[T any](rows []T, spec TableSpec[T]) (string, error) {
 
 // RenderTableless renders rows without a table grid, using "|" as a one-character column separator.
 // Right-aligned columns are left-padded to their own maximum content width; left-aligned columns
-// are not padded, so wide text columns do not reintroduce table-grid width.
+// are not padded, so wide text columns do not reintroduce table-grid width. Center alignment is
+// not supported by this layout and is rendered as unpadded text.
 func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
 	tableRows, _, alignments, err := collectTableRows(rows, spec)
 	if err != nil {
@@ -228,6 +229,8 @@ func alignTablelessCell(s string, width int, alignment tw.Align) string {
 	if alignment == tw.AlignRight {
 		return leftPadDisplay(s, width)
 	}
+	// Tableless output intentionally supports only right-padding behavior; center
+	// alignment would require adding both-side padding and reintroduce grid width.
 	return s
 }
 
