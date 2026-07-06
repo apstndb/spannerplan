@@ -54,7 +54,7 @@ var (
 type ValidationError struct {
 	// Kind is the category sentinel for this failure, e.g.
 	// ErrChildLinkIndexOutOfRange. It is always one of the exported
-	// Err* sentinels and always satisfies errors.Is against ErrInvalidPlan.
+	// Err* sentinels; the ValidationError itself also wraps ErrInvalidPlan.
 	Kind error
 	// NodeIndex is the plan-node index (equivalently, slice position, which
 	// New requires to match) involved in the failure, or -1 when no single
