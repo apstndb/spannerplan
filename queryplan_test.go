@@ -86,6 +86,101 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNewValidationError(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          []*sppb.PlanNode
+		wantKind       error
+		wantNodeIndex  int
+		wantChildIndex int
+		wantMessage    string
+	}{
+		{
+			name:           "empty",
+			input:          nil,
+			wantKind:       ErrEmptyPlanNodes,
+			wantNodeIndex:  -1,
+			wantChildIndex: -1,
+			wantMessage:    "spannerplan: planNodes cannot be empty",
+		},
+		{
+			name:           "nil node",
+			input:          []*sppb.PlanNode{nil},
+			wantKind:       ErrNilPlanNode,
+			wantNodeIndex:  0,
+			wantChildIndex: -1,
+			wantMessage:    "spannerplan: planNode cannot be nil: at slice position 0",
+		},
+		{
+			name:           "index mismatch",
+			input:          []*sppb.PlanNode{{Index: 1}},
+			wantKind:       ErrPlanNodeIndexMismatch,
+			wantNodeIndex:  0,
+			wantChildIndex: -1,
+			wantMessage:    "spannerplan: planNode index must match slice position: at slice position 0 expected index 0, got 1",
+		},
+		{
+			name:           "nil child link",
+			input:          []*sppb.PlanNode{{Index: 0, ChildLinks: []*sppb.PlanNode_ChildLink{nil}}},
+			wantKind:       ErrNilChildLink,
+			wantNodeIndex:  0,
+			wantChildIndex: 0,
+			wantMessage:    "spannerplan: childLink cannot be nil: parent node 0 childLinks[0]",
+		},
+		{
+			name: "child link index out of range",
+			input: []*sppb.PlanNode{
+				{Index: 0, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 99}}},
+				{Index: 1},
+			},
+			wantKind:       ErrChildLinkIndexOutOfRange,
+			wantNodeIndex:  0,
+			wantChildIndex: 0,
+			// This exact text is pinned by downstream golden tests
+			// (e.g. spanner-mycli). It must not change.
+			wantMessage: "spannerplan: childLink childIndex out of range: parent node 0 childLinks[0] has childIndex 99, len(planNodes)=2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := New(tt.input)
+			if err == nil {
+				t.Fatal("New() error = nil, want error")
+			}
+
+			// Umbrella sentinel matches every validation failure.
+			if !errors.Is(err, ErrInvalidPlan) {
+				t.Errorf("errors.Is(err, ErrInvalidPlan) = false, want true (err = %v)", err)
+			}
+			// The specific category sentinel matches.
+			if !errors.Is(err, tt.wantKind) {
+				t.Errorf("errors.Is(err, %v) = false, want true (err = %v)", tt.wantKind, err)
+			}
+
+			// The typed error exposes structured fields.
+			var verr *ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("errors.As(err, *ValidationError) = false, want true (err = %v)", err)
+			}
+			if verr.Kind != tt.wantKind {
+				t.Errorf("verr.Kind = %v, want %v", verr.Kind, tt.wantKind)
+			}
+			if verr.NodeIndex != tt.wantNodeIndex {
+				t.Errorf("verr.NodeIndex = %d, want %d", verr.NodeIndex, tt.wantNodeIndex)
+			}
+			if verr.ChildIndex != tt.wantChildIndex {
+				t.Errorf("verr.ChildIndex = %d, want %d", verr.ChildIndex, tt.wantChildIndex)
+			}
+
+			// Message text is preserved exactly for downstream consumers.
+			if got := err.Error(); got != tt.wantMessage {
+				t.Errorf("err.Error() = %q, want %q", got, tt.wantMessage)
+			}
+		})
+	}
+}
+
 func TestHasStats(t *testing.T) {
 	tests := []struct {
 		name  string
