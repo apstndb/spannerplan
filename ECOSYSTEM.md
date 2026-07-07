@@ -41,6 +41,6 @@ As of 2026-07-08:
 
 | Consumer | Validated against |
 |---|---|
-| spannerplanviz v0.9.1 | spannerplan v0.1.11 |
-| rendertree-web (rolling) | spannerplan v0.1.11, spannerplanviz v0.9.1 |
-| spannerplan-rs v0.1.0-alpha.1 | spannerplan `cmd/rendertree` v0.1.11 (parity CI) |
+| spannerplanviz v0.9.2 | spannerplan v0.2.0 |
+| rendertree-web (rolling) | spannerplan v0.2.0, spannerplanviz v0.9.2 |
+| spannerplan-rs (main, post-v0.1.0-alpha.1) | spannerplan `cmd/rendertree` v0.2.0 (parity CI) |
