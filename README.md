@@ -6,6 +6,8 @@ Spanner QueryPlan manipulation module.
 
 This is a v0 module, so breaking changes are possible across all packages before v1.
 
+See [ECOSYSTEM.md](ECOSYSTEM.md) for how this module relates to spannerplan-rs, spannerplanviz, and rendertree-web.
+
 ## Directory overview
 
 - [`asciitable`](./asciitable): Generic ASCII table and appendix rendering helpers.
