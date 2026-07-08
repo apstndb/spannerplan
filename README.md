@@ -19,7 +19,7 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for how this module relates to spannerplan-rs, 
 - [`lab`](./lab): Small ad hoc scripts and experiments.
 - [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives.
 - [`plantree/reference`](./plantree/reference): High-level reference renderer API for Go, browser, and WebAssembly callers.
-- [`protoyaml`](./protoyaml) (project-internal helper): YAML and JSON helpers used by this module for decoding protobuf query plan data. External use is not recommended; it is especially likely to be removed or moved behind unexported/internal helpers because it exists for internal use rather than as a supported public API.
+- [`protoyaml`](./protoyaml) (**deprecated, frozen**): YAML and JSON helpers formerly used by this module for decoding protobuf query plan data. It is frozen for downstream compatibility (spanner-mycli pins its exact `Marshal` output) and will be removed in v0.3.0. New code should use [`github.com/apstndb/protoyaml`](https://github.com/apstndb/protoyaml), the canonical protojson-over-YAML mapping.
 - [`stats`](./stats): Execution statistics types and extraction helpers.
 - [`treerender`](./treerender): Generic ASCII tree renderer with wrapping support.
 
