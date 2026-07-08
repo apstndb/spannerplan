@@ -32,8 +32,21 @@ embed a Graphviz runtime into WASM binaries.
   breaking events for downstream golden tests even when the API is
   unchanged.
 - Release checklist for spannerplan/spannerplanviz: before tagging, check
-  downstream pins and golden suites (spanner-mycli, spanner-cli,
-  rendertree-web, spannerplan-rs).
+  downstream pins and golden suites (spanner-mycli — the direct API
+  downstream; rendertree-web; spannerplan-rs). cloudspannerecosystem/spanner-cli
+  has its own renderer and does not consume spannerplan; treat it as an
+  output-semantics comparator, not a release blocker.
+- Dependency minimums: modules consumed as libraries (spannerplan,
+  spannerplanviz) keep their go.mod dependency floors low for MVS
+  friendliness — bumping a library's minimums raises the floor for every
+  downstream. Dependency and security updates happen in applications
+  (rendertree-web, spanner-mycli). Do not raise library minimums except when
+  new code requires it.
+- YAML handling: the Go repositories standardize on goccy/go-yaml, accessed
+  through [apstndb/protoyaml](https://github.com/apstndb/protoyaml) — a
+  general-purpose canonical protojson⇄YAML utility that originated in this
+  ecosystem but is versioned and governed independently (it is not part of
+  this release train).
 
 ## Compatibility matrix
 
@@ -41,6 +54,6 @@ As of 2026-07-08:
 
 | Consumer | Validated against |
 |---|---|
-| spannerplanviz v0.9.2 | spannerplan v0.2.0 |
-| rendertree-web (rolling) | spannerplan v0.2.0, spannerplanviz v0.9.2 |
-| spannerplan-rs (main, post-v0.1.0-alpha.1) | spannerplan `cmd/rendertree` v0.2.0 (parity CI) |
+| spannerplanviz v0.9.3 | spannerplan v0.2.1 |
+| rendertree-web (rolling) | spannerplan v0.2.1, spannerplanviz v0.9.3 |
+| spannerplan-rs (main, post-v0.1.0-alpha.1) | spannerplan `cmd/rendertree` v0.2.0 (parity CI; v0.2.1 contains no rendering changes) |
