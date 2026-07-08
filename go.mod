@@ -8,6 +8,7 @@ require (
 	cloud.google.com/go/spanner v1.48.0
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/apstndb/go-tabwrap v0.1.3
+	github.com/apstndb/protoyaml v0.1.0
 	github.com/goccy/go-yaml v1.17.1
 	github.com/google/go-cmp v0.5.9
 	github.com/olekukonko/tablewriter v1.0.9
