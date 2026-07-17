@@ -66,8 +66,8 @@ func TestStructuralSignature_IgnoresIDsAndExecutionStats(t *testing.T) {
 	withStats[2].ExecutionStats = mustStruct(t, map[string]any{
 		"latency": "0.4 msecs",
 	})
-	// Different indexes must not affect the signature: rebuild with the same
-	// topology but renumbered indexes via a fresh New() on an isomorphic plan.
+	// Different non-root indexes must not affect the signature: rebuild with the
+	// same topology after swapping the scalar and relational child positions.
 	renumbered := []*sppb.PlanNode{
 		{
 			Index:       0,
@@ -77,20 +77,12 @@ func TestStructuralSignature_IgnoresIDsAndExecutionStats(t *testing.T) {
 				"execution_method": "Row",
 			}),
 			ChildLinks: []*sppb.PlanNode_ChildLink{
-				{ChildIndex: 1, Type: "Condition"},
-				{ChildIndex: 2},
+				{ChildIndex: 2, Type: "Condition"},
+				{ChildIndex: 1},
 			},
 		},
 		{
 			Index:       1,
-			DisplayName: "Function",
-			Kind:        sppb.PlanNode_SCALAR,
-			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
-				Description: "$id > 1",
-			},
-		},
-		{
-			Index:       2,
 			DisplayName: "Scan",
 			Kind:        sppb.PlanNode_RELATIONAL,
 			Metadata: mustStruct(t, map[string]any{
@@ -100,21 +92,22 @@ func TestStructuralSignature_IgnoresIDsAndExecutionStats(t *testing.T) {
 				"Full scan":        "true",
 			}),
 		},
+		{
+			Index:       2,
+			DisplayName: "Function",
+			Kind:        sppb.PlanNode_SCALAR,
+			ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+				Description: "$id > 1",
+			},
+		},
 	}
 
 	gotBase := mustSignature(t, base)
 	gotStats := mustSignature(t, withStats)
 	gotRenumbered := mustSignature(t, renumbered)
 
-	want := strings.Join([]string{
-		StructuralSignatureVersion,
-		"0||Filter|execution_method=Row|Condition:$id > 1",
-		"1||Index Scan|Full scan=true;execution_method=Row;scan_target=AlbumsByAlbumTitle|",
-		"",
-	}, "\n")
-
-	if diff := cmp.Diff(want, gotBase); diff != "" {
-		t.Fatalf("base signature mismatch (-want +got):\n%s", diff)
+	if !strings.HasPrefix(gotBase, StructuralSignatureVersion+"\nnode 0 ") {
+		t.Fatalf("signature does not start with its alpha version and root record:\n%s", gotBase)
 	}
 	if gotStats != gotBase {
 		t.Fatalf("signature changed when execution stats were added:\nbase:\n%s\nwith stats:\n%s", gotBase, gotStats)
@@ -124,17 +117,6 @@ func TestStructuralSignature_IgnoresIDsAndExecutionStats(t *testing.T) {
 	}
 	if strings.Contains(gotBase, "ExecutionStats") || strings.Contains(gotBase, "latency") {
 		t.Fatalf("signature unexpectedly embeds execution stats: %q", gotBase)
-	}
-	// Plan-node indexes must not appear as identity fields. Depth `0`/`1` are
-	// structural positions, not Spanner PlanNode.Index values.
-	for _, line := range strings.Split(strings.TrimSuffix(gotBase, "\n"), "\n")[1:] {
-		fields := strings.SplitN(line, "|", 5)
-		if len(fields) != 5 {
-			t.Fatalf("unexpected line shape: %q", line)
-		}
-		if fields[2] == "0" || fields[2] == "2" {
-			t.Fatalf("operator field looks like a plan-node id: %q", line)
-		}
 	}
 }
 
@@ -154,17 +136,41 @@ func TestStructuralSignature_PreservesOrderedChildOccurrencesAndLinkTypes(t *tes
 		t.Fatalf("StructuralSignature() error = %v", err)
 	}
 
-	want := strings.Join([]string{
-		StructuralSignatureVersion,
-		"0||Root||",
-		"1||Cross Apply||",
-		"2|Input|Shared Scan||",
-		"1||Hash Join||",
-		"2||Shared Scan||",
-		"",
-	}, "\n")
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("signature mismatch (-want +got):\n%s", diff)
+	if strings.Count(got, "11:Shared Scan,") != 2 {
+		t.Fatalf("signature did not expand the shared child twice:\n%s", got)
+	}
+	if strings.Count(got, "5:Input,") != 1 {
+		t.Fatalf("signature did not retain the inferred Input link type:\n%s", got)
+	}
+}
+
+func TestStructuralSignature_PreservesSameParentRepeatedChildOccurrences(t *testing.T) {
+	qp, err := spannerplan.New([]*sppb.PlanNode{
+		{Index: 0, DisplayName: "Root", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}}},
+		{
+			Index:       1,
+			DisplayName: "Cross Apply",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks: []*sppb.PlanNode_ChildLink{
+				{ChildIndex: 2},
+				{ChildIndex: 2, Type: "Map"},
+			},
+		},
+		{Index: 2, DisplayName: "Shared Scan", Kind: sppb.PlanNode_RELATIONAL},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	got, err := StructuralSignature(qp)
+	if err != nil {
+		t.Fatalf("StructuralSignature() error = %v", err)
+	}
+	if strings.Count(got, "11:Shared Scan,") != 2 {
+		t.Fatalf("signature did not preserve same-parent repeated occurrences:\n%s", got)
+	}
+	if strings.Count(got, "5:Input,") != 1 || strings.Count(got, "3:Map,") != 1 {
+		t.Fatalf("signature did not preserve the raw child-link positions:\n%s", got)
 	}
 }
 
@@ -235,7 +241,7 @@ func TestStructuralSignature_CycleAndBudgets(t *testing.T) {
 	})
 }
 
-func TestStructuralSignature_EscapesSpecialCharacters(t *testing.T) {
+func TestStructuralSignature_FramesSpecialCharacters(t *testing.T) {
 	qp, err := spannerplan.New([]*sppb.PlanNode{
 		{
 			Index:       0,
@@ -266,14 +272,122 @@ func TestStructuralSignature_EscapesSpecialCharacters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StructuralSignature() error = %v", err)
 	}
-	want := strings.Join([]string{
-		StructuralSignatureVersion,
-		`0||Filter\|Odd|execution_method=Row;Batch;scan_target=A\\B|Residual Condition:a\|b;c\nd`,
-		"",
-	}, "\n")
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("signature mismatch (-want +got):\n%s", diff)
+	for _, want := range []string{
+		"10:Filter|Odd,",
+		"9:Row;Batch,",
+		"3:A\\B,",
+		"7:a|b;c\nd,",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("signature does not retain framed value %q:\n%s", want, got)
+		}
 	}
+}
+
+func TestStructuralSignature_DistinguishesIncludedComponentCollisions(t *testing.T) {
+	t.Run("metadata", func(t *testing.T) {
+		withEmbeddedDelimiter := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata: mustStruct(t, map[string]any{
+					"distribution_table": "Albums;execution_method=Row",
+				}),
+			},
+		})
+		withSeparateFields := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata: mustStruct(t, map[string]any{
+					"distribution_table": "Albums",
+					"execution_method":   "Row",
+				}),
+			},
+		})
+		if withEmbeddedDelimiter == withSeparateFields {
+			t.Fatalf("metadata delimiter collision:\n%s", withEmbeddedDelimiter)
+		}
+	})
+
+	t.Run("predicates", func(t *testing.T) {
+		withEmbeddedDelimiter := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Filter",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				ChildLinks:  []*sppb.PlanNode_ChildLink{{ChildIndex: 1, Type: "Condition"}},
+			},
+			{
+				Index:       1,
+				DisplayName: "Function",
+				Kind:        sppb.PlanNode_SCALAR,
+				ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+					Description: "a;Condition:b",
+				},
+			},
+		})
+		withSeparatePredicates := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Filter",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				ChildLinks: []*sppb.PlanNode_ChildLink{
+					{ChildIndex: 1, Type: "Condition"},
+					{ChildIndex: 2, Type: "Condition"},
+				},
+			},
+			{
+				Index:       1,
+				DisplayName: "Function",
+				Kind:        sppb.PlanNode_SCALAR,
+				ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+					Description: "a",
+				},
+			},
+			{
+				Index:       2,
+				DisplayName: "Function",
+				Kind:        sppb.PlanNode_SCALAR,
+				ShortRepresentation: &sppb.PlanNode_ShortRepresentation{
+					Description: "b",
+				},
+			},
+		})
+		if withEmbeddedDelimiter == withSeparatePredicates {
+			t.Fatalf("predicate delimiter collision:\n%s", withEmbeddedDelimiter)
+		}
+	})
+
+	t.Run("operator components", func(t *testing.T) {
+		withCombinedCallType := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata: mustStruct(t, map[string]any{
+					"call_type":     "Distributed Cross",
+					"iterator_type": "Apply",
+				}),
+			},
+		})
+		withSeparateCallType := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata: mustStruct(t, map[string]any{
+					"call_type":     "Distributed",
+					"iterator_type": "Cross Apply",
+				}),
+			},
+		})
+		if withCombinedCallType == withSeparateCallType {
+			t.Fatalf("operator component collision:\n%s", withCombinedCallType)
+		}
+	})
 }
 
 func TestStructuralSignature_DCAGolden(t *testing.T) {

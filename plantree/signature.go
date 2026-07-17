@@ -3,7 +3,8 @@ package plantree
 import (
 	"errors"
 	"fmt"
-	"slices"
+	"sort"
+	"strconv"
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -11,9 +12,10 @@ import (
 	"github.com/apstndb/spannerplan"
 )
 
-// StructuralSignatureVersion is the version prefix embedded in every signature
-// string. Bump it when the canonical encoding or included fields change.
-const StructuralSignatureVersion = "spannerplan.structural_signature.v1"
+// StructuralSignatureVersion identifies the current alpha encoding revision.
+// It may change in a later alpha release when the canonical encoding or its
+// included fields change.
+const StructuralSignatureVersion = "spannerplan.structural_signature.v1alpha1"
 
 // signatureTargetKeys are PlanNode metadata keys treated as structural targets.
 var signatureTargetKeys = []string{"scan_target", "distribution_table", "table"}
@@ -45,8 +47,9 @@ var signatureFlagKeys = []string{"Full scan", "split_ranges_aligned"}
 // [spannerplan.New] before calling this function; remaining link/node guards
 // fail with ordinary errors.
 //
-// Compatibility: exact string equality is the interchange contract for a given
-// StructuralSignatureVersion. Ports must golden-test against this encoding.
+// Equality is meaningful only for signatures produced by this same alpha
+// encoding revision. The encoding may change during the alpha, so it is not a
+// stable cross-version or cross-language interchange contract.
 //
 // Collision limitations: the signature deliberately omits node IDs, so repeated
 // identical operators or shared DAG subtrees produce identical fragments.
@@ -125,17 +128,17 @@ func writeSignatureNode(
 	defer delete(ancestors, node.GetIndex())
 
 	linkType := qp.LinkTypeInParent(parent, childLinkIndex)
-	operator := signatureOperator(node)
-	meta := signatureMetadata(node)
-	preds := signaturePredicates(qp, node)
-
-	fmt.Fprintf(b, "%d|%s|%s|%s|%s\n",
-		depth,
-		escapeSignatureField(linkType),
-		escapeSignatureField(operator),
-		escapeSignatureField(meta),
-		escapeSignatureField(preds),
-	)
+	b.WriteString("node ")
+	b.WriteString(strconv.Itoa(depth))
+	b.WriteByte(' ')
+	appendSignatureString(b, linkType)
+	b.WriteByte(' ')
+	appendSignatureStrings(b, signatureOperator(node))
+	b.WriteByte(' ')
+	appendSignatureFields(b, signatureMetadata(node))
+	b.WriteByte(' ')
+	appendSignatureFields(b, signaturePredicates(qp, node))
+	b.WriteByte('\n')
 
 	for idx, child := range node.GetChildLinks() {
 		if !qp.IsVisible(child) {
@@ -151,81 +154,86 @@ func writeSignatureNode(
 	return nil
 }
 
-func signatureOperator(node *sppb.PlanNode) string {
+func signatureOperator(node *sppb.PlanNode) []string {
 	fields := node.GetMetadata().GetFields()
-	return joinIfNotEmpty(" ",
+	return []string{
 		fields["call_type"].GetStringValue(),
 		fields["iterator_type"].GetStringValue(),
 		strings.TrimSuffix(fields["scan_type"].GetStringValue(), "Scan"),
 		node.GetDisplayName(),
-	)
+	}
 }
 
-func signatureMetadata(node *sppb.PlanNode) string {
+type signatureField struct {
+	key   string
+	value string
+}
+
+func signatureMetadata(node *sppb.PlanNode) []signatureField {
 	fields := node.GetMetadata().GetFields()
-	var parts []string
+	var parts []signatureField
 
 	if v := fields["execution_method"].GetStringValue(); v != "" {
-		parts = append(parts, "execution_method="+v)
+		parts = append(parts, signatureField{key: "execution_method", value: v})
 	}
 	for _, key := range signatureTargetKeys {
 		if v := fields[key].GetStringValue(); v != "" {
-			parts = append(parts, key+"="+v)
+			parts = append(parts, signatureField{key: key, value: v})
 		}
 	}
 	for _, key := range signatureFlagKeys {
 		if v := fields[key].GetStringValue(); v == "true" {
-			parts = append(parts, key+"=true")
+			parts = append(parts, signatureField{key: key, value: "true"})
 		}
 	}
-	slices.Sort(parts)
-	return strings.Join(parts, ";")
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].key < parts[j].key
+	})
+	return parts
 }
 
-func signaturePredicates(qp *spannerplan.QueryPlan, node *sppb.PlanNode) string {
-	var parts []string
+func signaturePredicates(qp *spannerplan.QueryPlan, node *sppb.PlanNode) []signatureField {
+	var parts []signatureField
 	for _, cl := range node.GetChildLinks() {
 		if !qp.IsPredicate(cl) {
 			continue
 		}
 		desc := qp.GetNodeByChildLink(cl).GetShortRepresentation().GetDescription()
-		parts = append(parts, cl.GetType()+":"+desc)
+		parts = append(parts, signatureField{key: cl.GetType(), value: desc})
 	}
-	return strings.Join(parts, ";")
+	return parts
 }
 
-// escapeSignatureField escapes one pipe-delimited column. The signature string
-// is an opaque equality contract; columns are escaped so embedded '|',
-// backslashes, and newlines cannot change the line shape.
-func escapeSignatureField(s string) string {
-	if s == "" {
-		return ""
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch r {
-		case '\\':
-			b.WriteString(`\\`)
-		case '|':
-			b.WriteString(`\|`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+// appendSignatureString appends one byte-length-prefixed string. The trailing
+// comma is part of the framing: no escaping is needed, so every included
+// string remains distinguishable even when it contains delimiters or newlines.
+func appendSignatureString(b *strings.Builder, s string) {
+	b.WriteString(strconv.Itoa(len(s)))
+	b.WriteByte(':')
+	b.WriteString(s)
+	b.WriteByte(',')
 }
 
-func joinIfNotEmpty(sep string, input ...string) string {
-	var filtered []string
-	for _, s := range input {
-		if s != "" {
-			filtered = append(filtered, s)
-		}
+// appendSignatureStrings frames a fixed-order list of included string values.
+func appendSignatureStrings(b *strings.Builder, values []string) {
+	b.WriteString(strconv.Itoa(len(values)))
+	b.WriteByte('[')
+	for _, value := range values {
+		appendSignatureString(b, value)
 	}
-	return strings.Join(filtered, sep)
+	b.WriteByte(']')
+}
+
+// appendSignatureFields frames an ordered list of key/value pairs. Metadata is
+// key-sorted before this call; predicates retain ChildLinks order.
+func appendSignatureFields(b *strings.Builder, fields []signatureField) {
+	b.WriteString(strconv.Itoa(len(fields)))
+	b.WriteByte('[')
+	for _, field := range fields {
+		b.WriteByte('(')
+		appendSignatureString(b, field.key)
+		appendSignatureString(b, field.value)
+		b.WriteByte(')')
+	}
+	b.WriteByte(']')
 }

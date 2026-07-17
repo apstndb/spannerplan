@@ -32,9 +32,14 @@ comparing plan shape across captures:
 - Excludes plan-node IDs, `subquery_cluster_node`, and execution statistics
 - Reuses the Plantree traversal budgets (`MaxPlantreeDepth`,
   `MaxPlantreeOccurrences`) and cycle detection from `ProcessPlan`
-- Exact string equality is the interchange contract for a given signature
-  version; identical operators can collide, so diff/match UIs must expose
-  ambiguity rather than silently pairing nodes
+- Uses a length-framed alpha encoding so included fields cannot collide through
+  delimiter characters; identical operators can still collide because IDs are
+  deliberately excluded, so diff/match UIs must expose ambiguity rather than
+  silently pairing nodes
+
+Equality is meaningful only for signatures made by the same alpha encoding
+revision. The encoding may change during the alpha and is not yet a stable
+cross-version or cross-language interchange contract.
 
 This API is not the PlanTreeNode / ProcessPlanTree surface tracked in issue #30.
 Golden fixtures live under `plantree/testdata/signature/`.
