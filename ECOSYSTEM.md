@@ -71,9 +71,11 @@ dependency of this release train and not part of the public canary set.
   ecosystem but is versioned and governed independently (it is not part of
   this release train).
 - Matrix drift control: `ecosystem/matrix.json` owns the observed pins. CI
-  fails if `ECOSYSTEM.md` marked tables diverge. The public downstream canary
-  (`.github/workflows/ecosystem-canary.yml`) checks only explicit pinned refs
-  for public repositories and never depends on the local viewer.
+  fails if `ECOSYSTEM.md` marked tables diverge. The public pinned-ref integrity
+  checker (`.github/workflows/ecosystem-canary.yml`) reads only explicit pinned
+  refs for public repositories and never depends on the local viewer. It can
+  detect a moved/deleted pin, rewritten history, or API/content failure at that
+  pin; it does not resolve downstream `main` or `latest` refs.
 
 ## Compatibility matrix
 
@@ -82,7 +84,9 @@ As of 2026-07-18:
 
 Rows record observed pins and declared module floors only. A go.mod require is not a compatibility or validation claim unless an entry explicitly says so.
 
-spannerplan tags observed while writing this matrix: stable v0.2.1; prerelease v0.3.0-alpha.1.
+spannerplan tags observed while writing this matrix: latest non-prerelease v0.2.1; prerelease v0.3.0-alpha.1.
+
+These are v0 releases and do not imply a stable compatibility contract.
 
 | Consumer | Observed ref | Declared / recorded pins |
 |---|---|---|
@@ -90,12 +94,13 @@ spannerplan tags observed while writing this matrix: stable v0.2.1; prerelease v
 | rendertree-web | `2f260a07666b589422fafac870a050e177c02b33` | `github.com/apstndb/spannerplan v0.2.1`; `github.com/apstndb/spannerplanviz v0.10.2` |
 | spanner-mycli | `v0.33.0` | `github.com/apstndb/spannerplan v0.2.0` |
 | spanner-mycli | `b43f857b194751e2631073bab45ff2026e86e30c` | `github.com/apstndb/spannerplan v0.2.1` |
-| spannerplan-rs | `main` | parity CI `github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.1`; fixtures synced at `v0.2.1`; latest published `v0.1.0-alpha.2` |
+| spannerplan-rs | `main` | parity CI `github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.1`; fixtures synced at `v0.2.1`; latest published `v0.1.0-alpha.3` |
 <!-- ecosystem-matrix:end -->
 
 When updating pins, edit `ecosystem/matrix.json` first, then run
 `go run ./ecosystem/cmd/render`. Optional live verification against the pinned
-public refs:
+public refs. This is a pinned-ref integrity check, not a lookup of current
+downstream `main` or `latest` refs:
 
 ```bash
 go run ./ecosystem/cmd/canary -live

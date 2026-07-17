@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/apstndb/spannerplan/ecosystem"
@@ -65,6 +66,17 @@ func TestMatrixLoadsAndValidates(t *testing.T) {
 func TestECOSYSTEMMarkdownMatchesMatrix(t *testing.T) {
 	if err := ecosystem.CheckDocument(repoRoot(t)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCanaryWorkflowUsesPipefail(t *testing.T) {
+	workflow, err := os.ReadFile(filepath.Join(repoRoot(t), ".github", "workflows", "ecosystem-canary.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "shell: bash\n        run: |\n          set -euo pipefail\n          go run ./ecosystem/cmd/canary -live 2>&1 | tee canary-output.txt"
+	if !strings.Contains(string(workflow), want) {
+		t.Fatalf("ecosystem canary must use explicit bash with pipefail before tee: %q", want)
 	}
 }
 

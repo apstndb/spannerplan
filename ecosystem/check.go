@@ -173,14 +173,15 @@ func (m *Matrix) RenderObservedTable() string {
 	if len(m.SpannerplanVersions) > 0 {
 		b.WriteString("spannerplan tags observed while writing this matrix: ")
 		parts := make([]string, 0, len(m.SpannerplanVersions))
-		if v, ok := m.SpannerplanVersions["latest_stable"]; ok {
-			parts = append(parts, "stable "+v)
+		if v, ok := m.SpannerplanVersions["latest_non_prerelease"]; ok {
+			parts = append(parts, "latest non-prerelease "+v)
 		}
 		if v, ok := m.SpannerplanVersions["latest_prerelease"]; ok {
 			parts = append(parts, "prerelease "+v)
 		}
 		b.WriteString(strings.Join(parts, "; "))
 		b.WriteString(".\n\n")
+		b.WriteString("These are v0 releases and do not imply a stable compatibility contract.\n\n")
 	}
 	b.WriteString("| Consumer | Observed ref | Declared / recorded pins |\n")
 	b.WriteString("|---|---|---|\n")

@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Command canary checks public consumer go.mod pins against ecosystem/matrix.json.
+// Command canary checks the integrity of public consumer go.mod pins recorded
+// in ecosystem/matrix.json.
 //
 // It is intentionally offline unless -live is set. Live mode fetches only the
 // pinned public refs listed under canary_targets and never touches local-only
-// viewers.
+// viewers. It does not resolve current downstream branch or release refs.
 package main
 
 import (
@@ -37,7 +38,7 @@ import (
 )
 
 func main() {
-	live := flag.Bool("live", false, "fetch pinned public go.mod files and compare requires")
+	live := flag.Bool("live", false, "fetch pinned public go.mod files and verify recorded requires")
 	root := flag.String("root", "", "repository root (default: cwd)")
 	flag.Parse()
 
@@ -59,7 +60,7 @@ func main() {
 	fmt.Println("ECOSYSTEM.md matches ecosystem/matrix.json")
 
 	if !*live {
-		fmt.Println("skipping live canary (pass -live)")
+		fmt.Println("skipping live pinned-ref integrity check (pass -live)")
 		return
 	}
 
@@ -175,6 +176,6 @@ func truncate(s string, n int) string {
 }
 
 func fail(err error) {
-	fmt.Fprintf(os.Stderr, "ecosystem canary: %v\n", err)
+	fmt.Fprintf(os.Stderr, "ecosystem pinned-ref integrity check: %v\n", err)
 	os.Exit(1)
 }

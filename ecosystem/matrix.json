@@ -34,7 +34,7 @@
     }
   ],
   "spannerplan_versions": {
-    "latest_stable": "v0.2.1",
+    "latest_non_prerelease": "v0.2.1",
     "latest_prerelease": "v0.3.0-alpha.1"
   },
   "observed": [
@@ -97,8 +97,8 @@
       "kind": "parity_workflow_pin",
       "parity_go_install": "github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.1",
       "fixture_sync_ref": "v0.2.1",
-      "latest_published_release": "v0.1.0-alpha.2",
-      "notes": "Required CI installs rendertree@v0.3.0-alpha.1. Fixture copies under testdata/ were last synced at spannerplan v0.2.1. Workspace docs may mention unpublished v0.1.0-alpha.3; do not treat that as a published release. Weekly canary vs spannerplan@latest lives in spannerplan-rs and is non-blocking."
+      "latest_published_release": "v0.1.0-alpha.3",
+      "notes": "Required CI installs rendertree@v0.3.0-alpha.1. Fixture copies under testdata/ were last synced at spannerplan v0.2.1. Weekly canary vs spannerplan@latest lives in spannerplan-rs and is non-blocking."
     }
   ],
   "canary_targets": [

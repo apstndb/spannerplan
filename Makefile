@@ -1,4 +1,4 @@
-.PHONY: test ecosystem-check ecosystem-render ecosystem-canary
+.PHONY: test ecosystem-check ecosystem-render ecosystem-pinned-ref-integrity
 
 test:
 	go test -v ./...
@@ -10,5 +10,5 @@ ecosystem-check:
 ecosystem-render:
 	go run ./ecosystem/cmd/render
 
-ecosystem-canary:
+ecosystem-pinned-ref-integrity:
 	go run ./ecosystem/cmd/canary -live
