@@ -388,6 +388,213 @@ func TestStructuralSignature_DistinguishesIncludedComponentCollisions(t *testing
 			t.Fatalf("operator component collision:\n%s", withCombinedCallType)
 		}
 	})
+
+	t.Run("scan type IndexScan versus Index", func(t *testing.T) {
+		withIndexScan := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata:    mustStruct(t, map[string]any{"scan_type": "IndexScan"}),
+			},
+		})
+		withIndex := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata:    mustStruct(t, map[string]any{"scan_type": "Index"}),
+			},
+		})
+		if withIndexScan == withIndex {
+			t.Fatalf("raw scan_type collision:\n%s", withIndexScan)
+		}
+	})
+
+	t.Run("scan type Scan versus absent", func(t *testing.T) {
+		withScanType := mustSignature(t, []*sppb.PlanNode{
+			{
+				Index:       0,
+				DisplayName: "Scan",
+				Kind:        sppb.PlanNode_RELATIONAL,
+				Metadata:    mustStruct(t, map[string]any{"scan_type": "Scan"}),
+			},
+		})
+		withoutScanType := mustSignature(t, []*sppb.PlanNode{
+			{Index: 0, DisplayName: "Scan", Kind: sppb.PlanNode_RELATIONAL},
+		})
+		if withScanType == withoutScanType {
+			t.Fatalf("scan_type presence collision:\n%s", withScanType)
+		}
+	})
+}
+
+func TestStructuralSignature_PreservesFlagPresenceAndValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]any
+	}{
+		{name: "absent", metadata: map[string]any{}},
+		{name: "string true", metadata: map[string]any{"Full scan": "true"}},
+		{name: "string false", metadata: map[string]any{"Full scan": "false"}},
+		{name: "bool true", metadata: map[string]any{"Full scan": true}},
+		{name: "bool false", metadata: map[string]any{"Full scan": false}},
+	}
+
+	signatures := make([]string, len(tests))
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			signatures[i] = mustSignature(t, []*sppb.PlanNode{
+				{
+					Index:       0,
+					DisplayName: "Scan",
+					Kind:        sppb.PlanNode_RELATIONAL,
+					Metadata:    mustStruct(t, tt.metadata),
+				},
+			})
+		})
+	}
+
+	for i := range tests {
+		for j := i + 1; j < len(tests); j++ {
+			if signatures[i] == signatures[j] {
+				t.Fatalf("flag cases %q and %q produced the same signature:\n%s", tests[i].name, tests[j].name, signatures[i])
+			}
+		}
+	}
+}
+
+func TestStructuralSignature_DistinguishesOperationTypes(t *testing.T) {
+	insert := mustSignature(t, []*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Mutation",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			Metadata:    mustStruct(t, map[string]any{"operation_type": "INSERT"}),
+		},
+	})
+	deleteOperation := mustSignature(t, []*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Mutation",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			Metadata:    mustStruct(t, map[string]any{"operation_type": "DELETE"}),
+		},
+	})
+	if insert == deleteOperation {
+		t.Fatalf("mutation operation types produced the same signature:\n%s", insert)
+	}
+}
+
+func TestStructuralSignature_CanonicalizesAllMetadata(t *testing.T) {
+	t.Run("future key changes signature", func(t *testing.T) {
+		withoutFutureMetadata := mustSignatureWithMetadata(t, map[string]any{})
+		withFutureMetadata := mustSignatureWithMetadata(t, map[string]any{
+			"new_optimizer_hint": "enabled",
+		})
+		if withoutFutureMetadata == withFutureMetadata {
+			t.Fatalf("future metadata key did not change signature:\n%s", withFutureMetadata)
+		}
+	})
+
+	t.Run("nested struct key order is deterministic", func(t *testing.T) {
+		first := mustSignatureWithMetadata(t, map[string]any{
+			"future": map[string]any{
+				"alpha": "x",
+				"omega": []any{false, nil, 1.5},
+			},
+		})
+		second := mustSignatureWithMetadata(t, map[string]any{
+			"future": map[string]any{
+				"omega": []any{false, nil, 1.5},
+				"alpha": "x",
+			},
+		})
+		if first != second {
+			t.Fatalf("equivalent nested metadata was nondeterministic:\nfirst:\n%s\nsecond:\n%s", first, second)
+		}
+	})
+
+	t.Run("nested list order changes signature", func(t *testing.T) {
+		first := mustSignatureWithMetadata(t, map[string]any{
+			"future": []any{"alpha", false, 1.5},
+		})
+		second := mustSignatureWithMetadata(t, map[string]any{
+			"future": []any{false, "alpha", 1.5},
+		})
+		if first == second {
+			t.Fatalf("nested metadata list order was lost:\n%s", first)
+		}
+	})
+
+	t.Run("non-string kinds remain distinct", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			metadata map[string]any
+		}{
+			{name: "absent", metadata: map[string]any{}},
+			{name: "bool false", metadata: map[string]any{"future": false}},
+			{name: "string false", metadata: map[string]any{"future": "false"}},
+			{name: "number zero", metadata: map[string]any{"future": 0.0}},
+			{name: "null", metadata: map[string]any{"future": nil}},
+		}
+
+		signatures := make([]string, len(tests))
+		for i, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				signatures[i] = mustSignatureWithMetadata(t, tt.metadata)
+			})
+		}
+		for i := range tests {
+			for j := i + 1; j < len(tests); j++ {
+				if signatures[i] == signatures[j] {
+					t.Fatalf("metadata cases %q and %q collided:\n%s", tests[i].name, tests[j].name, signatures[i])
+				}
+			}
+		}
+	})
+
+	t.Run("optimizer metadata changes signature", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			key    string
+			first  string
+			second string
+		}{
+			{name: "scan method", key: "scan_method", first: "Row", second: "Batch"},
+			{name: "seekable key size", key: "seekable_key_size", first: "0", second: "1"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				first := mustSignatureWithMetadata(t, map[string]any{tt.key: tt.first})
+				second := mustSignatureWithMetadata(t, map[string]any{tt.key: tt.second})
+				if first == second {
+					t.Fatalf("%s did not change signature:\n%s", tt.key, first)
+				}
+			})
+		}
+	})
+
+	t.Run("subquery cluster node is excluded", func(t *testing.T) {
+		withoutID := mustSignatureWithMetadata(t, map[string]any{"execution_method": "Row"})
+		withFirstID := mustSignatureWithMetadata(t, map[string]any{
+			"execution_method":      "Row",
+			"subquery_cluster_node": "1",
+		})
+		withSecondID := mustSignatureWithMetadata(t, map[string]any{
+			"execution_method":      "Row",
+			"subquery_cluster_node": "99",
+		})
+		if withoutID != withFirstID || withFirstID != withSecondID {
+			t.Fatalf(
+				"subquery_cluster_node changed signature:\nwithout:\n%s\nfirst:\n%s\nsecond:\n%s",
+				withoutID,
+				withFirstID,
+				withSecondID,
+			)
+		}
+	})
 }
 
 func TestStructuralSignature_DCAGolden(t *testing.T) {
@@ -418,6 +625,18 @@ func mustSignature(t *testing.T, nodes []*sppb.PlanNode) string {
 		t.Fatalf("StructuralSignature() error = %v", err)
 	}
 	return got
+}
+
+func mustSignatureWithMetadata(t *testing.T, metadata map[string]any) string {
+	t.Helper()
+	return mustSignature(t, []*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Scan",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			Metadata:    mustStruct(t, metadata),
+		},
+	})
 }
 
 func clonePlanNodes(nodes []*sppb.PlanNode) []*sppb.PlanNode {

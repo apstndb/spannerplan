@@ -40,12 +40,19 @@ not expose viewer structured-row DTOs.
 
 The signature ignores plan-node IDs and execution statistics, preserves ordered
 child occurrences and parent link types, and uses the same depth / occurrence
-budgets and cycle detection as [ProcessPlan]. Equality is meaningful only for
-signatures made by the same alpha encoding revision; the encoding may change
-during the alpha and is not a stable interchange contract. Repeated identical
-operators can collide because plan-node IDs are intentionally excluded, so
-comparison layers must expose matching ambiguity. See [StructuralSignature] and
-plantree/testdata/signature for the encoding and fixture corpus.
+budgets and cycle detection as [ProcessPlan]. Its metadata field set is every
+present key and recursively typed value except subquery_cluster_node, whose
+value is a PlanNode ID. This includes operation_type, raw scan_type, scan_method,
+seekable_key_size, flags (including false), and future optimizer metadata. New
+metadata therefore intentionally changes the alpha signature instead of being
+silently ignored.
+
+Equality is meaningful only for signatures made by the same alpha encoding
+revision; the encoding may change during the alpha and is not a stable
+interchange contract. Repeated identical operators can collide because plan-node
+IDs are intentionally excluded, so comparison layers must expose matching
+ambiguity. See [StructuralSignature] and plantree/testdata/signature for the
+encoding and fixture corpus.
 
 # Stability
 

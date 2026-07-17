@@ -27,9 +27,12 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for how this module relates to spannerplan-rs, 
 `plantree.StructuralSignature` produces a versioned canonical string suitable for
 comparing plan shape across captures:
 
-- Includes operator identity, parent link types, scan/table targets, structural
-  flags, normalized predicates, and ordered visible child occurrences
-- Excludes plan-node IDs, `subquery_cluster_node`, and execution statistics
+- Includes the operator display name, parent link types, every present metadata
+  key and recursively typed value, predicates, and ordered visible child
+  occurrences; this includes raw `scan_type`, `operation_type`, `scan_method`,
+  and `seekable_key_size`
+- Excludes plan-node IDs, ID-bearing `subquery_cluster_node`, and execution
+  statistics
 - Reuses the Plantree traversal budgets (`MaxPlantreeDepth`,
   `MaxPlantreeOccurrences`) and cycle detection from `ProcessPlan`
 - Uses a length-framed alpha encoding so included fields cannot collide through
@@ -39,7 +42,9 @@ comparing plan shape across captures:
 
 Equality is meaningful only for signatures made by the same alpha encoding
 revision. The encoding may change during the alpha and is not yet a stable
-cross-version or cross-language interchange contract.
+cross-version or cross-language interchange contract. New metadata emitted by
+Spanner intentionally changes the alpha signature rather than being silently
+ignored.
 
 This API is not the PlanTreeNode / ProcessPlanTree surface tracked in issue #30.
 Golden fixtures live under `plantree/testdata/signature/`.

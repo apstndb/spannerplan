@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spannerplan"
 )
@@ -17,26 +18,19 @@ import (
 // included fields change.
 const StructuralSignatureVersion = "spannerplan.structural_signature.v1alpha1"
 
-// signatureTargetKeys are PlanNode metadata keys treated as structural targets.
-var signatureTargetKeys = []string{"scan_target", "distribution_table", "table"}
-
-// signatureFlagKeys are boolean-ish metadata flags that affect plan shape.
-var signatureFlagKeys = []string{"Full scan", "split_ranges_aligned"}
-
 // StructuralSignature returns a deterministic, versioned canonical string that
 // describes the visible relational plan tree for comparison.
 //
 // Included:
-//   - operator identity (display name plus call_type / iterator_type / scan_type)
+//   - operator display name
 //   - link type in the parent for each child occurrence
-//   - structural metadata targets and flags (scan_target, distribution_table,
-//     table, execution_method, Full scan, split_ranges_aligned)
+//   - every present metadata key, recursively preserving value type and value
 //   - predicate link types and short-representation descriptions, in ChildLinks order
 //   - ordered visible child occurrences (DAG reuse expands like [ProcessPlan])
 //
 // Excluded:
 //   - plan-node indexes / IDs
-//   - subquery_cluster_node
+//   - subquery_cluster_node, because its value is a PlanNode ID
 //   - execution statistics and other volatile runtime metrics
 //   - rendered titles, wrapping, and ASCII tree prefixes
 //
@@ -155,13 +149,7 @@ func writeSignatureNode(
 }
 
 func signatureOperator(node *sppb.PlanNode) []string {
-	fields := node.GetMetadata().GetFields()
-	return []string{
-		fields["call_type"].GetStringValue(),
-		fields["iterator_type"].GetStringValue(),
-		strings.TrimSuffix(fields["scan_type"].GetStringValue(), "Scan"),
-		node.GetDisplayName(),
-	}
+	return []string{node.GetDisplayName()}
 }
 
 type signatureField struct {
@@ -171,25 +159,80 @@ type signatureField struct {
 
 func signatureMetadata(node *sppb.PlanNode) []signatureField {
 	fields := node.GetMetadata().GetFields()
-	var parts []signatureField
-
-	if v := fields["execution_method"].GetStringValue(); v != "" {
-		parts = append(parts, signatureField{key: "execution_method", value: v})
-	}
-	for _, key := range signatureTargetKeys {
-		if v := fields[key].GetStringValue(); v != "" {
-			parts = append(parts, signatureField{key: key, value: v})
+	parts := make([]signatureField, 0, len(fields))
+	for key, value := range fields {
+		if key == "subquery_cluster_node" {
+			continue
 		}
-	}
-	for _, key := range signatureFlagKeys {
-		if v := fields[key].GetStringValue(); v == "true" {
-			parts = append(parts, signatureField{key: key, value: "true"})
-		}
+		parts = append(parts, signatureField{key: key, value: signatureValue(value)})
 	}
 	sort.Slice(parts, func(i, j int) bool {
 		return parts[i].key < parts[j].key
 	})
 	return parts
+}
+
+// signatureValue preserves protobuf Struct field presence, type, and value.
+// Recursively framed structs and lists make non-string and future metadata
+// deterministic without silently collapsing values through GetStringValue.
+func signatureValue(value *structpb.Value) string {
+	var b strings.Builder
+	appendSignatureValue(&b, value)
+	return b.String()
+}
+
+func appendSignatureValue(b *strings.Builder, value *structpb.Value) {
+	if value == nil {
+		b.WriteString("nil")
+		return
+	}
+
+	switch kind := value.Kind.(type) {
+	case *structpb.Value_NullValue:
+		b.WriteString("null")
+	case *structpb.Value_NumberValue:
+		b.WriteString("number ")
+		b.WriteString(strconv.FormatFloat(kind.NumberValue, 'g', -1, 64))
+	case *structpb.Value_StringValue:
+		b.WriteString("string ")
+		appendSignatureString(b, kind.StringValue)
+	case *structpb.Value_BoolValue:
+		b.WriteString("bool ")
+		b.WriteString(strconv.FormatBool(kind.BoolValue))
+	case *structpb.Value_StructValue:
+		appendSignatureStruct(b, kind.StructValue)
+	case *structpb.Value_ListValue:
+		appendSignatureList(b, kind.ListValue)
+	}
+}
+
+func appendSignatureStruct(b *strings.Builder, value *structpb.Struct) {
+	fields := value.GetFields()
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	b.WriteString("struct ")
+	b.WriteString(strconv.Itoa(len(keys)))
+	b.WriteByte('[')
+	for _, key := range keys {
+		appendSignatureString(b, key)
+		appendSignatureString(b, signatureValue(fields[key]))
+	}
+	b.WriteByte(']')
+}
+
+func appendSignatureList(b *strings.Builder, value *structpb.ListValue) {
+	values := value.GetValues()
+	b.WriteString("list ")
+	b.WriteString(strconv.Itoa(len(values)))
+	b.WriteByte('[')
+	for _, item := range values {
+		appendSignatureString(b, signatureValue(item))
+	}
+	b.WriteByte(']')
 }
 
 func signaturePredicates(qp *spannerplan.QueryPlan, node *sppb.PlanNode) []signatureField {
