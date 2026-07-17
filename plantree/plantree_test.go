@@ -2,6 +2,7 @@ package plantree
 
 import (
 	_ "embed"
+	"errors"
 	"strings"
 	"testing"
 
@@ -275,6 +276,171 @@ func TestProcessPlan_RelationalCycleReturnsError(t *testing.T) {
 	_, err = ProcessPlan(qp)
 	if err == nil || !strings.Contains(err.Error(), "cycle detected at PlanNode index 0") {
 		t.Fatalf("ProcessPlan() error = %v, want cycle error", err)
+	}
+	if errors.Is(err, ErrTraversalLimitExceeded) {
+		t.Fatalf("ProcessPlan() error = %v, want cycle error before traversal limit", err)
+	}
+}
+
+func TestProcessPlan_ChecksCycleBeforeOccurrenceBudget(t *testing.T) {
+	childLinks := make([]*sppb.PlanNode_ChildLink, MaxPlantreeOccurrences)
+	for i := range childLinks[:len(childLinks)-1] {
+		childLinks[i] = &sppb.PlanNode_ChildLink{ChildIndex: 1}
+	}
+	childLinks[len(childLinks)-1] = &sppb.PlanNode_ChildLink{ChildIndex: 0}
+	qp, err := spannerplan.New([]*sppb.PlanNode{
+		{Index: 0, DisplayName: "Root", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: childLinks},
+		{Index: 1, DisplayName: "Shared Scan", Kind: sppb.PlanNode_RELATIONAL},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	_, err = ProcessPlan(qp)
+	if err == nil || !strings.Contains(err.Error(), "cycle detected at PlanNode index 0") {
+		t.Fatalf("ProcessPlan() error = %v, want cycle error", err)
+	}
+	if errors.Is(err, ErrTraversalLimitExceeded) {
+		t.Fatalf("ProcessPlan() error = %v, want cycle before occurrence budget", err)
+	}
+}
+
+func TestProcessPlan_SharedChildUsesOccurrenceLocalLinkType(t *testing.T) {
+	tests := []struct {
+		name          string
+		planNodes     []*sppb.PlanNode
+		wantNodeTexts []string
+	}{
+		{
+			name: "apply parent before non apply parent",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, DisplayName: "Root", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}, {ChildIndex: 2}}},
+				{Index: 1, DisplayName: "Cross Apply", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 2, DisplayName: "Hash Join", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 3, DisplayName: "Shared Scan", Kind: sppb.PlanNode_RELATIONAL},
+			},
+			wantNodeTexts: []string{"Root", "Cross Apply", "[Input] Shared Scan", "Hash Join", "Shared Scan"},
+		},
+		{
+			name: "non apply parent before apply parent",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, DisplayName: "Root", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}, {ChildIndex: 2}}},
+				{Index: 1, DisplayName: "Hash Join", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 2, DisplayName: "Cross Apply", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 3, DisplayName: "Shared Scan", Kind: sppb.PlanNode_RELATIONAL},
+			},
+			wantNodeTexts: []string{"Root", "Hash Join", "Shared Scan", "Cross Apply", "[Input] Shared Scan"},
+		},
+		{
+			name: "duplicate links to same child only label first occurrence",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, DisplayName: "Cross Apply", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}, {ChildIndex: 1}}},
+				{Index: 1, DisplayName: "Shared Scan", Kind: sppb.PlanNode_RELATIONAL},
+			},
+			wantNodeTexts: []string{"Cross Apply", "[Input] Shared Scan", "Shared Scan"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qp, err := spannerplan.New(tt.planNodes)
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			rows, err := ProcessPlan(qp)
+			if err != nil {
+				t.Fatalf("ProcessPlan() error = %v", err)
+			}
+			gotNodeTexts := make([]string, len(rows))
+			for i, row := range rows {
+				gotNodeTexts[i] = row.NodeText
+			}
+			if diff := cmp.Diff(tt.wantNodeTexts, gotNodeTexts); diff != "" {
+				t.Fatalf("NodeText mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestProcessPlan_TraversalLimits(t *testing.T) {
+	tests := []struct {
+		name        string
+		planNodes   []*sppb.PlanNode
+		want        TraversalLimitError
+		wantMessage string
+	}{
+		{
+			name: "visible occurrences",
+			planNodes: func() []*sppb.PlanNode {
+				childLinks := make([]*sppb.PlanNode_ChildLink, MaxPlantreeOccurrences)
+				for i := range childLinks {
+					childLinks[i] = &sppb.PlanNode_ChildLink{ChildIndex: 1}
+				}
+				return []*sppb.PlanNode{
+					{Index: 0, DisplayName: "Root", Kind: sppb.PlanNode_RELATIONAL, ChildLinks: childLinks},
+					{Index: 1, DisplayName: "Shared Scan", Kind: sppb.PlanNode_RELATIONAL},
+				}
+			}(),
+			want: TraversalLimitError{
+				Kind:      TraversalLimitOccurrences,
+				Limit:     MaxPlantreeOccurrences,
+				Observed:  MaxPlantreeOccurrences + 1,
+				NodeIndex: 1,
+			},
+			wantMessage: "plan exceeds the renderer occurrence budget 4096 at PlanNode index 1",
+		},
+		{
+			name: "visible depth",
+			planNodes: func() []*sppb.PlanNode {
+				nodes := make([]*sppb.PlanNode, MaxPlantreeDepth+2)
+				for i := range nodes {
+					nodes[i] = &sppb.PlanNode{
+						Index:       int32(i),
+						DisplayName: "Node",
+						Kind:        sppb.PlanNode_RELATIONAL,
+					}
+					if i+1 < len(nodes) {
+						nodes[i].ChildLinks = []*sppb.PlanNode_ChildLink{{ChildIndex: int32(i + 1)}}
+					}
+				}
+				return nodes
+			}(),
+			want: TraversalLimitError{
+				Kind:      TraversalLimitDepth,
+				Limit:     MaxPlantreeDepth,
+				Observed:  MaxPlantreeDepth + 1,
+				NodeIndex: MaxPlantreeDepth + 1,
+			},
+			wantMessage: "plan exceeds the renderer depth budget 256 at PlanNode index 257",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qp, err := spannerplan.New(tt.planNodes)
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			_, err = ProcessPlan(qp)
+			if !errors.Is(err, ErrTraversalLimitExceeded) {
+				t.Fatalf("ProcessPlan() error = %v, want ErrTraversalLimitExceeded", err)
+			}
+			if got := err.Error(); got != tt.wantMessage {
+				t.Fatalf("ProcessPlan() error = %q, want %q", got, tt.wantMessage)
+			}
+			var got *TraversalLimitError
+			if !errors.As(err, &got) {
+				t.Fatalf("ProcessPlan() error = %v, want TraversalLimitError", err)
+			}
+			if diff := cmp.Diff(tt.want, *got); diff != "" {
+				t.Fatalf("TraversalLimitError mismatch (-want +got):\n%s", diff)
+			}
+			if got := got.Error(); got != tt.wantMessage {
+				t.Fatalf("TraversalLimitError.Error() = %q, want %q", got, tt.wantMessage)
+			}
+		})
 	}
 }
 

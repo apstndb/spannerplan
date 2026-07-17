@@ -66,3 +66,14 @@ The `v0.3.0` prerelease line removes the deprecated
 `github.com/apstndb/spannerplan/protoyaml` compatibility package. Import
 [`github.com/apstndb/protoyaml`](https://github.com/apstndb/protoyaml)
 directly; `spanner-mycli` and the Spanner plan ecosystem have already migrated.
+
+It also replaces the ambiguous `QueryPlan.GetLinkType(link)` API with
+`QueryPlan.LinkTypeInParent(parent, rawChildLinkIndex)`. Callers that render
+links must preserve the raw position in the actual parent's `ChildLinks` slice:
+a shared child PlanNode can have different link labels at different occurrences.
+
+Plantree now rejects rendered trees deeper than 256 edges from the root or
+with more than 4096 visible node occurrences. Callers can identify those
+renderer-budget failures with `errors.Is(err, plantree.ErrTraversalLimitExceeded)`
+and inspect `*plantree.TraversalLimitError`; the conservative alpha budgets may
+be raised non-breakingly when real Spanner captures require it.

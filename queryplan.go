@@ -472,17 +472,33 @@ func HasStats(nodes []*sppb.PlanNode) bool {
 	return nodes[0].ExecutionStats != nil
 }
 
-func (qp *QueryPlan) GetLinkType(link *sppb.PlanNode_ChildLink) string {
+// LinkTypeInParent returns the type for one child-link occurrence in parent.
+//
+// rawChildLinkIndex is the position in parent.ChildLinks, not the child
+// PlanNode index. An explicit ChildLink.Type wins. For an untyped first child
+// of an Apply operator, LinkTypeInParent returns "Input" to match the Spanner
+// operator documentation. The parent and position are required because a
+// PlanNode can have multiple parents and can appear more than once under the
+// same parent.
+//
+// LinkTypeInParent returns an empty string when parent is nil or
+// rawChildLinkIndex does not identify a child link. This lets callers safely
+// use it while walking a plan without treating an invalid occurrence as an
+// implicit Input edge.
+func (qp *QueryPlan) LinkTypeInParent(parent *sppb.PlanNode, rawChildLinkIndex int) string {
+	childLinks := parent.GetChildLinks()
+	if rawChildLinkIndex < 0 || rawChildLinkIndex >= len(childLinks) {
+		return ""
+	}
+
+	link := childLinks[rawChildLinkIndex]
 	if link.GetType() != "" {
 		return link.GetType()
 	}
 
-	// Workaround to treat the first child of Apply as Input.
-	// This is necessary because it is more consistent with the official query plan operator docs.
-	// Note: Apply variants are Cross Apply, Anti Semi Apply, Semi Apply, Outer Apply, and their Distributed variants.
-	if parent := qp.GetParentNodeByChildLink(link); parent != nil &&
-		strings.HasSuffix(parent.GetDisplayName(), "Apply") &&
-		len(parent.GetChildLinks()) > 0 && parent.GetChildLinks()[0].GetChildIndex() == link.GetChildIndex() {
+	// Treat only this raw child-link occurrence as Input. Comparing child node
+	// indexes would incorrectly label every link to a shared child as Input.
+	if rawChildLinkIndex == 0 && strings.HasSuffix(parent.GetDisplayName(), "Apply") {
 		return "Input"
 	}
 

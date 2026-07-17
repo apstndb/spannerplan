@@ -1,6 +1,7 @@
 package plantree
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,75 @@ import (
 )
 
 var defaultWrapCondition = newDefaultWrapCondition()
+
+const (
+	// MaxPlantreeDepth counts the root as depth zero. This conservative
+	// first-alpha renderer budget bounds recursive tree construction, row
+	// collection, and rendering passes even when a plan contains a deep DAG.
+	// It may be raised non-breakingly when real capture evidence requires it.
+	MaxPlantreeDepth = 256
+	// MaxPlantreeOccurrences bounds visible node occurrences, rather than
+	// unique PlanNode indexes, because a DAG can expand exponentially when it
+	// is rendered as a tree. This conservative first-alpha renderer budget may
+	// be raised non-breakingly when real capture evidence requires it.
+	MaxPlantreeOccurrences = 4096
+)
+
+// ErrTraversalLimitExceeded identifies a plan whose visible rendered tree
+// exceeds Plantree's fixed resource bounds.
+var ErrTraversalLimitExceeded = errors.New("plantree: traversal limit exceeded")
+
+// TraversalLimitKind identifies which rendered-tree resource bound was exceeded.
+type TraversalLimitKind string
+
+const (
+	// TraversalLimitDepth reports a node below MaxPlantreeDepth.
+	TraversalLimitDepth TraversalLimitKind = "depth"
+	// TraversalLimitOccurrences reports more than MaxPlantreeOccurrences
+	// visible node occurrences.
+	TraversalLimitOccurrences TraversalLimitKind = "occurrences"
+)
+
+// TraversalLimitError describes a rendered-tree resource bound failure.
+// It unwraps to ErrTraversalLimitExceeded so callers can distinguish a valid
+// but too-large plan from malformed-plan and rendering failures.
+type TraversalLimitError struct {
+	Kind      TraversalLimitKind
+	Limit     int
+	Observed  int
+	NodeIndex int32
+}
+
+func (e *TraversalLimitError) Error() string {
+	switch e.Kind {
+	case TraversalLimitDepth:
+		return fmt.Sprintf(
+			"plan exceeds the renderer depth budget %d at PlanNode index %d",
+			e.Limit,
+			e.NodeIndex,
+		)
+	case TraversalLimitOccurrences:
+		return fmt.Sprintf(
+			"plan exceeds the renderer occurrence budget %d at PlanNode index %d",
+			e.Limit,
+			e.NodeIndex,
+		)
+	default:
+		return fmt.Sprintf(
+			"plan exceeds the renderer %s budget %d at PlanNode index %d",
+			e.Kind,
+			e.Limit,
+			e.NodeIndex,
+		)
+	}
+}
+
+// Unwrap reports the stable traversal-limit sentinel.
+func (e *TraversalLimitError) Unwrap() error { return ErrTraversalLimitExceeded }
+
+type traversalState struct {
+	occurrences int
+}
 
 func newDefaultWrapCondition() *tabwrap.Condition {
 	c := tabwrap.NewCondition()
@@ -166,8 +236,11 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapWidth != nil && *o.wrapWidth < 0 {
 		return nil, fmt.Errorf("wrap width cannot be negative: %d", *o.wrapWidth)
 	}
-	root, err := buildRenderedTree(qp, nil, &o, make(map[int32]struct{}))
+	root, err := buildRenderedTree(qp, nil, -1, &o, make(map[int32]struct{}), &traversalState{})
 	if err != nil {
+		if errors.Is(err, ErrTraversalLimitExceeded) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to build rendered tree: %w", err)
 	}
 	if root == nil {
@@ -217,7 +290,22 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	return result, nil
 }
 
-func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, opts *options, ancestors map[int32]struct{}) (*renderedNode, error) {
+func buildRenderedTree(
+	qp *spannerplan.QueryPlan,
+	parent *sppb.PlanNode,
+	childLinkIndex int,
+	opts *options,
+	ancestors map[int32]struct{},
+	state *traversalState,
+) (*renderedNode, error) {
+	var link *sppb.PlanNode_ChildLink
+	if parent != nil {
+		childLinks := parent.GetChildLinks()
+		if childLinkIndex < 0 || childLinkIndex >= len(childLinks) {
+			return nil, fmt.Errorf("child link index out of range: parent node %d childLinks[%d]", parent.GetIndex(), childLinkIndex)
+		}
+		link = childLinks[childLinkIndex]
+	}
 	if !qp.IsVisible(link) {
 		return nil, nil
 	}
@@ -236,9 +324,27 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	if _, ok := ancestors[node.GetIndex()]; ok {
 		return nil, fmt.Errorf("cycle detected at PlanNode index %d", node.GetIndex())
 	}
+	depth := len(ancestors)
+	if depth > MaxPlantreeDepth {
+		return nil, &TraversalLimitError{
+			Kind:      TraversalLimitDepth,
+			Limit:     MaxPlantreeDepth,
+			Observed:  depth,
+			NodeIndex: node.GetIndex(),
+		}
+	}
+	if state.occurrences >= MaxPlantreeOccurrences {
+		return nil, &TraversalLimitError{
+			Kind:      TraversalLimitOccurrences,
+			Limit:     MaxPlantreeOccurrences,
+			Observed:  state.occurrences + 1,
+			NodeIndex: node.GetIndex(),
+		}
+	}
+	state.occurrences++
 	ancestors[node.GetIndex()] = struct{}{}
 	defer delete(ancestors, node.GetIndex())
-	linkType := qp.GetLinkType(link)
+	linkType := qp.LinkTypeInParent(parent, childLinkIndex)
 	continuationAnchor := lo.Ternary(linkType != "", "["+linkType+"]"+sep, "")
 	nodeText := continuationAnchor + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 
@@ -276,7 +382,6 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		return nil, err
 	}
 
-	visibleChildLinks := qp.VisibleChildLinks(node)
 	rendered := &renderedNode{
 		ID:                 node.GetIndex(),
 		ContinuationAnchor: continuationAnchor,
@@ -287,9 +392,15 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		ScalarChildLinks:   renderedScalarChildLinks,
 	}
 
-	for _, child := range visibleChildLinks {
-		renderedChild, err := buildRenderedTree(qp, child, opts, ancestors)
+	for childIndex, child := range node.GetChildLinks() {
+		if !qp.IsVisible(child) {
+			continue
+		}
+		renderedChild, err := buildRenderedTree(qp, node, childIndex, opts, ancestors, state)
 		if err != nil {
+			if errors.Is(err, ErrTraversalLimitExceeded) {
+				return nil, err
+			}
 			return nil, fmt.Errorf("buildRenderedTree failed on child link %v: %w", child, err)
 		}
 		if renderedChild != nil {
