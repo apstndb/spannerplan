@@ -85,7 +85,7 @@ As of 2026-07-18:
 
 Rows record observed pins and declared module floors only. A go.mod require is not a compatibility or validation claim unless an entry explicitly says so.
 
-spannerplan tags observed while writing this matrix: latest non-prerelease v0.2.1; prerelease v0.3.0-alpha.1.
+spannerplan tags observed while writing this matrix: latest non-prerelease v0.2.1; prerelease v0.3.0-alpha.2.
 
 These are v0 releases and do not imply a stable compatibility contract.
 
