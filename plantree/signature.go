@@ -164,7 +164,11 @@ type signatureField struct {
 }
 
 func signatureMetadata(node *sppb.PlanNode) ([]signatureField, error) {
-	fields := node.GetMetadata().GetFields()
+	metadata := node.GetMetadata()
+	if metadata != nil && len(metadata.ProtoReflect().GetUnknown()) != 0 {
+		return nil, errors.New("metadata protobuf Struct contains unknown fields")
+	}
+	fields := metadata.GetFields()
 	parts := make([]signatureField, 0, len(fields))
 	for key, value := range fields {
 		if key == "subquery_cluster_node" {
@@ -249,6 +253,9 @@ func appendSignatureValue(b *strings.Builder, value *structpb.Value) error {
 }
 
 func appendSignatureStruct(b *strings.Builder, value *structpb.Struct) error {
+	if len(value.ProtoReflect().GetUnknown()) != 0 {
+		return errors.New("protobuf Struct contains unknown fields")
+	}
 	fields := value.GetFields()
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
@@ -275,6 +282,9 @@ func appendSignatureStruct(b *strings.Builder, value *structpb.Struct) error {
 }
 
 func appendSignatureList(b *strings.Builder, value *structpb.ListValue) error {
+	if len(value.ProtoReflect().GetUnknown()) != 0 {
+		return errors.New("protobuf ListValue contains unknown fields")
+	}
 	values := value.GetValues()
 	b.WriteString("list ")
 	b.WriteString(strconv.Itoa(len(values)))

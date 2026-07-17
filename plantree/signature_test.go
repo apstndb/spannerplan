@@ -624,6 +624,10 @@ func TestStructuralSignature_RejectsInvalidMetadataValues(t *testing.T) {
 	if err := proto.Unmarshal([]byte{0x38, 0x01}, unknown); err != nil {
 		t.Fatal(err)
 	}
+	unknownStruct := &structpb.Struct{Fields: map[string]*structpb.Value{"mode": structpb.NewStringValue("Row")}}
+	unknownStruct.ProtoReflect().SetUnknown([]byte{0x38, 0x01})
+	unknownList := &structpb.ListValue{Values: []*structpb.Value{structpb.NewStringValue("Row")}}
+	unknownList.ProtoReflect().SetUnknown([]byte{0x38, 0x01})
 
 	tests := []struct {
 		name    string
@@ -638,6 +642,16 @@ func TestStructuralSignature_RejectsInvalidMetadataValues(t *testing.T) {
 			wantErr: "nil protobuf number Value wrapper",
 		},
 		{name: "unknown wire field", value: unknown, wantErr: "contains unknown fields"},
+		{
+			name:    "unknown nested struct field",
+			value:   structpb.NewStructValue(unknownStruct),
+			wantErr: "protobuf Struct contains unknown fields",
+		},
+		{
+			name:    "unknown nested list field",
+			value:   structpb.NewListValue(unknownList),
+			wantErr: "protobuf ListValue contains unknown fields",
+		},
 		{
 			name: "nested nil list item",
 			value: structpb.NewListValue(&structpb.ListValue{
@@ -655,6 +669,15 @@ func TestStructuralSignature_RejectsInvalidMetadataValues(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("unknown top-level struct field", func(t *testing.T) {
+		metadata := &structpb.Struct{Fields: map[string]*structpb.Value{"future": structpb.NewStringValue("Row")}}
+		metadata.ProtoReflect().SetUnknown([]byte{0x38, 0x01})
+		_, err := signatureWithRawMetadata(t, metadata)
+		if err == nil || !strings.Contains(err.Error(), "metadata protobuf Struct contains unknown fields") {
+			t.Fatalf("StructuralSignature() error = %v, want top-level unknown fields error", err)
+		}
+	})
 }
 
 func TestStructuralSignature_NumberValueCorners(t *testing.T) {
@@ -730,14 +753,19 @@ func mustSignatureWithMetadata(t *testing.T, metadata map[string]any) string {
 
 func signatureWithRawMetadataValue(t *testing.T, value *structpb.Value) (string, error) {
 	t.Helper()
+	return signatureWithRawMetadata(t, &structpb.Struct{
+		Fields: map[string]*structpb.Value{"future": value},
+	})
+}
+
+func signatureWithRawMetadata(t *testing.T, metadata *structpb.Struct) (string, error) {
+	t.Helper()
 	qp, err := spannerplan.New([]*sppb.PlanNode{
 		{
 			Index:       0,
 			DisplayName: "Scan",
 			Kind:        sppb.PlanNode_RELATIONAL,
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{"future": value},
-			},
+			Metadata:    metadata,
 		},
 	})
 	if err != nil {
