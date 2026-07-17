@@ -2,8 +2,8 @@ name: Ecosystem pinned-ref integrity
 
 # Non-blocking pinned-reference integrity check. Verifies ECOSYSTEM.md against
 # ecosystem/matrix.json on every run, and optionally fetches pinned public
-# consumer go.mod files to detect a moved/deleted ref, rewritten history, or
-# GitHub API reachability/content failure at the recorded pin.
+# consumer go.mod files to detect an unreachable recorded ref or dependency
+# content that no longer matches the recorded pin.
 #
 # This workflow never runs on push/pull_request as a required gate for the live
 # network check: live mode is schedule + workflow_dispatch only. Document drift
@@ -19,6 +19,10 @@ on:
 permissions:
   contents: read
   issues: write
+
+concurrency:
+  group: ecosystem-pinned-ref-integrity
+  cancel-in-progress: false
 
 jobs:
   canary:
@@ -40,14 +44,14 @@ jobs:
           go run ./ecosystem/cmd/canary -live 2>&1 | tee canary-output.txt
 
       - name: Upload integrity-check output
-        if: failure()
+        if: ${{ always() && steps.integrity.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: ecosystem-pinned-ref-integrity-output
           path: canary-output.txt
 
       - name: Open or update integrity tracking issue
-        if: failure()
+        if: ${{ always() && steps.integrity.outcome == 'failure' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

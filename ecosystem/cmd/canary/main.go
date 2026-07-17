@@ -16,8 +16,8 @@
 // in ecosystem/matrix.json.
 //
 // It is intentionally offline unless -live is set. Live mode fetches only the
-// pinned public refs listed under canary_targets and never touches local-only
-// viewers. It does not resolve current downstream branch or release refs.
+// observed rows marked canary=true and never touches local-only viewers. It
+// does not resolve current downstream branch or release refs.
 package main
 
 import (
@@ -70,7 +70,7 @@ func main() {
 	}
 	client := &http.Client{Timeout: 30 * time.Second}
 	var failed int
-	for _, t := range m.CanaryTargets {
+	for _, t := range m.CanaryTargets() {
 		if err := checkTarget(client, t); err != nil {
 			fmt.Fprintf(os.Stderr, "FAIL %s@%s: %v\n", t.Repo, t.Ref, err)
 			failed++

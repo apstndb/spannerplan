@@ -40,7 +40,6 @@ type Matrix struct {
 	Roles               []Role            `json:"roles"`
 	SpannerplanVersions map[string]string `json:"spannerplan_versions"`
 	Observed            []Observed        `json:"observed"`
-	CanaryTargets       []CanaryTarget    `json:"canary_targets"`
 }
 
 // Role describes one ecosystem participant.
@@ -56,7 +55,9 @@ type Observed struct {
 	Consumer               string          `json:"consumer"`
 	ConsumerRef            string          `json:"consumer_ref"`
 	Kind                   string          `json:"kind"`
-	Canary                 *bool           `json:"canary,omitempty"`
+	Canary                 bool            `json:"canary,omitempty"`
+	Repo                   string          `json:"repo,omitempty"`
+	Path                   string          `json:"path,omitempty"`
 	Requires               []ModuleRequire `json:"requires,omitempty"`
 	ParityGoInstall        string          `json:"parity_go_install,omitempty"`
 	FixtureSyncRef         string          `json:"fixture_sync_ref,omitempty"`
@@ -72,10 +73,10 @@ type ModuleRequire struct {
 
 // CanaryTarget is a public pinned ref checked by the live canary.
 type CanaryTarget struct {
-	Repo          string            `json:"repo"`
-	Ref           string            `json:"ref"`
-	Path          string            `json:"path"`
-	ExpectRequire map[string]string `json:"expect_require"`
+	Repo          string
+	Ref           string
+	Path          string
+	ExpectRequire map[string]string
 }
 
 // LoadMatrix reads ecosystem/matrix.json from dir (repository root or ecosystem/).
@@ -123,18 +124,61 @@ func (m *Matrix) validate() error {
 	if len(m.Observed) == 0 {
 		return fmt.Errorf("observed must not be empty")
 	}
-	if len(m.CanaryTargets) == 0 {
-		return fmt.Errorf("canary_targets must not be empty")
+	canaryCount := 0
+	for i, o := range m.Observed {
+		if o.Consumer == "" || o.ConsumerRef == "" || o.Kind == "" {
+			return fmt.Errorf("observed[%d]: consumer, consumer_ref, and kind are required", i)
+		}
+		seenRequires := make(map[string]struct{}, len(o.Requires))
+		for j, req := range o.Requires {
+			if req.Module == "" || req.Version == "" {
+				return fmt.Errorf("observed[%d].requires[%d]: module and version are required", i, j)
+			}
+			if _, ok := seenRequires[req.Module]; ok {
+				return fmt.Errorf("observed[%d]: duplicate require %q", i, req.Module)
+			}
+			seenRequires[req.Module] = struct{}{}
+		}
+		if !o.Canary {
+			if o.Repo != "" || o.Path != "" {
+				return fmt.Errorf("observed[%d]: repo and path require canary=true", i)
+			}
+			continue
+		}
+		canaryCount++
+		if o.Repo == "" || o.Path == "" {
+			return fmt.Errorf("observed[%d]: canary repo and path are required", i)
+		}
+		if len(o.Requires) == 0 {
+			return fmt.Errorf("observed[%d]: canary requires must not be empty", i)
+		}
 	}
-	for i, t := range m.CanaryTargets {
-		if t.Repo == "" || t.Ref == "" || t.Path == "" {
-			return fmt.Errorf("canary_targets[%d]: repo, ref, and path are required", i)
-		}
-		if len(t.ExpectRequire) == 0 {
-			return fmt.Errorf("canary_targets[%d]: expect_require must not be empty", i)
-		}
+	if canaryCount == 0 {
+		return fmt.Errorf("observed must contain at least one canary entry")
 	}
 	return nil
+}
+
+// CanaryTargets derives the live integrity checks from the observed rows. This
+// keeps the rendered matrix and the network check on one source of truth.
+func (m *Matrix) CanaryTargets() []CanaryTarget {
+	targets := make([]CanaryTarget, 0)
+	for _, o := range m.Observed {
+		if !o.Canary {
+			continue
+		}
+		requires := make(map[string]string, len(o.Requires))
+		for _, req := range o.Requires {
+			requires[req.Module] = req.Version
+		}
+		targets = append(targets, CanaryTarget{
+			Repo:          o.Repo,
+			Ref:           o.ConsumerRef,
+			Path:          o.Path,
+			ExpectRequire: requires,
+		})
+	}
+	return targets
 }
 
 // RenderRolesTable renders the markdown roles table body (with header).

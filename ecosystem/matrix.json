@@ -42,6 +42,9 @@
       "consumer": "spannerplanviz",
       "consumer_ref": "v0.10.2",
       "kind": "go_module_require",
+      "canary": true,
+      "repo": "apstndb/spannerplanviz",
+      "path": "go.mod",
       "requires": [
         {
           "module": "github.com/apstndb/spannerplan",
@@ -54,6 +57,9 @@
       "consumer": "rendertree-web",
       "consumer_ref": "2f260a07666b589422fafac870a050e177c02b33",
       "kind": "go_module_require",
+      "canary": true,
+      "repo": "apstndb/rendertree-web",
+      "path": "go.mod",
       "requires": [
         {
           "module": "github.com/apstndb/spannerplan",
@@ -70,6 +76,9 @@
       "consumer": "spanner-mycli",
       "consumer_ref": "v0.33.0",
       "kind": "go_module_require",
+      "canary": true,
+      "repo": "apstndb/spanner-mycli",
+      "path": "go.mod",
       "requires": [
         {
           "module": "github.com/apstndb/spannerplan",
@@ -82,7 +91,6 @@
       "consumer": "spanner-mycli",
       "consumer_ref": "b43f857b194751e2631073bab45ff2026e86e30c",
       "kind": "go_module_require",
-      "canary": false,
       "requires": [
         {
           "module": "github.com/apstndb/spannerplan",
@@ -99,33 +107,6 @@
       "fixture_sync_ref": "v0.2.1",
       "latest_published_release": "v0.1.0-alpha.3",
       "notes": "Required CI installs rendertree@v0.3.0-alpha.1. Fixture copies under testdata/ were last synced at spannerplan v0.2.1. Weekly canary vs spannerplan@latest lives in spannerplan-rs and is non-blocking."
-    }
-  ],
-  "canary_targets": [
-    {
-      "repo": "apstndb/spannerplanviz",
-      "ref": "v0.10.2",
-      "path": "go.mod",
-      "expect_require": {
-        "github.com/apstndb/spannerplan": "v0.2.0"
-      }
-    },
-    {
-      "repo": "apstndb/rendertree-web",
-      "ref": "2f260a07666b589422fafac870a050e177c02b33",
-      "path": "go.mod",
-      "expect_require": {
-        "github.com/apstndb/spannerplan": "v0.2.1",
-        "github.com/apstndb/spannerplanviz": "v0.10.2"
-      }
-    },
-    {
-      "repo": "apstndb/spanner-mycli",
-      "ref": "v0.33.0",
-      "path": "go.mod",
-      "expect_require": {
-        "github.com/apstndb/spannerplan": "v0.2.0"
-      }
     }
   ]
 }

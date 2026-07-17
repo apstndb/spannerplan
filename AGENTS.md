@@ -11,7 +11,8 @@ Use Go 1.24 as in CI.
 - `make ecosystem-check`: verify `ECOSYSTEM.md` matches `ecosystem/matrix.json`.
 - `make ecosystem-render`: regenerate marked `ECOSYSTEM.md` tables from the matrix.
 - `make ecosystem-pinned-ref-integrity`: live integrity check of pinned public
-  consumer `go.mod` requires. This does not resolve current downstream refs.
+  consumer `go.mod` requires derived from observed matrix rows. This does not
+  resolve current downstream refs or attest commit identity.
 - `go run ./cmd/rendertree < plan.yaml`: render a query plan from YAML or JSON.
 - `go run ./cmd/lintplan < plan.yaml`: print heuristic warnings for expensive plan operators.
 - `golangci-lint run --timeout=5m`: run the same linter family used in GitHub Actions. Run lint before creating a commit, not just before opening a PR.

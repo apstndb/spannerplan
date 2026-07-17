@@ -53,13 +53,43 @@ func TestMatrixLoadsAndValidates(t *testing.T) {
 	if !foundViewer {
 		t.Fatal("expected spanner-plan-viewer role")
 	}
-	if len(m.CanaryTargets) == 0 {
+	targets := m.CanaryTargets()
+	if len(targets) == 0 {
 		t.Fatal("expected canary targets")
 	}
-	for _, c := range m.CanaryTargets {
+	for _, c := range targets {
 		if c.Repo == "" || c.Ref == "" {
 			t.Fatalf("canary target missing repo/ref: %+v", c)
 		}
+	}
+}
+
+func TestCanaryTargetsAreDerivedFromObservedRows(t *testing.T) {
+	m, err := ecosystem.LoadMatrix(filepath.Join(repoRoot(t), "ecosystem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets := m.CanaryTargets()
+	if len(targets) != 3 {
+		t.Fatalf("CanaryTargets() count = %d, want 3", len(targets))
+	}
+	if got := targets[0].ExpectRequire["github.com/apstndb/spannerplan"]; got != "v0.2.0" {
+		t.Fatalf("first target spannerplan require = %q, want v0.2.0", got)
+	}
+}
+
+func TestMatrixRejectsIncompleteCanaryObservedRow(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "ecosystem", "matrix.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := strings.Replace(string(raw), `"repo": "apstndb/spannerplanviz"`, `"repo": ""`, 1)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "matrix.json"), []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ecosystem.LoadMatrix(dir); err == nil || !strings.Contains(err.Error(), "canary repo and path are required") {
+		t.Fatalf("LoadMatrix() error = %v, want incomplete canary error", err)
 	}
 }
 
@@ -77,6 +107,10 @@ func TestCanaryWorkflowUsesPipefail(t *testing.T) {
 	const want = "shell: bash\n        run: |\n          set -euo pipefail\n          go run ./ecosystem/cmd/canary -live 2>&1 | tee canary-output.txt"
 	if !strings.Contains(string(workflow), want) {
 		t.Fatalf("ecosystem canary must use explicit bash with pipefail before tee: %q", want)
+	}
+	const outcomeGate = `if: ${{ always() && steps.integrity.outcome == 'failure' }}`
+	if got := strings.Count(string(workflow), outcomeGate); got != 2 {
+		t.Fatalf("integrity-step outcome gate count = %d, want 2", got)
 	}
 }
 

@@ -74,8 +74,9 @@ dependency of this release train and not part of the public canary set.
   fails if `ECOSYSTEM.md` marked tables diverge. The public pinned-ref integrity
   checker (`.github/workflows/ecosystem-canary.yml`) reads only explicit pinned
   refs for public repositories and never depends on the local viewer. It can
-  detect a moved/deleted pin, rewritten history, or API/content failure at that
-  pin; it does not resolve downstream `main` or `latest` refs.
+  detect an unreachable recorded ref or dependency content that no longer
+  matches the recorded pin; it does not resolve downstream `main` or `latest`
+  refs and does not attest the ref's commit identity.
 
 ## Compatibility matrix
 
