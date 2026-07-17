@@ -17,10 +17,27 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for how this module relates to spannerplan-rs, 
 - [`examples/wasm/render`](./examples/wasm/render): Minimal WebAssembly wrapper around the reference renderer.
 - [`internal`](./internal): Internal subpackages that are not recommended for external use.
 - [`lab`](./lab): Small ad hoc scripts and experiments.
-- [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives.
+- [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives, including [plantree.StructuralSignature](https://pkg.go.dev/github.com/apstndb/spannerplan/plantree#StructuralSignature) for deterministic structural comparison.
 - [`plantree/reference`](./plantree/reference): High-level reference renderer API for Go, browser, and WebAssembly callers.
 - [`stats`](./stats): Execution statistics types and extraction helpers.
 - [`treerender`](./treerender): Generic ASCII tree renderer with wrapping support.
+
+## Structural signatures
+
+`plantree.StructuralSignature` produces a versioned canonical string suitable for
+comparing plan shape across captures:
+
+- Includes operator identity, parent link types, scan/table targets, structural
+  flags, normalized predicates, and ordered visible child occurrences
+- Excludes plan-node IDs, `subquery_cluster_node`, and execution statistics
+- Reuses the Plantree traversal budgets (`MaxPlantreeDepth`,
+  `MaxPlantreeOccurrences`) and cycle detection from `ProcessPlan`
+- Exact string equality is the interchange contract for a given signature
+  version; identical operators can collide, so diff/match UIs must expose
+  ambiguity rather than silently pairing nodes
+
+This API is not the PlanTreeNode / ProcessPlanTree surface tracked in issue #30.
+Golden fixtures live under `plantree/testdata/signature/`.
 
 ## Browser and WASM embedding
 

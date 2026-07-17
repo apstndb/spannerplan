@@ -1,0 +1,15 @@
+spannerplan.structural_signature.v1
+0||Distributed Union|distribution_table=AlbumsByAlbumTitle;execution_method=Row|Split Range:(STARTS_WITH($AlbumTitle, 'T') AND ($AlbumTitle LIKE 'T%e'))
+1||Distributed Cross Apply|execution_method=Row|Split Range:(($SingerId' = $SingerId) AND ($AlbumId' = $AlbumId))
+2|Input|Create Batch|execution_method=Row|
+3||Local Distributed Union|execution_method=Row|
+4||Compute Struct|execution_method=Row|
+5||Filter Scan|execution_method=Row|Residual Condition:($AlbumTitle LIKE 'T%e')
+6||Index Scan|execution_method=Row;scan_target=AlbumsByAlbumTitle|Seek Condition:STARTS_WITH($AlbumTitle, 'T')
+2|Map|Serialize Result|execution_method=Row|
+3||Cross Apply|execution_method=Row|
+4|Input|KeyRangeAccumulator|execution_method=Row|
+5||Batch Scan|execution_method=Row;scan_target=$v2|
+4|Map|Local Distributed Union|execution_method=Row|
+5||Filter Scan|execution_method=Row|
+6||Table Scan|execution_method=Row;scan_target=Albums|Seek Condition:(($SingerId' = $batched_SingerId) AND ($AlbumId' = $batched_AlbumId))

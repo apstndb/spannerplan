@@ -31,6 +31,21 @@ at the time of this change uses ProcessPlan and Text/FormatID only, not TreePart
 Breaking changes in this package are called out in the release / PR description when
 they affect exported options or types.
 
+# Structural signatures
+
+[StructuralSignature] returns a deterministic, versioned canonical string for
+comparing visible relational plan structure. It is intentionally separate from
+any machine-readable PlanTreeNode / ProcessPlanTree API (see issue #30) and does
+not expose viewer structured-row DTOs.
+
+The signature ignores plan-node IDs and execution statistics, preserves ordered
+child occurrences and parent link types, and uses the same depth / occurrence
+budgets and cycle detection as [ProcessPlan]. Exact string equality is the
+interchange contract for a given [StructuralSignatureVersion]; repeated identical
+operators can collide, so comparison layers must expose matching ambiguity.
+See [StructuralSignature] and plantree/testdata/signature for the encoding and
+fixture corpus.
+
 # Stability
 
 This package is still marked EXPERIMENTAL. The shape of exported row types (including
