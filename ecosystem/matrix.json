@@ -1,0 +1,112 @@
+{
+  "as_of": "2026-07-18",
+  "disclaimer": "Rows record observed pins and declared module floors only. A go.mod require is not a compatibility or validation claim unless an entry explicitly says so.",
+  "roles": [
+    {
+      "id": "spannerplan",
+      "repo": "https://github.com/apstndb/spannerplan",
+      "language": "Go",
+      "role": "Ecosystem semantic reference: plan parsing, tree building, text rendering, and golden-output generation for ports. Pure Go — no CGO/Rust/WASM requirements."
+    },
+    {
+      "id": "spannerplan-rs",
+      "repo": "https://github.com/apstndb/spannerplan-rs",
+      "language": "Rust",
+      "role": "Distribution core for non-Go ecosystems (C FFI, browser WASM, GitHub-Release JS tarballs). Follows the Go reference via byte-for-byte parity tests and never forks rendering semantics; \"canonical\" claims in its docs are scoped to that repository's internals."
+    },
+    {
+      "id": "spannerplanviz",
+      "repo": "https://github.com/apstndb/spannerplanviz",
+      "language": "Go",
+      "role": "Diagram source renderer (Mermaid, DOT via the `dot` package, and D2) plus native Graphviz rasterization for CLI use."
+    },
+    {
+      "id": "rendertree-web",
+      "repo": "https://github.com/apstndb/rendertree-web",
+      "language": "Go/WASM + TypeScript",
+      "role": "Lightweight public renderer/playground (GitHub Pages). Thin composition over the libraries; bundle size and safe rendering of untrusted plans are first-class requirements."
+    },
+    {
+      "id": "spanner-plan-viewer",
+      "repo": null,
+      "language": "local unpublished",
+      "role": "Experimental interactive diagnostics workbench (local checkout only; no published GitHub remote). Not a product dependency of this release train and not a canary target."
+    }
+  ],
+  "spannerplan_versions": {
+    "latest_non_prerelease": "v0.2.1",
+    "latest_prerelease": "v0.3.0-alpha.1"
+  },
+  "observed": [
+    {
+      "consumer": "spannerplanviz",
+      "consumer_ref": "v0.10.2",
+      "kind": "go_module_require",
+      "canary": true,
+      "repo": "apstndb/spannerplanviz",
+      "path": "go.mod",
+      "requires": [
+        {
+          "module": "github.com/apstndb/spannerplan",
+          "version": "v0.2.0"
+        }
+      ],
+      "notes": "Latest published release is v0.10.2. Declared module floor is spannerplan v0.2.0; this is not a claim that v0.10.2 was validated against spannerplan v0.2.1."
+    },
+    {
+      "consumer": "rendertree-web",
+      "consumer_ref": "2f260a07666b589422fafac870a050e177c02b33",
+      "kind": "go_module_require",
+      "canary": true,
+      "repo": "apstndb/rendertree-web",
+      "path": "go.mod",
+      "requires": [
+        {
+          "module": "github.com/apstndb/spannerplan",
+          "version": "v0.2.1"
+        },
+        {
+          "module": "github.com/apstndb/spannerplanviz",
+          "version": "v0.10.2"
+        }
+      ],
+      "notes": "Rolling main tip observed on 2026-07-18; no release tag used."
+    },
+    {
+      "consumer": "spanner-mycli",
+      "consumer_ref": "v0.33.0",
+      "kind": "go_module_require",
+      "canary": true,
+      "repo": "apstndb/spanner-mycli",
+      "path": "go.mod",
+      "requires": [
+        {
+          "module": "github.com/apstndb/spannerplan",
+          "version": "v0.2.0"
+        }
+      ],
+      "notes": "Latest published release pin. main@b43f857b194751e2631073bab45ff2026e86e30c currently requires spannerplan v0.2.1; that tip is recorded separately below and is not treated as the release canary pin."
+    },
+    {
+      "consumer": "spanner-mycli",
+      "consumer_ref": "b43f857b194751e2631073bab45ff2026e86e30c",
+      "kind": "go_module_require",
+      "requires": [
+        {
+          "module": "github.com/apstndb/spannerplan",
+          "version": "v0.2.1"
+        }
+      ],
+      "notes": "Observed main tip on 2026-07-18. Informational only; canary uses the published v0.33.0 pin."
+    },
+    {
+      "consumer": "spannerplan-rs",
+      "consumer_ref": "main",
+      "kind": "parity_workflow_pin",
+      "parity_go_install": "github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.1",
+      "fixture_sync_ref": "v0.2.1",
+      "latest_published_release": "v0.1.0-alpha.3",
+      "notes": "Required CI installs rendertree@v0.3.0-alpha.1. Fixture copies under testdata/ were last synced at spannerplan v0.2.1. Weekly canary vs spannerplan@latest lives in spannerplan-rs and is non-blocking."
+    }
+  ]
+}

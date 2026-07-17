@@ -1,0 +1,92 @@
+name: Ecosystem pinned-ref integrity
+
+# Non-blocking pinned-reference integrity check. Verifies ECOSYSTEM.md against
+# ecosystem/matrix.json on every run, and optionally fetches pinned public
+# consumer go.mod files to detect an unreachable recorded ref or dependency
+# content that no longer matches the recorded pin.
+#
+# This workflow never runs on push/pull_request as a required gate for the live
+# network check: live mode is schedule + workflow_dispatch only. Document drift
+# is already covered by `go test ./ecosystem` in the main CI suite. It does not
+# resolve current downstream main/latest refs, so it is not a downstream-current
+# compatibility or freshness check.
+on:
+  schedule:
+    # Mondays at 07:00 UTC (after spannerplan-rs parity canary).
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ecosystem-pinned-ref-integrity
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Check document and pinned public references
+        id: integrity
+        # An explicit bash shell enables pipefail, so a failed canary remains a
+        # failed step even though tee preserves the diagnostic output.
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./ecosystem/cmd/canary -live 2>&1 | tee canary-output.txt
+
+      - name: Upload integrity-check output
+        if: ${{ always() && steps.integrity.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecosystem-pinned-ref-integrity-output
+          path: canary-output.txt
+
+      - name: Open or update integrity tracking issue
+        if: ${{ always() && steps.integrity.outcome == 'failure' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Ecosystem pinned-ref integrity check failed"
+          body=$(cat <<EOF
+          The scheduled ecosystem pinned-ref integrity check failed: a pinned
+          public consumer \`go.mod\` no longer matches \`ecosystem/matrix.json\`,
+          its recorded ref can no longer be read, or \`ECOSYSTEM.md\` drifted
+          from the matrix.
+
+          Update \`ecosystem/matrix.json\` (and regenerate \`ECOSYSTEM.md\` with
+          \`go run ./ecosystem/cmd/render\`) after confirming the recorded
+          pins. This integrity check does not resolve downstream \`main\` or
+          \`latest\` refs and does not make a compatibility claim.
+
+          - Failing run: ${RUN_URL}
+          - Log artifact: \`ecosystem-pinned-ref-integrity-output\`
+
+          This issue is updated by the integrity checker; a new comment is added on each
+          subsequent failure while it stays open.
+          EOF
+          )
+
+          existing=$(gh issue list \
+            --state open \
+            --search "\"${title}\" in:title" \
+            --json number,title \
+            --jq "map(select(.title == \"${title}\")) | .[0].number // empty")
+
+          if [ -n "${existing}" ]; then
+            echo "Updating existing issue #${existing}"
+            gh issue comment "${existing}" --body "${body}"
+          else
+            echo "Creating new integrity issue"
+            gh issue create --title "${title}" --body "${body}"
+          fi
