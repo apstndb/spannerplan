@@ -2,6 +2,7 @@ package plantree
 
 import (
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spannerplan"
@@ -595,6 +597,93 @@ func TestStructuralSignature_CanonicalizesAllMetadata(t *testing.T) {
 			)
 		}
 	})
+
+	t.Run("nested subquery cluster node is excluded", func(t *testing.T) {
+		withoutID := mustSignatureWithMetadata(t, map[string]any{
+			"future": map[string]any{"mode": "Row"},
+		})
+		withFirstID := mustSignatureWithMetadata(t, map[string]any{
+			"future": map[string]any{"mode": "Row", "subquery_cluster_node": "1"},
+		})
+		withSecondID := mustSignatureWithMetadata(t, map[string]any{
+			"future": map[string]any{"mode": "Row", "subquery_cluster_node": "99"},
+		})
+		if withoutID != withFirstID || withFirstID != withSecondID {
+			t.Fatalf(
+				"nested subquery_cluster_node changed signature:\nwithout:\n%s\nfirst:\n%s\nsecond:\n%s",
+				withoutID,
+				withFirstID,
+				withSecondID,
+			)
+		}
+	})
+}
+
+func TestStructuralSignature_RejectsInvalidMetadataValues(t *testing.T) {
+	unknown := &structpb.Value{}
+	if err := proto.Unmarshal([]byte{0x38, 0x01}, unknown); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		value   *structpb.Value
+		wantErr string
+	}{
+		{name: "nil value", value: nil, wantErr: "nil protobuf Value"},
+		{name: "unset kind", value: &structpb.Value{}, wantErr: "kind is unset"},
+		{
+			name:    "typed nil wrapper",
+			value:   &structpb.Value{Kind: (*structpb.Value_NumberValue)(nil)},
+			wantErr: "nil protobuf number Value wrapper",
+		},
+		{name: "unknown wire field", value: unknown, wantErr: "contains unknown fields"},
+		{
+			name: "nested nil list item",
+			value: structpb.NewListValue(&structpb.ListValue{
+				Values: []*structpb.Value{structpb.NewStringValue("ok"), nil},
+			}),
+			wantErr: "list item 1: nil protobuf Value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := signatureWithRawMetadataValue(t, tt.value)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("StructuralSignature() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestStructuralSignature_NumberValueCorners(t *testing.T) {
+	positiveZero := mustSignatureWithRawMetadataValue(t, structpb.NewNumberValue(0))
+	negativeZero := mustSignatureWithRawMetadataValue(t, structpb.NewNumberValue(math.Copysign(0, -1)))
+	if positiveZero == negativeZero {
+		t.Fatalf("positive and negative zero collided:\n%s", positiveZero)
+	}
+
+	subnormal := mustSignatureWithRawMetadataValue(t, structpb.NewNumberValue(math.SmallestNonzeroFloat64))
+	if positiveZero == subnormal {
+		t.Fatalf("zero and the smallest subnormal collided:\n%s", positiveZero)
+	}
+
+	for _, tt := range []struct {
+		name  string
+		value float64
+	}{
+		{name: "positive infinity", value: math.Inf(1)},
+		{name: "negative infinity", value: math.Inf(-1)},
+		{name: "not a number", value: math.NaN()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := signatureWithRawMetadataValue(t, structpb.NewNumberValue(tt.value))
+			if err == nil || !strings.Contains(err.Error(), "non-finite protobuf number Value") {
+				t.Fatalf("StructuralSignature() error = %v, want non-finite error", err)
+			}
+		})
+	}
 }
 
 func TestStructuralSignature_DCAGolden(t *testing.T) {
@@ -637,6 +726,33 @@ func mustSignatureWithMetadata(t *testing.T, metadata map[string]any) string {
 			Metadata:    mustStruct(t, metadata),
 		},
 	})
+}
+
+func signatureWithRawMetadataValue(t *testing.T, value *structpb.Value) (string, error) {
+	t.Helper()
+	qp, err := spannerplan.New([]*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Scan",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			Metadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{"future": value},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	return StructuralSignature(qp)
+}
+
+func mustSignatureWithRawMetadataValue(t *testing.T, value *structpb.Value) string {
+	t.Helper()
+	got, err := signatureWithRawMetadataValue(t, value)
+	if err != nil {
+		t.Fatalf("StructuralSignature() error = %v", err)
+	}
+	return got
 }
 
 func clonePlanNodes(nodes []*sppb.PlanNode) []*sppb.PlanNode {

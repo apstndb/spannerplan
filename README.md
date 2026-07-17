@@ -31,8 +31,8 @@ comparing plan shape across captures:
   key and recursively typed value, predicates, and ordered visible child
   occurrences; this includes raw `scan_type`, `operation_type`, `scan_method`,
   and `seekable_key_size`
-- Excludes plan-node IDs, ID-bearing `subquery_cluster_node`, and execution
-  statistics
+- Excludes plan-node IDs, ID-bearing `subquery_cluster_node` keys at any
+  metadata struct depth, and execution statistics
 - Reuses the Plantree traversal budgets (`MaxPlantreeDepth`,
   `MaxPlantreeOccurrences`) and cycle detection from `ProcessPlan`
 - Uses a length-framed alpha encoding so included fields cannot collide through

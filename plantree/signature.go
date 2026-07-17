@@ -3,6 +3,7 @@ package plantree
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,8 @@ const StructuralSignatureVersion = "spannerplan.structural_signature.v1alpha1"
 //
 // Excluded:
 //   - plan-node indexes / IDs
-//   - subquery_cluster_node, because its value is a PlanNode ID
+//   - subquery_cluster_node keys at any metadata struct depth, because their
+//     values are PlanNode IDs
 //   - execution statistics and other volatile runtime metrics
 //   - rendered titles, wrapping, and ASCII tree prefixes
 //
@@ -129,7 +131,11 @@ func writeSignatureNode(
 	b.WriteByte(' ')
 	appendSignatureStrings(b, signatureOperator(node))
 	b.WriteByte(' ')
-	appendSignatureFields(b, signatureMetadata(node))
+	metadata, err := signatureMetadata(node)
+	if err != nil {
+		return fmt.Errorf("plan node %d metadata: %w", node.GetIndex(), err)
+	}
+	appendSignatureFields(b, metadata)
 	b.WriteByte(' ')
 	appendSignatureFields(b, signaturePredicates(qp, node))
 	b.WriteByte('\n')
@@ -157,59 +163,98 @@ type signatureField struct {
 	value string
 }
 
-func signatureMetadata(node *sppb.PlanNode) []signatureField {
+func signatureMetadata(node *sppb.PlanNode) ([]signatureField, error) {
 	fields := node.GetMetadata().GetFields()
 	parts := make([]signatureField, 0, len(fields))
 	for key, value := range fields {
 		if key == "subquery_cluster_node" {
 			continue
 		}
-		parts = append(parts, signatureField{key: key, value: signatureValue(value)})
+		canonical, err := signatureValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("field %q: %w", key, err)
+		}
+		parts = append(parts, signatureField{key: key, value: canonical})
 	}
 	sort.Slice(parts, func(i, j int) bool {
 		return parts[i].key < parts[j].key
 	})
-	return parts
+	return parts, nil
 }
 
-// signatureValue preserves protobuf Struct field presence, type, and value.
-// Recursively framed structs and lists make non-string and future metadata
-// deterministic without silently collapsing values through GetStringValue.
-func signatureValue(value *structpb.Value) string {
+// signatureValue preserves valid protobuf Struct field presence, type, and
+// value. Recursively framed structs and lists make non-string and future
+// metadata deterministic without silently collapsing values through
+// GetStringValue. Invalid, non-JSON, or forward-unknown Value states fail
+// closed because this encoding cannot canonically represent them.
+func signatureValue(value *structpb.Value) (string, error) {
 	var b strings.Builder
-	appendSignatureValue(&b, value)
-	return b.String()
+	if err := appendSignatureValue(&b, value); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
 
-func appendSignatureValue(b *strings.Builder, value *structpb.Value) {
+func appendSignatureValue(b *strings.Builder, value *structpb.Value) error {
 	if value == nil {
-		b.WriteString("nil")
-		return
+		return errors.New("nil protobuf Value")
+	}
+	if len(value.ProtoReflect().GetUnknown()) != 0 {
+		return errors.New("protobuf Value contains unknown fields")
 	}
 
 	switch kind := value.Kind.(type) {
 	case *structpb.Value_NullValue:
+		if kind == nil || kind.NullValue != structpb.NullValue_NULL_VALUE {
+			return errors.New("invalid protobuf null Value")
+		}
 		b.WriteString("null")
 	case *structpb.Value_NumberValue:
+		if kind == nil {
+			return errors.New("nil protobuf number Value wrapper")
+		}
+		if math.IsNaN(kind.NumberValue) || math.IsInf(kind.NumberValue, 0) {
+			return errors.New("non-finite protobuf number Value")
+		}
 		b.WriteString("number ")
 		b.WriteString(strconv.FormatFloat(kind.NumberValue, 'g', -1, 64))
 	case *structpb.Value_StringValue:
+		if kind == nil {
+			return errors.New("nil protobuf string Value wrapper")
+		}
 		b.WriteString("string ")
 		appendSignatureString(b, kind.StringValue)
 	case *structpb.Value_BoolValue:
+		if kind == nil {
+			return errors.New("nil protobuf bool Value wrapper")
+		}
 		b.WriteString("bool ")
 		b.WriteString(strconv.FormatBool(kind.BoolValue))
 	case *structpb.Value_StructValue:
-		appendSignatureStruct(b, kind.StructValue)
+		if kind == nil || kind.StructValue == nil {
+			return errors.New("nil protobuf struct Value wrapper")
+		}
+		return appendSignatureStruct(b, kind.StructValue)
 	case *structpb.Value_ListValue:
-		appendSignatureList(b, kind.ListValue)
+		if kind == nil || kind.ListValue == nil {
+			return errors.New("nil protobuf list Value wrapper")
+		}
+		return appendSignatureList(b, kind.ListValue)
+	case nil:
+		return errors.New("protobuf Value kind is unset")
+	default:
+		return fmt.Errorf("unsupported protobuf Value kind %T", kind)
 	}
+	return nil
 }
 
-func appendSignatureStruct(b *strings.Builder, value *structpb.Struct) {
+func appendSignatureStruct(b *strings.Builder, value *structpb.Struct) error {
 	fields := value.GetFields()
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
+		if key == "subquery_cluster_node" {
+			continue
+		}
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
@@ -219,20 +264,30 @@ func appendSignatureStruct(b *strings.Builder, value *structpb.Struct) {
 	b.WriteByte('[')
 	for _, key := range keys {
 		appendSignatureString(b, key)
-		appendSignatureString(b, signatureValue(fields[key]))
+		canonical, err := signatureValue(fields[key])
+		if err != nil {
+			return fmt.Errorf("struct field %q: %w", key, err)
+		}
+		appendSignatureString(b, canonical)
 	}
 	b.WriteByte(']')
+	return nil
 }
 
-func appendSignatureList(b *strings.Builder, value *structpb.ListValue) {
+func appendSignatureList(b *strings.Builder, value *structpb.ListValue) error {
 	values := value.GetValues()
 	b.WriteString("list ")
 	b.WriteString(strconv.Itoa(len(values)))
 	b.WriteByte('[')
-	for _, item := range values {
-		appendSignatureString(b, signatureValue(item))
+	for i, item := range values {
+		canonical, err := signatureValue(item)
+		if err != nil {
+			return fmt.Errorf("list item %d: %w", i, err)
+		}
+		appendSignatureString(b, canonical)
 	}
 	b.WriteByte(']')
+	return nil
 }
 
 func signaturePredicates(qp *spannerplan.QueryPlan, node *sppb.PlanNode) []signatureField {

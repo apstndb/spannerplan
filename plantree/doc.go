@@ -41,8 +41,9 @@ not expose viewer structured-row DTOs.
 The signature ignores plan-node IDs and execution statistics, preserves ordered
 child occurrences and parent link types, and uses the same depth / occurrence
 budgets and cycle detection as [ProcessPlan]. Its metadata field set is every
-present key and recursively typed value except subquery_cluster_node, whose
-value is a PlanNode ID. This includes operation_type, raw scan_type, scan_method,
+present key and recursively typed value except subquery_cluster_node at any
+metadata struct depth, whose value is a PlanNode ID. This includes
+operation_type, raw scan_type, scan_method,
 seekable_key_size, flags (including false), and future optimizer metadata. New
 metadata therefore intentionally changes the alpha signature instead of being
 silently ignored.

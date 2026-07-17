@@ -10,7 +10,8 @@ These goldens lock the `plantree.StructuralSignature` canonical encoding.
 - The encoding ignores plan-node IDs and execution statistics
 - Included metadata is every present key and recursively typed value, including
   raw `scan_type`, `operation_type`, `scan_method`, `seekable_key_size`, and
-  false flags; only ID-bearing `subquery_cluster_node` is excluded
+  false flags; only ID-bearing `subquery_cluster_node` keys at any metadata
+  struct depth are excluded
 - New metadata emitted by Spanner intentionally changes this alpha signature
 - DAG reuse is expanded as ordered visible occurrences (same budgets as `ProcessPlan`)
 - Identical operators / shared subtrees can collide; matching layers must expose ambiguity
