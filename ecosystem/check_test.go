@@ -41,17 +41,22 @@ func TestMatrixLoadsAndValidates(t *testing.T) {
 	if m.AsOf == "" {
 		t.Fatal("as_of empty")
 	}
-	foundViewer := false
+	unpublishedViewers := map[string]bool{
+		"spanner-plan-viewer":     false,
+		"spanner-plan-viewer-tui": false,
+	}
 	for _, r := range m.Roles {
-		if r.ID == "spanner-plan-viewer" {
-			foundViewer = true
+		if _, ok := unpublishedViewers[r.ID]; ok {
+			unpublishedViewers[r.ID] = true
 			if r.Repo != nil {
-				t.Fatalf("viewer must remain unpublished (repo=%v)", *r.Repo)
+				t.Fatalf("%s must remain unpublished (repo=%v)", r.ID, *r.Repo)
 			}
 		}
 	}
-	if !foundViewer {
-		t.Fatal("expected spanner-plan-viewer role")
+	for id, found := range unpublishedViewers {
+		if !found {
+			t.Fatalf("expected %s role", id)
+		}
 	}
 	targets := m.CanaryTargets()
 	if len(targets) == 0 {

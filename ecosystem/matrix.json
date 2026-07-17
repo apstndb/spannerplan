@@ -31,6 +31,12 @@
       "repo": null,
       "language": "local unpublished",
       "role": "Experimental interactive diagnostics workbench (local checkout only; no published GitHub remote). Not a product dependency of this release train and not a canary target."
+    },
+    {
+      "id": "spanner-plan-viewer-tui",
+      "repo": null,
+      "language": "Go / Bubble Tea; local unpublished",
+      "role": "Sister terminal viewer over the Go reference Plantree semantics. Its outline uses occurrence identity and its explicit export uses the reference text renderer; it has no published GitHub remote and is not a canary target."
     }
   ],
   "spannerplan_versions": {
@@ -101,12 +107,24 @@
     },
     {
       "consumer": "spannerplan-rs",
-      "consumer_ref": "main",
+      "consumer_ref": "7793f4c02ec01282e4af9a2f86ee878dc6b3b77b",
       "kind": "parity_workflow_pin",
-      "parity_go_install": "github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.1",
+      "parity_go_install": "github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.2",
       "fixture_sync_ref": "v0.2.1",
       "latest_published_release": "v0.1.0-alpha.3",
-      "notes": "Required CI installs rendertree@v0.3.0-alpha.1. Fixture copies under testdata/ were last synced at spannerplan v0.2.1. Weekly canary vs spannerplan@latest lives in spannerplan-rs and is non-blocking."
+      "notes": "Observed main merge snapshot on 2026-07-18. Required CI installs rendertree@v0.3.0-alpha.2 and the Rust core carries structural-signature v1alpha1 byte parity with the copied Go alpha.2 golden. General reference fixture copies under testdata/ were last synced at spannerplan v0.2.1. Latest published distribution remains v0.1.0-alpha.3 because this main-only train added no WASM, FFI, or JavaScript surface. Weekly canary vs spannerplan@latest lives in spannerplan-rs and is non-blocking."
+    },
+    {
+      "consumer": "spanner-plan-viewer-tui",
+      "consumer_ref": "f9dcc6914a923e385c29be75970c7c580896c0f0",
+      "kind": "local_go_module_require",
+      "requires": [
+        {
+          "module": "github.com/apstndb/spannerplan",
+          "version": "v0.3.0-alpha.2"
+        }
+      ],
+      "notes": "Local unpublished snapshot observed on 2026-07-18. Informational only: there is no public repository or canary ref, and the TUI is outside this public release train."
     }
   ]
 }

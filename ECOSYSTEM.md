@@ -18,6 +18,7 @@ with `go run ./ecosystem/cmd/render`, and verify with
 | [spannerplanviz](https://github.com/apstndb/spannerplanviz) (Go) | Diagram source renderer (Mermaid, DOT via the `dot` package, and D2) plus native Graphviz rasterization for CLI use. |
 | [rendertree-web](https://github.com/apstndb/rendertree-web) (Go/WASM + TypeScript) | Lightweight public renderer/playground (GitHub Pages). Thin composition over the libraries; bundle size and safe rendering of untrusted plans are first-class requirements. |
 | spanner-plan-viewer (local unpublished) | Experimental interactive diagnostics workbench (local checkout only; no published GitHub remote). Not a product dependency of this release train and not a canary target. |
+| spanner-plan-viewer-tui (Go / Bubble Tea; local unpublished) | Sister terminal viewer over the Go reference Plantree semantics. Its outline uses occurrence identity and its explicit export uses the reference text renderer; it has no published GitHub remote and is not a canary target. |
 <!-- ecosystem-roles:end -->
 
 ## Design principle
@@ -31,6 +32,9 @@ embed a Graphviz runtime into WASM binaries.
 unpublished `spanner-plan-viewer` checkout is an experimental diagnostics
 workbench: useful for interactive analysis, but not a published product
 dependency of this release train and not part of the public canary set.
+The local unpublished `spanner-plan-viewer-tui` is its terminal-focused sister
+interface over the Go reference Plantree semantics. It is recorded for
+responsibility and pin visibility only; it likewise has no public canary.
 
 ## Governance
 
@@ -57,7 +61,7 @@ dependency of this release train and not part of the public canary set.
   downstream; rendertree-web; spannerplan-rs). cloudspannerecosystem/spanner-cli
   has its own renderer and does not consume spannerplan; treat it as an
   output-semantics comparator, not a release blocker. Do not block releases
-  on the local unpublished viewer.
+  on the local unpublished viewers.
 - Dependency minimums: modules consumed as libraries (spannerplan,
   spannerplanviz) keep their go.mod dependency floors low for MVS
   friendliness — bumping a library's minimums raises the floor for every
@@ -73,7 +77,7 @@ dependency of this release train and not part of the public canary set.
 - Matrix drift control: `ecosystem/matrix.json` owns the observed pins. CI
   fails if `ECOSYSTEM.md` marked tables diverge. The public pinned-ref integrity
   checker (`.github/workflows/ecosystem-canary.yml`) reads only explicit pinned
-  refs for public repositories and never depends on the local viewer. It can
+  refs for public repositories and never depends on the local viewers. It can
   detect an unreachable recorded ref or dependency content that no longer
   matches the recorded pin; it does not resolve downstream `main` or `latest`
   refs and does not attest the ref's commit identity.
@@ -95,7 +99,8 @@ These are v0 releases and do not imply a stable compatibility contract.
 | rendertree-web | `2f260a07666b589422fafac870a050e177c02b33` | `github.com/apstndb/spannerplan v0.2.1`; `github.com/apstndb/spannerplanviz v0.10.2` |
 | spanner-mycli | `v0.33.0` | `github.com/apstndb/spannerplan v0.2.0` |
 | spanner-mycli | `b43f857b194751e2631073bab45ff2026e86e30c` | `github.com/apstndb/spannerplan v0.2.1` |
-| spannerplan-rs | `main` | parity CI `github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.1`; fixtures synced at `v0.2.1`; latest published `v0.1.0-alpha.3` |
+| spannerplan-rs | `7793f4c02ec01282e4af9a2f86ee878dc6b3b77b` | parity CI `github.com/apstndb/spannerplan/cmd/rendertree@v0.3.0-alpha.2`; fixtures synced at `v0.2.1`; latest published `v0.1.0-alpha.3` |
+| spanner-plan-viewer-tui | `f9dcc6914a923e385c29be75970c7c580896c0f0` | `github.com/apstndb/spannerplan v0.3.0-alpha.2` |
 <!-- ecosystem-matrix:end -->
 
 When updating pins, edit `ecosystem/matrix.json` first, then run
