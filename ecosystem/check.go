@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -32,6 +34,8 @@ const (
 	matrixJSON  = "matrix.json"
 	ecosystemMD = "ECOSYSTEM.md"
 )
+
+var githubRepoPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // Matrix is the machine-readable source of truth for ECOSYSTEM.md tables.
 type Matrix struct {
@@ -146,8 +150,21 @@ func (m *Matrix) validate() error {
 			continue
 		}
 		canaryCount++
+		if o.Kind != "go_module_require" {
+			return fmt.Errorf("observed[%d]: canary kind must be go_module_require", i)
+		}
 		if o.Repo == "" || o.Path == "" {
 			return fmt.Errorf("observed[%d]: canary repo and path are required", i)
+		}
+		if !githubRepoPattern.MatchString(o.Repo) {
+			return fmt.Errorf("observed[%d]: canary repo must be a URL-safe OWNER/REPO", i)
+		}
+		_, repoName, _ := strings.Cut(o.Repo, "/")
+		if repoName != o.Consumer {
+			return fmt.Errorf("observed[%d]: canary repo name %q must match consumer %q", i, repoName, o.Consumer)
+		}
+		if err := validateCanaryPath(o.Path); err != nil {
+			return fmt.Errorf("observed[%d]: canary path: %w", i, err)
 		}
 		if len(o.Requires) == 0 {
 			return fmt.Errorf("observed[%d]: canary requires must not be empty", i)
@@ -155,6 +172,24 @@ func (m *Matrix) validate() error {
 	}
 	if canaryCount == 0 {
 		return fmt.Errorf("observed must contain at least one canary entry")
+	}
+	return nil
+}
+
+func validateCanaryPath(filePath string) error {
+	if filePath == "" || path.IsAbs(filePath) {
+		return fmt.Errorf("must be a non-empty relative path")
+	}
+	if strings.Contains(filePath, `\`) {
+		return fmt.Errorf("must use forward slashes")
+	}
+	if path.Clean(filePath) != filePath {
+		return fmt.Errorf("must be clean and must not contain traversal segments")
+	}
+	for _, segment := range strings.Split(filePath, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return fmt.Errorf("must not contain empty or traversal segments")
+		}
 	}
 	return nil
 }

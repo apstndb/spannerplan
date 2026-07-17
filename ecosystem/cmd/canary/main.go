@@ -101,9 +101,11 @@ func checkTarget(client *http.Client, t ecosystem.CanaryTarget) error {
 	return nil
 }
 
-func fetchGitHubFile(client *http.Client, repo, ref, path string) ([]byte, error) {
-	u := fmt.Sprintf("https://api.github.com/repos/%s/contents/%s?ref=%s",
-		repo, path, url.QueryEscape(ref))
+func fetchGitHubFile(client *http.Client, repo, ref, filePath string) ([]byte, error) {
+	u, err := githubContentsURL(repo, ref, filePath)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -135,6 +137,22 @@ func fetchGitHubFile(client *http.Client, repo, ref, path string) ([]byte, error
 		return nil, fmt.Errorf("unexpected encoding %q", payload.Encoding)
 	}
 	return base64.StdEncoding.DecodeString(strings.ReplaceAll(payload.Content, "\n", ""))
+}
+
+func githubContentsURL(repo, ref, filePath string) (string, error) {
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+		return "", fmt.Errorf("invalid GitHub repository %q", repo)
+	}
+	u := &url.URL{
+		Scheme: "https",
+		Host:   "api.github.com",
+		Path:   "/repos/" + owner + "/" + name + "/contents/" + filePath,
+	}
+	query := u.Query()
+	query.Set("ref", ref)
+	u.RawQuery = query.Encode()
+	return u.String(), nil
 }
 
 var requireLine = regexp.MustCompile(`^\s*([^\s]+)\s+(v[^\s]+)`)
