@@ -1,0 +1,80 @@
+name: Ecosystem canary
+
+# Non-blocking governance check. Verifies ECOSYSTEM.md against
+# ecosystem/matrix.json on every run, and optionally fetches pinned public
+# consumer go.mod files to detect silent matrix drift.
+#
+# This workflow never runs on push/pull_request as a required gate for the live
+# network check: live mode is schedule + workflow_dispatch only. Document drift
+# is already covered by `go test ./ecosystem` in the main CI suite.
+on:
+  schedule:
+    # Mondays at 07:00 UTC (after spannerplan-rs parity canary).
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Check document drift and pinned public go.mod requires
+        id: canary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: go run ./ecosystem/cmd/canary -live 2>&1 | tee canary-output.txt
+
+      - name: Upload canary output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecosystem-canary-output
+          path: canary-output.txt
+
+      - name: Open or update drift tracking issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Ecosystem matrix drift against pinned public consumers"
+          body=$(cat <<EOF
+          The scheduled ecosystem canary failed: a pinned public consumer
+          \`go.mod\` no longer matches \`ecosystem/matrix.json\`, or
+          \`ECOSYSTEM.md\` drifted from the matrix.
+
+          Update \`ecosystem/matrix.json\` (and regenerate \`ECOSYSTEM.md\` with
+          \`go run ./ecosystem/cmd/render\`) after confirming the new pins. Do
+          not treat a changed module floor as a compatibility claim.
+
+          - Failing run: ${RUN_URL}
+          - Log artifact: \`ecosystem-canary-output\`
+
+          This issue is updated by the canary; a new comment is added on each
+          subsequent failure while it stays open.
+          EOF
+          )
+
+          existing=$(gh issue list \
+            --state open \
+            --search "\"${title}\" in:title" \
+            --json number,title \
+            --jq "map(select(.title == \"${title}\")) | .[0].number // empty")
+
+          if [ -n "${existing}" ]; then
+            echo "Updating existing issue #${existing}"
+            gh issue comment "${existing}" --body "${body}"
+          else
+            echo "Creating new drift issue"
+            gh issue create --title "${title}" --body "${body}"
+          fi
