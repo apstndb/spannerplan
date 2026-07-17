@@ -189,13 +189,6 @@ func TestProcessPlan_NegativeWrapWidthErrors(t *testing.T) {
 	}
 }
 
-func invalidContinuationIndentOption() Option {
-	return func(o *options) {
-		indent := ContinuationIndent(99)
-		o.continuationIndent = &indent
-	}
-}
-
 func TestProcessPlan_CompactFormatting(t *testing.T) {
 	opts := append(currentOptions(), EnableCompact())
 	rows, err := ProcessPlan(decodeDCAPlan(t), opts...)
@@ -257,6 +250,31 @@ func TestProcessPlan_InvisibleRootReturnsEmpty(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Fatalf("ProcessPlan() rows = %v, want empty", rows)
+	}
+}
+
+func TestProcessPlan_RelationalCycleReturnsError(t *testing.T) {
+	qp, err := spannerplan.New([]*sppb.PlanNode{
+		{
+			Index:       0,
+			DisplayName: "Root",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks:  []*sppb.PlanNode_ChildLink{{ChildIndex: 1}},
+		},
+		{
+			Index:       1,
+			DisplayName: "Child",
+			Kind:        sppb.PlanNode_RELATIONAL,
+			ChildLinks:  []*sppb.PlanNode_ChildLink{{ChildIndex: 0}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	_, err = ProcessPlan(qp)
+	if err == nil || !strings.Contains(err.Error(), "cycle detected at PlanNode index 0") {
+		t.Fatalf("ProcessPlan() error = %v, want cycle error", err)
 	}
 }
 
@@ -426,17 +444,6 @@ func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T)
 	if diff := cmp.Diff(wantSortLinks, sortRow.ScalarChildLinks); diff != "" {
 		t.Fatalf("sort ScalarChildLinks mismatch (-want +got):\n%s", diff)
 	}
-	wantSortKeys := map[string][]string{
-		"Key":   {"$SongGenre"},
-		"Value": {"$SongName"},
-	}
-	if diff := cmp.Diff(wantSortKeys, sortRow.Keys); diff != "" {
-		t.Fatalf("sort deprecated Keys mismatch (-want +got):\n%s", diff)
-	}
-	if got := sortRow.ChildLinks["Key"]; len(got) != 1 || got[0].ChildLink.GetVariable() != "sort_key" {
-		t.Fatalf("sort deprecated ChildLinks[Key] = %v, want sort_key", got)
-	}
-
 	aggregateRow := rowByID(t, rows, 3)
 	wantAggregateLinks := []ScalarChildLink{
 		{Type: "Key", Variable: "group_key", Description: "$SingerId", DisplayName: "Reference", ChildIndex: 4},
@@ -444,16 +451,6 @@ func TestProcessPlan_ScalarChildLinksPreserveParentContextAndOrder(t *testing.T)
 	}
 	if diff := cmp.Diff(wantAggregateLinks, aggregateRow.ScalarChildLinks); diff != "" {
 		t.Fatalf("aggregate ScalarChildLinks mismatch (-want +got):\n%s", diff)
-	}
-	wantAggregateKeys := map[string][]string{
-		"Key": {"$SingerId"},
-		"Agg": {"COUNT(*)"},
-	}
-	if diff := cmp.Diff(wantAggregateKeys, aggregateRow.Keys); diff != "" {
-		t.Fatalf("aggregate deprecated Keys mismatch (-want +got):\n%s", diff)
-	}
-	if got := aggregateRow.ChildLinks["Agg"]; len(got) != 1 || got[0].ChildLink.GetVariable() != "song_count" {
-		t.Fatalf("aggregate deprecated ChildLinks[Agg] = %v, want song_count", got)
 	}
 }
 
@@ -572,39 +569,5 @@ func TestProcessPlan_HangingIndentKeepsChildGuide(t *testing.T) {
 		NodeText: got.NodeText,
 	}); diff != "" {
 		t.Fatalf("row 1 mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestProcessPlan_DeprecatedContinuationIndentNodePrefix(t *testing.T) {
-	withDeprecated, err := ProcessPlan(hangingIndentPlan(t), append(currentOptions(),
-		WithWrapWidth(21),
-		WithContinuationIndent(ContinuationIndentNodePrefix),
-	)...)
-	if err != nil {
-		t.Fatalf("ProcessPlan(deprecated option) error = %v", err)
-	}
-
-	withHanging, err := ProcessPlan(hangingIndentPlan(t), append(currentOptions(),
-		WithWrapWidth(21),
-		WithHangingIndent(),
-	)...)
-	if err != nil {
-		t.Fatalf("ProcessPlan(WithHangingIndent) error = %v", err)
-	}
-
-	if diff := cmp.Diff(withHanging, withDeprecated); diff != "" {
-		t.Fatalf("deprecated continuation-indent option mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestProcessPlan_InvalidContinuationIndentErrors(t *testing.T) {
-	t.Parallel()
-
-	_, err := ProcessPlan(hangingIndentPlan(t), append(currentOptions(), invalidContinuationIndentOption())...)
-	if err == nil {
-		t.Fatal("ProcessPlan(invalid continuation indent) error = nil, want non-nil")
-	}
-	if got := err.Error(); !strings.Contains(got, "unknown ContinuationIndent") {
-		t.Fatalf("ProcessPlan() error = %q, want unknown ContinuationIndent", got)
 	}
 }

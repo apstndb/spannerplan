@@ -279,10 +279,7 @@ func ParseTargetMetadataFormat(s string) (TargetMetadataFormat, error) {
 	}
 }
 
-type (
-	KnownFlagFormat int64
-	FullScanFormat  = KnownFlagFormat
-)
+type KnownFlagFormat int64
 
 const (
 	// KnownFlagFormatRaw prints known boolean flag metadata as is.
@@ -290,12 +287,6 @@ const (
 
 	// KnownFlagFormatLabel prints known boolean flag metadata without value if true or omits if false.
 	KnownFlagFormatLabel
-
-	// Deprecated: FullScanFormatRaw is an alias of KnownFlagFormatRaw.
-	FullScanFormatRaw = KnownFlagFormatRaw
-
-	// Deprecated: FullScanFormatLabel is an alias of KnownFlagFormatLabel.
-	FullScanFormatLabel = KnownFlagFormatLabel
 )
 
 // ParseKnownFlagFormat parses string representation of KnownFlagFormat.
@@ -332,11 +323,6 @@ func WithInlineStatsFunc(f func(*sppb.PlanNode) []string) Option {
 	return func(o *option) {
 		o.inlineStatsFunc = f
 	}
-}
-
-// Deprecated: WithFullScanFormat is an alias of WithKnownFlagFormat.
-func WithFullScanFormat(fmt FullScanFormat) Option {
-	return WithKnownFlagFormat(fmt)
 }
 
 func EnableCompact() Option {
