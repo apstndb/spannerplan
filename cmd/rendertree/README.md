@@ -140,7 +140,8 @@ Aggregates(identified by ID):
 
 ## Custom stats columns
 
-Rendered stats columns are customizable using `--custom-file` or repeatable `--custom-column` flags. `--custom-file`, `--custom-column`, and deprecated `--custom` are mutually exclusive.
+Rendered stats columns are customizable using `--custom-file` or repeatable
+`--custom-column` flags. These two forms are mutually exclusive.
 
 ```
 $ cat custom.yaml
@@ -277,10 +278,6 @@ Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
 ```
-
-### Deprecated custom syntax
-
-The older `--custom=<name>:<template>[:<align>[:<inline_type>]]` form is still accepted for compatibility, but it is deprecated because the delimiter-based mini-language cannot represent all valid template strings robustly.
 
 ## Narrow width output
 

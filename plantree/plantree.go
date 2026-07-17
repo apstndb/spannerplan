@@ -1,6 +1,7 @@
 package plantree
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,75 @@ import (
 )
 
 var defaultWrapCondition = newDefaultWrapCondition()
+
+const (
+	// MaxPlantreeDepth counts the root as depth zero. This conservative
+	// first-alpha renderer budget bounds recursive tree construction, row
+	// collection, and rendering passes even when a plan contains a deep DAG.
+	// It may be raised non-breakingly when real capture evidence requires it.
+	MaxPlantreeDepth = 256
+	// MaxPlantreeOccurrences bounds visible node occurrences, rather than
+	// unique PlanNode indexes, because a DAG can expand exponentially when it
+	// is rendered as a tree. This conservative first-alpha renderer budget may
+	// be raised non-breakingly when real capture evidence requires it.
+	MaxPlantreeOccurrences = 4096
+)
+
+// ErrTraversalLimitExceeded identifies a plan whose visible rendered tree
+// exceeds Plantree's fixed resource bounds.
+var ErrTraversalLimitExceeded = errors.New("plantree: traversal limit exceeded")
+
+// TraversalLimitKind identifies which rendered-tree resource bound was exceeded.
+type TraversalLimitKind string
+
+const (
+	// TraversalLimitDepth reports a node below MaxPlantreeDepth.
+	TraversalLimitDepth TraversalLimitKind = "depth"
+	// TraversalLimitOccurrences reports more than MaxPlantreeOccurrences
+	// visible node occurrences.
+	TraversalLimitOccurrences TraversalLimitKind = "occurrences"
+)
+
+// TraversalLimitError describes a rendered-tree resource bound failure.
+// It unwraps to ErrTraversalLimitExceeded so callers can distinguish a valid
+// but too-large plan from malformed-plan and rendering failures.
+type TraversalLimitError struct {
+	Kind      TraversalLimitKind
+	Limit     int
+	Observed  int
+	NodeIndex int32
+}
+
+func (e *TraversalLimitError) Error() string {
+	switch e.Kind {
+	case TraversalLimitDepth:
+		return fmt.Sprintf(
+			"plan exceeds the renderer depth budget %d at PlanNode index %d",
+			e.Limit,
+			e.NodeIndex,
+		)
+	case TraversalLimitOccurrences:
+		return fmt.Sprintf(
+			"plan exceeds the renderer occurrence budget %d at PlanNode index %d",
+			e.Limit,
+			e.NodeIndex,
+		)
+	default:
+		return fmt.Sprintf(
+			"plan exceeds the renderer %s budget %d at PlanNode index %d",
+			e.Kind,
+			e.Limit,
+			e.NodeIndex,
+		)
+	}
+}
+
+// Unwrap reports the stable traversal-limit sentinel.
+func (e *TraversalLimitError) Unwrap() error { return ErrTraversalLimitExceeded }
+
+type traversalState struct {
+	occurrences int
+}
 
 func newDefaultWrapCondition() *tabwrap.Condition {
 	c := tabwrap.NewCondition()
@@ -37,17 +107,8 @@ type RowWithPredicates struct {
 	DisplayName string
 	// Predicates contains filter predicate text associated with this row.
 	Predicates []string
-	// Keys contains scalar child descriptions grouped by ChildLink type.
-	//
-	// Deprecated: this field is kept for source compatibility.
-	// Use [RowWithPredicates.ScalarChildLinks] and filter by [ScalarChildLink.Type] instead.
-	Keys map[string][]string
 	// ExecutionStats contains execution statistics associated with this row.
 	ExecutionStats stats.ExecutionStats
-	// ChildLinks contains resolved child-link metadata associated with this row.
-	//
-	// Deprecated: use [RowWithPredicates.ScalarChildLinks] for ordered scalar child-link metadata.
-	ChildLinks map[string][]*spannerplan.ResolvedChildLink
 	// ScalarChildLinks contains this row's scalar child links in original PlanNode.ChildLinks order.
 	ScalarChildLinks []ScalarChildLink
 }
@@ -77,9 +138,7 @@ type renderedNode struct {
 	NodeText           string
 	DisplayName        string
 	Predicates         []string
-	Keys               map[string][]string
 	ExecutionStats     stats.ExecutionStats
-	ChildLinks         map[string][]*spannerplan.ResolvedChildLink
 	ScalarChildLinks   []ScalarChildLink
 	Children           []*renderedNode
 }
@@ -111,30 +170,12 @@ type options struct {
 	style                treerender.Style
 	compact              bool
 	hangingIndent        bool
-	continuationIndent   *ContinuationIndent
 	wrapWidth            *int
 	wrapper              *tabwrap.Condition
 }
 
 // Option configures [ProcessPlan].
 type Option func(*options)
-
-// ContinuationIndent controls how wrapped continuation lines are aligned.
-//
-// Deprecated: use [WithHangingIndent] to opt into hanging indent, or omit the option
-// to keep the default tree-aligned continuation behavior.
-type ContinuationIndent int
-
-const (
-	// ContinuationIndentTree preserves the current behavior: continuation lines align only to the tree prefix.
-	//
-	// Deprecated: omit [WithHangingIndent] to keep the default tree-aligned continuation behavior.
-	ContinuationIndentTree ContinuationIndent = iota
-	// ContinuationIndentNodePrefix hangs continuation lines after a node-local prefix such as `[Input] `.
-	//
-	// Deprecated: use [WithHangingIndent].
-	ContinuationIndentNodePrefix
-)
 
 // DisallowUnknownStats makes [ProcessPlan] fail on unknown execution-stat keys.
 func DisallowUnknownStats() Option {
@@ -174,21 +215,6 @@ func EnableCompact() Option {
 func WithHangingIndent() Option {
 	return func(o *options) {
 		o.hangingIndent = true
-		o.continuationIndent = nil
-	}
-}
-
-// WithContinuationIndent selects how wrapped continuation lines are aligned.
-// The default [ContinuationIndentTree] preserves the current behavior.
-// [ContinuationIndentNodePrefix] is opt-in and hangs continuation lines after a
-// node-local prefix such as `[Input] ` or `[Map] ` when present.
-//
-// Deprecated: use [WithHangingIndent] to opt into hanging indent, or omit the option
-// to keep the default tree-aligned continuation behavior.
-func WithContinuationIndent(indent ContinuationIndent) Option {
-	return func(o *options) {
-		o.continuationIndent = &indent
-		o.hangingIndent = indent == ContinuationIndentNodePrefix
 	}
 }
 
@@ -210,14 +236,11 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	if o.wrapWidth != nil && *o.wrapWidth < 0 {
 		return nil, fmt.Errorf("wrap width cannot be negative: %d", *o.wrapWidth)
 	}
-	if o.continuationIndent != nil {
-		if err := validateContinuationIndent(*o.continuationIndent); err != nil {
+	root, err := buildRenderedTree(qp, nil, -1, &o, make(map[int32]struct{}), &traversalState{})
+	if err != nil {
+		if errors.Is(err, ErrTraversalLimitExceeded) {
 			return nil, err
 		}
-	}
-
-	root, err := buildRenderedTree(qp, nil, &o)
-	if err != nil {
 		return nil, fmt.Errorf("failed to build rendered tree: %w", err)
 	}
 	if root == nil {
@@ -257,8 +280,6 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 			ID:               node.ID,
 			DisplayName:      node.DisplayName,
 			Predicates:       node.Predicates,
-			Keys:             node.Keys,
-			ChildLinks:       node.ChildLinks,
 			ScalarChildLinks: node.ScalarChildLinks,
 			TreePart:         row.TreePart,
 			NodeText:         row.NodeText,
@@ -269,7 +290,22 @@ func ProcessPlan(qp *spannerplan.QueryPlan, opts ...Option) (rows []RowWithPredi
 	return result, nil
 }
 
-func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink, opts *options) (*renderedNode, error) {
+func buildRenderedTree(
+	qp *spannerplan.QueryPlan,
+	parent *sppb.PlanNode,
+	childLinkIndex int,
+	opts *options,
+	ancestors map[int32]struct{},
+	state *traversalState,
+) (*renderedNode, error) {
+	var link *sppb.PlanNode_ChildLink
+	if parent != nil {
+		childLinks := parent.GetChildLinks()
+		if childLinkIndex < 0 || childLinkIndex >= len(childLinks) {
+			return nil, fmt.Errorf("child link index out of range: parent node %d childLinks[%d]", parent.GetIndex(), childLinkIndex)
+		}
+		link = childLinks[childLinkIndex]
+	}
 	if !qp.IsVisible(link) {
 		return nil, nil
 	}
@@ -285,7 +321,30 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 	if node.GetIndex() < 0 {
 		return nil, fmt.Errorf("plan node index cannot be negative: %d", node.GetIndex())
 	}
-	linkType := qp.GetLinkType(link)
+	if _, ok := ancestors[node.GetIndex()]; ok {
+		return nil, fmt.Errorf("cycle detected at PlanNode index %d", node.GetIndex())
+	}
+	depth := len(ancestors)
+	if depth > MaxPlantreeDepth {
+		return nil, &TraversalLimitError{
+			Kind:      TraversalLimitDepth,
+			Limit:     MaxPlantreeDepth,
+			Observed:  depth,
+			NodeIndex: node.GetIndex(),
+		}
+	}
+	if state.occurrences >= MaxPlantreeOccurrences {
+		return nil, &TraversalLimitError{
+			Kind:      TraversalLimitOccurrences,
+			Limit:     MaxPlantreeOccurrences,
+			Observed:  state.occurrences + 1,
+			NodeIndex: node.GetIndex(),
+		}
+	}
+	state.occurrences++
+	ancestors[node.GetIndex()] = struct{}{}
+	defer delete(ancestors, node.GetIndex())
+	linkType := qp.LinkTypeInParent(parent, childLinkIndex)
 	continuationAnchor := lo.Ternary(linkType != "", "["+linkType+"]"+sep, "")
 	nodeText := continuationAnchor + spannerplan.NodeTitle(node, opts.queryplanOptions...)
 
@@ -308,15 +367,6 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		return item.Child.GetKind() == sppb.PlanNode_SCALAR
 	})
 
-	childLinks := lo.GroupBy(scalarChildLinks, func(item *spannerplan.ResolvedChildLink) string {
-		return item.ChildLink.GetType()
-	})
-	keys := lo.MapValues(childLinks, func(items []*spannerplan.ResolvedChildLink, _ string) []string {
-		return lo.Map(items, func(item *spannerplan.ResolvedChildLink, _ int) string {
-			return item.Child.GetShortRepresentation().GetDescription()
-		})
-	})
-
 	renderedScalarChildLinks := lo.Map(scalarChildLinks, func(item *spannerplan.ResolvedChildLink, _ int) ScalarChildLink {
 		return ScalarChildLink{
 			Type:        item.ChildLink.GetType(),
@@ -332,22 +382,25 @@ func buildRenderedTree(qp *spannerplan.QueryPlan, link *sppb.PlanNode_ChildLink,
 		return nil, err
 	}
 
-	visibleChildLinks := qp.VisibleChildLinks(node)
 	rendered := &renderedNode{
 		ID:                 node.GetIndex(),
 		ContinuationAnchor: continuationAnchor,
 		NodeText:           nodeText,
 		DisplayName:        node.GetDisplayName(),
 		Predicates:         predicates,
-		Keys:               keys,
 		ExecutionStats:     *executionStats,
-		ChildLinks:         childLinks,
 		ScalarChildLinks:   renderedScalarChildLinks,
 	}
 
-	for _, child := range visibleChildLinks {
-		renderedChild, err := buildRenderedTree(qp, child, opts)
+	for childIndex, child := range node.GetChildLinks() {
+		if !qp.IsVisible(child) {
+			continue
+		}
+		renderedChild, err := buildRenderedTree(qp, node, childIndex, opts, ancestors, state)
 		if err != nil {
+			if errors.Is(err, ErrTraversalLimitExceeded) {
+				return nil, err
+			}
 			return nil, fmt.Errorf("buildRenderedTree failed on child link %v: %w", child, err)
 		}
 		if renderedChild != nil {
@@ -362,15 +415,6 @@ func mapHangingIndent(enabled bool) treerender.ContinuationIndent {
 		return treerender.ContinuationIndentAnchor
 	}
 	return treerender.ContinuationIndentTree
-}
-
-func validateContinuationIndent(indent ContinuationIndent) error {
-	switch indent {
-	case ContinuationIndentTree, ContinuationIndentNodePrefix:
-		return nil
-	default:
-		return fmt.Errorf("unknown ContinuationIndent: %d", indent)
-	}
 }
 
 func collectPreorder(root *renderedNode) []*renderedNode {

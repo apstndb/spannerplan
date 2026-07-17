@@ -19,7 +19,6 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for how this module relates to spannerplan-rs, 
 - [`lab`](./lab): Small ad hoc scripts and experiments.
 - [`plantree`](./plantree): Spanner `PlanNode` tree processing and row-building primitives.
 - [`plantree/reference`](./plantree/reference): High-level reference renderer API for Go, browser, and WebAssembly callers.
-- [`protoyaml`](./protoyaml) (**deprecated, frozen**): YAML and JSON helpers formerly used by this module for decoding protobuf query plan data. It is frozen for downstream compatibility (spanner-mycli pins its exact `Marshal` output) and will be removed in v0.3.0. New code should use [`github.com/apstndb/protoyaml`](https://github.com/apstndb/protoyaml), the canonical protojson-over-YAML mapping.
 - [`stats`](./stats): Execution statistics types and extraction helpers.
 - [`treerender`](./treerender): Generic ASCII tree renderer with wrapping support.
 
@@ -62,3 +61,19 @@ console.log(result.output)
 ## Disclaimer
 
 This module is alpha quality.
+
+The `v0.3.0` prerelease line removes the deprecated
+`github.com/apstndb/spannerplan/protoyaml` compatibility package. Import
+[`github.com/apstndb/protoyaml`](https://github.com/apstndb/protoyaml)
+directly; `spanner-mycli` and the Spanner plan ecosystem have already migrated.
+
+It also replaces the ambiguous `QueryPlan.GetLinkType(link)` API with
+`QueryPlan.LinkTypeInParent(parent, rawChildLinkIndex)`. Callers that render
+links must preserve the raw position in the actual parent's `ChildLinks` slice:
+a shared child PlanNode can have different link labels at different occurrences.
+
+Plantree now rejects rendered trees deeper than 256 edges from the root or
+with more than 4096 visible node occurrences. Callers can identify those
+renderer-budget failures with `errors.Is(err, plantree.ErrTraversalLimitExceeded)`
+and inspect `*plantree.TraversalLimitError`; the conservative alpha budgets may
+be raised non-breakingly when real Spanner captures require it.

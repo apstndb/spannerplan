@@ -272,6 +272,107 @@ func TestParentLinks(t *testing.T) {
 	}
 }
 
+func TestLinkTypeInParentUsesParentOccurrence(t *testing.T) {
+	tests := []struct {
+		name      string
+		planNodes []*sppb.PlanNode
+		want      []struct {
+			parentIndex    int
+			childLinkIndex int
+			linkType       string
+		}
+	}{
+		{
+			name: "apply parent before non apply parent",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}, {ChildIndex: 2}}},
+				{Index: 1, DisplayName: "Cross Apply", ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 2, DisplayName: "Hash Join", ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 3},
+			},
+			want: []struct {
+				parentIndex    int
+				childLinkIndex int
+				linkType       string
+			}{
+				{parentIndex: 1, childLinkIndex: 0, linkType: "Input"},
+				{parentIndex: 2, childLinkIndex: 0, linkType: ""},
+			},
+		},
+		{
+			name: "non apply parent before apply parent",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}, {ChildIndex: 2}}},
+				{Index: 1, DisplayName: "Hash Join", ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 2, DisplayName: "Cross Apply", ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 3}}},
+				{Index: 3},
+			},
+			want: []struct {
+				parentIndex    int
+				childLinkIndex int
+				linkType       string
+			}{
+				{parentIndex: 1, childLinkIndex: 0, linkType: ""},
+				{parentIndex: 2, childLinkIndex: 0, linkType: "Input"},
+			},
+		},
+		{
+			name: "duplicate links to same child only label first occurrence",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, DisplayName: "Cross Apply", ChildLinks: []*sppb.PlanNode_ChildLink{{ChildIndex: 1}, {ChildIndex: 1}}},
+				{Index: 1},
+			},
+			want: []struct {
+				parentIndex    int
+				childLinkIndex int
+				linkType       string
+			}{
+				{parentIndex: 0, childLinkIndex: 0, linkType: "Input"},
+				{parentIndex: 0, childLinkIndex: 1, linkType: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qp, err := New(tt.planNodes)
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			for _, want := range tt.want {
+				parent := tt.planNodes[want.parentIndex]
+				if got := qp.LinkTypeInParent(parent, want.childLinkIndex); got != want.linkType {
+					t.Fatalf("LinkTypeInParent(parent %d, childLinks[%d]) = %q, want %q", want.parentIndex, want.childLinkIndex, got, want.linkType)
+				}
+			}
+		})
+	}
+}
+
+func TestLinkTypeInParentExplicitTypeAndInvalidOccurrence(t *testing.T) {
+	parent := &sppb.PlanNode{
+		Index:       0,
+		DisplayName: "Cross Apply",
+		ChildLinks: []*sppb.PlanNode_ChildLink{
+			{ChildIndex: 1, Type: "Map"},
+		},
+	}
+	qp, err := New([]*sppb.PlanNode{parent, {Index: 1}})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if got := qp.LinkTypeInParent(parent, 0); got != "Map" {
+		t.Fatalf("LinkTypeInParent(explicit) = %q, want Map", got)
+	}
+	if got := qp.LinkTypeInParent(parent, 1); got != "" {
+		t.Fatalf("LinkTypeInParent(out of range) = %q, want empty", got)
+	}
+	if got := qp.LinkTypeInParent(nil, 0); got != "" {
+		t.Fatalf("LinkTypeInParent(nil parent) = %q, want empty", got)
+	}
+}
+
 func TestIsPredicate(t *testing.T) {
 	tests := []struct {
 		name      string

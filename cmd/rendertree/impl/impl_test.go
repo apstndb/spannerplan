@@ -286,79 +286,6 @@ Predicates(identified by ID):
 `),
 		},
 		{
-			desc:  "PROFILE with custom list",
-			input: dcaProfileYAML,
-			renderDef: lo.Must(customListToTableRenderDef([]string{
-				`ID:{{.FormatID}}:RIGHT`,
-				`Operator:{{.Text}}`,
-				`Rows:{{.ExecutionStats.Rows.Total}}:RIGHT`,
-				`Scanned:{{.ExecutionStats.ScannedRows.Total}}:RIGHT`,
-				`Filtered:{{.ExecutionStats.FilteredRows.Total}}:RIGHT`,
-			})),
-			want: heredoc.Doc(`
-+-----+-------------------------------------------------------------------------------------------+------+---------+----------+
-| ID  | Operator                                                                                  | Rows | Scanned | Filtered |
-+-----+-------------------------------------------------------------------------------------------+------+---------+----------+
-|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                                             |   33 |         |          |
-|  *1 | +- Distributed Cross Apply <Row>                                                          |   33 |         |          |
-|   2 |    +- [Input] Create Batch <Row>                                                          |      |         |          |
-|   3 |    |  +- Local Distributed Union <Row>                                                    |    7 |         |          |
-|   4 |    |     +- Compute Struct <Row>                                                          |    7 |         |          |
-|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full scan, scan_method: Automatic) |    7 |       7 |        0 |
-|  11 |    +- [Map] Serialize Result <Row>                                                        |   33 |         |          |
-|  12 |       +- Cross Apply <Row>                                                                |   33 |         |          |
-|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Row)                            |    7 |         |          |
-|  16 |          +- [Map] Local Distributed Union <Row>                                           |   33 |         |          |
-| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)                                   |      |         |          |
-|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full scan, scan_method: Row)      |   33 |      63 |       30 |
-+-----+-------------------------------------------------------------------------------------------+------+---------+----------+
-
-Predicates(identified by ID):
-  1: Split Range: ($AlbumId = $AlbumId_1)
- 17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
-`),
-		},
-		{
-			desc:  "PROFILE with custom list, inline",
-			input: dcaProfileYAML,
-			renderDef: lo.Must(customListToTableRenderDef([]string{
-				`ID:{{.FormatID}}:RIGHT:NEVER`,
-				`Operator:{{.Text}}::NEVER`,
-				`Rows:{{.ExecutionStats.Rows.Total}}:RIGHT:NEVER`,
-				`Scanned:{{.ExecutionStats.ScannedRows.Total}}:RIGHT`,
-				`Filtered:{{.ExecutionStats.FilteredRows.Total}}:RIGHT`,
-			})),
-			inline: true,
-			opts:   sliceOf(plantree.WithWrapWidth(60)),
-			want: heredoc.Doc(`
-+-----+--------------------------------------------------------------+------+
-| ID  | Operator                                                     | Rows |
-+-----+--------------------------------------------------------------+------+
-|   0 | Distributed Union on AlbumsByAlbumTitle <Row>                |   33 |
-|  *1 | +- Distributed Cross Apply <Row>                             |   33 |
-|   2 |    +- [Input] Create Batch <Row>                             |      |
-|   3 |    |  +- Local Distributed Union <Row>                       |    7 |
-|   4 |    |     +- Compute Struct <Row>                             |    7 |
-|   5 |    |        +- Index Scan on AlbumsByAlbumTitle <Row> (Full  |    7 |
-|     |    |           scan, scan_method: Automatic, Scanned=7, Filt |      |
-|     |    |           ered=0)                                       |      |
-|  11 |    +- [Map] Serialize Result <Row>                           |   33 |
-|  12 |       +- Cross Apply <Row>                                   |   33 |
-|  13 |          +- [Input] Batch Scan on $v2 <Row> (scan_method: Ro |    7 |
-|     |          |  w)                                               |      |
-|  16 |          +- [Map] Local Distributed Union <Row>              |   33 |
-| *17 |             +- Filter Scan <Row> (seekable_key_size: 0)      |      |
-|  18 |                +- Index Scan on SongsBySongGenre <Row> (Full |   33 |
-|     |                    scan, scan_method: Row, Scanned=63, Filte |      |
-|     |                   red=30)                                    |      |
-+-----+--------------------------------------------------------------+------+
-
-Predicates(identified by ID):
-  1: Split Range: ($AlbumId = $AlbumId_1)
- 17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
-`),
-		},
-		{
 			desc:      "DELETE PLAN",
 			input:     deleteYAML,
 			renderDef: withStatsToRenderDefMap[false],
@@ -872,45 +799,12 @@ func TestRun_UsageErrors(t *testing.T) {
 			},
 		},
 		{
-			name:        "full-scan and known-flag are mutually exclusive",
-			args:        []string{"-full-scan", "raw", "-known-flag", "label"},
-			wantErrText: "--full-scan and --known-flag are mutually exclusive",
-			postCheck: func(t *testing.T, stderr string, err error) {
-				t.Helper()
-				if !strings.Contains(stderr, "--full-scan and --known-flag are mutually exclusive") {
-					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
-				}
-			},
-		},
-		{
-			name:        "custom and custom-file are mutually exclusive",
-			args:        []string{"-custom", "ID:{{.FormatID}}", "-custom-file", "custom.yaml"},
-			wantErrText: "--custom and --custom-file are mutually exclusive",
-			postCheck: func(t *testing.T, stderr string, err error) {
-				t.Helper()
-				if !strings.Contains(stderr, "--custom and --custom-file are mutually exclusive") {
-					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
-				}
-			},
-		},
-		{
 			name:        "custom-column and custom-file are mutually exclusive",
 			args:        []string{"-custom-column", `{"name":"ID","template":"{{.FormatID}}"}`, "-custom-file", "custom.yaml"},
 			wantErrText: "--custom-column and --custom-file are mutually exclusive",
 			postCheck: func(t *testing.T, stderr string, err error) {
 				t.Helper()
 				if !strings.Contains(stderr, "--custom-column and --custom-file are mutually exclusive") {
-					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
-				}
-			},
-		},
-		{
-			name:        "custom and custom-column are mutually exclusive",
-			args:        []string{"-custom", "ID:{{.FormatID}}", "-custom-column", `{"name":"Operator","template":"{{.Text}}"}`},
-			wantErrText: "--custom and --custom-column are mutually exclusive",
-			postCheck: func(t *testing.T, stderr string, err error) {
-				t.Helper()
-				if !strings.Contains(stderr, "--custom and --custom-column are mutually exclusive") {
 					t.Fatalf("stderr = %q, want mutual exclusion message", stderr)
 				}
 			},
@@ -965,38 +859,6 @@ func TestRun_EmptyPrintSuppressesAppendix(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Distributed Cross Apply") {
 		t.Fatalf("stdout = %q, want rendered tree", stdout.String())
-	}
-}
-
-func TestRun_DeprecatedFullScanAlias(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	err := run([]string{"-full-scan", "label", "-mode", "plan"}, bytes.NewReader(deleteYAML), &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("run() error = %v", err)
-	}
-	if !strings.Contains(stderr.String(), "--full-scan is deprecated. You must migrate to --known-flag.") {
-		t.Fatalf("stderr = %q, want deprecation warning", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "Apply Mutations on MutationTest <Row>") {
-		t.Fatalf("stdout = %q, want rendered table output", stdout.String())
-	}
-}
-
-func TestRun_DeprecatedCustomAlias(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	err := run([]string{"-custom", "ID:{{.FormatID}}:RIGHT", "-mode", "plan"}, bytes.NewReader(deleteYAML), &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("run() error = %v", err)
-	}
-	if !strings.Contains(stderr.String(), "--custom is deprecated. You must migrate to --custom-column or --custom-file.") {
-		t.Fatalf("stderr = %q, want deprecation warning", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "| ID |") {
-		t.Fatalf("stdout = %q, want custom output", stdout.String())
 	}
 }
 

@@ -31,6 +31,14 @@ embed a Graphviz runtime into WASM binaries.
   including new public APIs, bumps patch. Rendering output changes are
   breaking events for downstream golden tests even when the API is
   unchanged.
+- Stable or v1 compatibility is never implied by repository age. New
+  cross-language surfaces stay v0/alpha until a maintainer explicitly
+  authorizes a stable release; prerelease tags are the default place to remove
+  deprecated aliases and correct accidental API boundaries.
+- Structured Plantree rows used between a bundled renderer and viewer are an
+  internal, co-pinned FFI detail. Public interoperability is based on Spanner
+  plan input plus the reference text renderer unless a separate external
+  contract is deliberately designed and released.
 - Release checklist for spannerplan/spannerplanviz: before tagging, check
   downstream pins and golden suites (spanner-mycli — the direct API
   downstream; rendertree-web; spannerplan-rs). cloudspannerecosystem/spanner-cli
