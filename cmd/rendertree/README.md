@@ -283,9 +283,12 @@ Predicates(identified by ID):
 
 `rendertree` supports compact formatting and wrapping for limited-width environments.
 
-- `--layout=tableless` removes the ASCII table grid and renders rows as `ID|Operator` lines.
+- `--layout=tableless` removes the ASCII table grid and headers and renders pipe-separated physical lines.
   - `--tableless` is a shortcut for `--layout=tableless`.
   - This layout can be combined with `--compact`, `--wrap-width`, and `--inline-stats`.
+  - The output is human-oriented: `|` is not escaped, trailing empty cells are omitted, and physical lines may have different field counts. Empty physical lines are preserved.
+  - PROFILE output without `--inline-stats` adds separate stats fields when present; rows without stats have fewer fields, and the unpadded Operator field means stats do not form vertically aligned columns.
+  - Custom columns using center alignment are emitted without centering or padding.
 - `--compact` enables the compact format:
   - Each level of depth in the Query Plan tree adds only one character to its indentation.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.

@@ -87,6 +87,10 @@ if (result.error) {
 console.log(result.output)
 ```
 
+The tableless layout is compact, human-oriented text rather than an escaped
+pipe-delimited interchange format. Use keyed `reference.RenderConfig` literals
+in Go so additive configuration fields remain source-compatible.
+
 ## Disclaimer
 
 This module is alpha quality.

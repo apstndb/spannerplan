@@ -2,6 +2,7 @@ package asciitable_test
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/MakeNowJust/heredoc/v2"
@@ -152,10 +153,12 @@ func TestRenderTableless_PreservesMultilineCells(t *testing.T) {
 	}
 }
 
-func TestRenderTableless_SkipsAllEmptyLinesBeforeAlignment(t *testing.T) {
+func TestRenderTableless_PreservesEmptyPhysicalLinesAndRows(t *testing.T) {
 	rows := []testRow{
 		{idText: "12", text: "Root"},
-		{idText: "", text: "\nChild"},
+		{idText: "", text: "\nChild\n"},
+		{},
+		{idText: "3", text: "Done"},
 	}
 	spec := asciitable.TableSpec[testRow]{
 		Columns: []asciitable.Column[testRow]{
@@ -168,10 +171,31 @@ func TestRenderTableless_SkipsAllEmptyLinesBeforeAlignment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderTableless() error = %v", err)
 	}
-	want := heredoc.Doc(`
-		12|Root
-		  |Child
-	`)
+	want := "12|Root\n\n  |Child\n\n\n 3|Done\n"
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("RenderTableless() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRenderTableless_CenterAlignmentIsUnpadded(t *testing.T) {
+	rows := []testRow{{text: "long"}, {text: "x"}}
+	spec := asciitable.TableSpec[testRow]{
+		Columns: []asciitable.Column[testRow]{
+			{
+				Header:    "Operator",
+				Alignment: asciitable.AlignCenter,
+				Cell: func(row testRow, _ int) string {
+					return row.text
+				},
+			},
+		},
+	}
+
+	got, err := asciitable.RenderTableless(rows, spec)
+	if err != nil {
+		t.Fatalf("RenderTableless() error = %v", err)
+	}
+	want := "long\nx\n"
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("RenderTableless() mismatch (-want +got):\n%s", diff)
 	}
@@ -231,6 +255,73 @@ func TestRenderTable_InvalidSpec(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("RenderTable() nil Cell error = nil, want non-nil")
+	}
+}
+
+func TestRenderTableless_InvalidSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		spec asciitable.TableSpec[testRow]
+	}{
+		{
+			name: "no columns",
+		},
+		{
+			name: "invalid alignment",
+			spec: asciitable.TableSpec[testRow]{
+				Columns: []asciitable.Column[testRow]{
+					{
+						Header:    "bad",
+						Alignment: asciitable.Alignment("diagonal"),
+						Cell: func(testRow, int) string {
+							return ""
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "nil Cell",
+			spec: asciitable.TableSpec[testRow]{
+				Columns: []asciitable.Column[testRow]{{Header: "bad"}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := asciitable.RenderTableless[testRow](nil, tt.spec); err == nil {
+				t.Fatal("RenderTableless() error = nil, want non-nil")
+			}
+		})
+	}
+}
+
+func BenchmarkRenderTableless_SparseMultilineRow(b *testing.B) {
+	const (
+		columnCount = 1000
+		lineCount   = 1000
+	)
+
+	row := make([]string, columnCount)
+	row[0] = strings.Repeat("x\n", lineCount-1) + "x"
+	spec := asciitable.TableSpec[[]string]{
+		Columns: make([]asciitable.Column[[]string], columnCount),
+	}
+	for i := range spec.Columns {
+		columnIndex := i
+		spec.Columns[i] = asciitable.Column[[]string]{
+			Cell: func(row []string, _ int) string {
+				return row[columnIndex]
+			},
+		}
+	}
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, err := asciitable.RenderTableless([][]string{row}, spec); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
