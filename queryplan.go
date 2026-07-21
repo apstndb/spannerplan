@@ -17,11 +17,73 @@ type QueryPlan struct {
 	parentLinksMap map[int32][]ResolvedParentLink
 }
 
-var ErrEmptyPlanNodes = errors.New("spannerplan: planNodes cannot be empty")
-var ErrNilPlanNode = errors.New("spannerplan: planNode cannot be nil")
-var ErrPlanNodeIndexMismatch = errors.New("spannerplan: planNode index must match slice position")
-var ErrNilChildLink = errors.New("spannerplan: childLink cannot be nil")
-var ErrChildLinkIndexOutOfRange = errors.New("spannerplan: childLink childIndex out of range")
+// ErrInvalidPlan is the stable sentinel identifying any plan-validation
+// failure returned by New. Every validation error wraps it, so consumers can
+// detect a malformed plan with errors.Is(err, ErrInvalidPlan) regardless of
+// the specific cause or the exact message wording, which is not guaranteed to
+// remain stable.
+var ErrInvalidPlan = errors.New("spannerplan: invalid plan")
+
+// Category sentinels identify the specific kind of validation failure. Each is
+// reported through a *ValidationError (see New) whose Kind field is set to one
+// of these values and which also wraps ErrInvalidPlan. Match them with
+// errors.Is; prefer ErrInvalidPlan when any validation failure should be
+// treated the same way.
+var (
+	ErrEmptyPlanNodes           = errors.New("spannerplan: planNodes cannot be empty")
+	ErrNilPlanNode              = errors.New("spannerplan: planNode cannot be nil")
+	ErrPlanNodeIndexMismatch    = errors.New("spannerplan: planNode index must match slice position")
+	ErrNilChildLink             = errors.New("spannerplan: childLink cannot be nil")
+	ErrChildLinkIndexOutOfRange = errors.New("spannerplan: childLink childIndex out of range")
+)
+
+// ValidationError is returned by New (and any other constructor that validates
+// its input) when a plan fails validation. It provides a stable, machine-
+// readable identity for the failure so consumers can branch on it without
+// pinning message text.
+//
+// Both errors.Is and errors.As work:
+//
+//   - errors.Is(err, spannerplan.ErrInvalidPlan) matches any validation failure.
+//   - errors.Is(err, spannerplan.ErrChildLinkIndexOutOfRange) (and the other
+//     category sentinels) matches a specific failure kind.
+//   - errors.As(err, &verr) exposes the structured fields below.
+//
+// The Error string is preserved for humans but is not part of the stable API;
+// use the sentinels or the fields instead.
+type ValidationError struct {
+	// Kind is the category sentinel for this failure, e.g.
+	// ErrChildLinkIndexOutOfRange. It is always one of the exported
+	// Err* sentinels; the ValidationError itself also wraps ErrInvalidPlan.
+	Kind error
+	// NodeIndex is the plan-node index (equivalently, slice position, which
+	// New requires to match) involved in the failure, or -1 when no single
+	// node applies (e.g. an empty slice).
+	NodeIndex int
+	// ChildIndex is the position within the parent node's ChildLinks slice
+	// involved in the failure, or -1 when the failure is not about a specific
+	// child link.
+	ChildIndex int
+	// err carries the full formatted message and wraps Kind, preserving the
+	// historical error text and errors.Is behavior for the category sentinel.
+	err error
+}
+
+// Error returns the full human-readable message. The exact wording is not part
+// of the stable API and may change; match on ErrInvalidPlan, the category
+// sentinels, or the struct fields instead.
+func (e *ValidationError) Error() string { return e.err.Error() }
+
+// Unwrap reports both ErrInvalidPlan and the wrapped category error, so that
+// errors.Is matches ErrInvalidPlan and every specific sentinel.
+func (e *ValidationError) Unwrap() []error { return []error{ErrInvalidPlan, e.err} }
+
+// newValidationError builds a *ValidationError from a category sentinel and the
+// fully formatted error (which itself wraps the sentinel to preserve message
+// text and errors.Is behavior).
+func newValidationError(kind error, nodeIndex, childIndex int, err error) *ValidationError {
+	return &ValidationError{Kind: kind, NodeIndex: nodeIndex, ChildIndex: childIndex, err: err}
+}
 
 // New constructs a QueryPlan from sppb.QueryPlan.PlanNodes.
 //
@@ -30,17 +92,22 @@ var ErrChildLinkIndexOutOfRange = errors.New("spannerplan: childLink childIndex 
 // position in the slice, as documented by the Spanner protobuf contract.
 // Arbitrary or reordered PlanNode slices are not supported and will return
 // an error.
+//
+// On validation failure it returns a *ValidationError that wraps ErrInvalidPlan
+// and a category sentinel; see ValidationError.
 func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	if len(planNodes) == 0 {
-		return nil, ErrEmptyPlanNodes
+		return nil, newValidationError(ErrEmptyPlanNodes, -1, -1, ErrEmptyPlanNodes)
 	}
 
 	for i, planNode := range planNodes {
 		if planNode == nil {
-			return nil, fmt.Errorf("%w: at slice position %d", ErrNilPlanNode, i)
+			return nil, newValidationError(ErrNilPlanNode, i, -1,
+				fmt.Errorf("%w: at slice position %d", ErrNilPlanNode, i))
 		}
 		if planNode.GetIndex() != int32(i) {
-			return nil, fmt.Errorf("%w: at slice position %d expected index %d, got %d", ErrPlanNodeIndexMismatch, i, i, planNode.GetIndex())
+			return nil, newValidationError(ErrPlanNodeIndexMismatch, i, -1,
+				fmt.Errorf("%w: at slice position %d expected index %d, got %d", ErrPlanNodeIndexMismatch, i, i, planNode.GetIndex()))
 		}
 	}
 
@@ -49,11 +116,13 @@ func New(planNodes []*sppb.PlanNode) (*QueryPlan, error) {
 	for _, planNode := range planNodes {
 		for j, childLink := range planNode.GetChildLinks() {
 			if childLink == nil {
-				return nil, fmt.Errorf("%w: parent node %d childLinks[%d]", ErrNilChildLink, planNode.GetIndex(), j)
+				return nil, newValidationError(ErrNilChildLink, int(planNode.GetIndex()), j,
+					fmt.Errorf("%w: parent node %d childLinks[%d]", ErrNilChildLink, planNode.GetIndex(), j))
 			}
 			childIndex := childLink.GetChildIndex()
 			if childIndex < 0 || childIndex >= int32(len(planNodes)) {
-				return nil, fmt.Errorf("%w: parent node %d childLinks[%d] has childIndex %d, len(planNodes)=%d", ErrChildLinkIndexOutOfRange, planNode.GetIndex(), j, childIndex, len(planNodes))
+				return nil, newValidationError(ErrChildLinkIndexOutOfRange, int(planNode.GetIndex()), j,
+					fmt.Errorf("%w: parent node %d childLinks[%d] has childIndex %d, len(planNodes)=%d", ErrChildLinkIndexOutOfRange, planNode.GetIndex(), j, childIndex, len(planNodes)))
 			}
 			parentMap[childIndex] = planNode.GetIndex()
 			parentLinksMap[childIndex] = append(parentLinksMap[childIndex], ResolvedParentLink{
@@ -211,7 +280,6 @@ func ParseTargetMetadataFormat(s string) (TargetMetadataFormat, error) {
 }
 
 type KnownFlagFormat int64
-type FullScanFormat = KnownFlagFormat
 
 const (
 	// KnownFlagFormatRaw prints known boolean flag metadata as is.
@@ -219,12 +287,6 @@ const (
 
 	// KnownFlagFormatLabel prints known boolean flag metadata without value if true or omits if false.
 	KnownFlagFormatLabel
-
-	// Deprecated: FullScanFormatRaw is an alias of KnownFlagFormatRaw.
-	FullScanFormatRaw = KnownFlagFormatRaw
-
-	// Deprecated: FullScanFormatLabel is an alias of KnownFlagFormatLabel.
-	FullScanFormatLabel = KnownFlagFormatLabel
 )
 
 // ParseKnownFlagFormat parses string representation of KnownFlagFormat.
@@ -261,11 +323,6 @@ func WithInlineStatsFunc(f func(*sppb.PlanNode) []string) Option {
 	return func(o *option) {
 		o.inlineStatsFunc = f
 	}
-}
-
-// Deprecated: WithFullScanFormat is an alias of WithKnownFlagFormat.
-func WithFullScanFormat(fmt FullScanFormat) Option {
-	return WithKnownFlagFormat(fmt)
 }
 
 func EnableCompact() Option {
@@ -415,17 +472,33 @@ func HasStats(nodes []*sppb.PlanNode) bool {
 	return nodes[0].ExecutionStats != nil
 }
 
-func (qp *QueryPlan) GetLinkType(link *sppb.PlanNode_ChildLink) string {
+// LinkTypeInParent returns the type for one child-link occurrence in parent.
+//
+// rawChildLinkIndex is the position in parent.ChildLinks, not the child
+// PlanNode index. An explicit ChildLink.Type wins. For an untyped first child
+// of an Apply operator, LinkTypeInParent returns "Input" to match the Spanner
+// operator documentation. The parent and position are required because a
+// PlanNode can have multiple parents and can appear more than once under the
+// same parent.
+//
+// LinkTypeInParent returns an empty string when parent is nil or
+// rawChildLinkIndex does not identify a child link. This lets callers safely
+// use it while walking a plan without treating an invalid occurrence as an
+// implicit Input edge.
+func (qp *QueryPlan) LinkTypeInParent(parent *sppb.PlanNode, rawChildLinkIndex int) string {
+	childLinks := parent.GetChildLinks()
+	if rawChildLinkIndex < 0 || rawChildLinkIndex >= len(childLinks) {
+		return ""
+	}
+
+	link := childLinks[rawChildLinkIndex]
 	if link.GetType() != "" {
 		return link.GetType()
 	}
 
-	// Workaround to treat the first child of Apply as Input.
-	// This is necessary because it is more consistent with the official query plan operator docs.
-	// Note: Apply variants are Cross Apply, Anti Semi Apply, Semi Apply, Outer Apply, and their Distributed variants.
-	if parent := qp.GetParentNodeByChildLink(link); parent != nil &&
-		strings.HasSuffix(parent.GetDisplayName(), "Apply") &&
-		len(parent.GetChildLinks()) > 0 && parent.GetChildLinks()[0].GetChildIndex() == link.GetChildIndex() {
+	// Treat only this raw child-link occurrence as Input. Comparing child node
+	// indexes would incorrectly label every link to a shared child as Input.
+	if rawChildLinkIndex == 0 && strings.HasSuffix(parent.GetDisplayName(), "Apply") {
 		return "Input"
 	}
 

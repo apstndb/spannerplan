@@ -22,14 +22,6 @@ Rows also expose scalar child links in original PlanNode.ChildLinks order via
 rendering time using the parent row's [RowWithPredicates.DisplayName] together
 with each [ScalarChildLink.Type], because the same child-link type can have
 different meanings under different operators.
-[RowWithPredicates.ChildLinks] remains available for compatibility with older
-callers, but new code should prefer [RowWithPredicates.ScalarChildLinks] because
-it preserves Spanner's original PlanNode.ChildLinks order after filtering to
-scalar child links.
-[RowWithPredicates.Keys] is also kept for compatibility and contains scalar
-child descriptions grouped by child-link type; new code should use
-[RowWithPredicates.ScalarChildLinks] when it needs variables, child indexes, or
-stable ordering.
 
 A []string field would avoid one strings.Join in the renderer and one strings.Split in
 Text, but it is a breaking API change for modules that build [RowWithPredicates] literals
@@ -38,6 +30,30 @@ at the time of this change uses ProcessPlan and Text/FormatID only, not TreePart
 
 Breaking changes in this package are called out in the release / PR description when
 they affect exported options or types.
+
+# Structural signatures
+
+[StructuralSignature] returns a deterministic, versioned canonical string for
+comparing visible relational plan structure. It is intentionally separate from
+any machine-readable PlanTreeNode / ProcessPlanTree API (see issue #30) and does
+not expose viewer structured-row DTOs.
+
+The signature ignores plan-node IDs and execution statistics, preserves ordered
+child occurrences and parent link types, and uses the same depth / occurrence
+budgets and cycle detection as [ProcessPlan]. Its metadata field set is every
+present key and recursively typed value except subquery_cluster_node at any
+metadata struct depth, whose value is a PlanNode ID. This includes
+operation_type, raw scan_type, scan_method,
+seekable_key_size, flags (including false), and future optimizer metadata. New
+metadata therefore intentionally changes the alpha signature instead of being
+silently ignored.
+
+Equality is meaningful only for signatures made by the same alpha encoding
+revision; the encoding may change during the alpha and is not a stable
+interchange contract. Repeated identical operators can collide because plan-node
+IDs are intentionally excluded, so comparison layers must expose matching
+ambiguity. See [StructuralSignature] and plantree/testdata/signature for the
+encoding and fixture corpus.
 
 # Stability
 

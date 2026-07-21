@@ -216,17 +216,6 @@ var (
 	}
 )
 
-type stringList []string
-
-func (s *stringList) String() string {
-	return fmt.Sprint([]string(*s))
-}
-
-func (s *stringList) Set(s2 string) error {
-	*s = append(*s, strings.Split(s2, ",")...)
-	return nil
-}
-
 type repeatableStringList []string
 
 func (s *repeatableStringList) String() string {
@@ -312,7 +301,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flagSet := flag.NewFlagSet("rendertree", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
 
-	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom and --custom-column)")
+	customFile := flagSet.String("custom-file", "", "Read custom table column definitions from a YAML file (mutually exclusive with --custom-column)")
 	mode := flagSet.String("mode", "AUTO", "PROFILE, PLAN, AUTO(ignore case)")
 	printSectionsStr := flagSet.String("print", "basic", printFlagUsage)
 	showScalarVars := flagSet.Bool("show-vars", false, "show scalar variable assignments in semantic appendix sections")
@@ -322,7 +311,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	layoutStr := flagSet.String("layout", string(layoutTable), "Render layout: 'table' or 'tableless' (default: table)")
 	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
 	targetMetadata := flagSet.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
-	fullscan := flagSet.String("full-scan", "", "Deprecated alias for --known-flag.")
 	knownFlag := flagSet.String("known-flag", "", "Format known flags: 'label' or 'raw' (default: label)")
 	compact := flagSet.Bool("compact", false, "Enable compact format")
 	tableless := flagSet.Bool("tableless", false, "Shortcut for --layout=tableless")
@@ -330,10 +318,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 	hangingIndent := flagSet.Bool("hanging-indent", false, "Enable hanging indent for wrapped lines after node-local prefixes such as [Input] and [Map]")
 
-	var custom stringList
 	var customColumn repeatableStringList
-	flagSet.Var(&custom, "custom", "DEPRECATED: add a custom table column definition in NAME:TEMPLATE[:ALIGNMENT[:INLINE_TYPE]] form (mutually exclusive with --custom-file and --custom-column)")
-	flagSet.Var(&customColumn, "custom-column", "Add one custom table column definition as a YAML/JSON object (repeatable, mutually exclusive with --custom and --custom-file)")
+	flagSet.Var(&customColumn, "custom-column", "Add one custom table column definition as a YAML/JSON object (repeatable, mutually exclusive with --custom-file)")
 	if err := flagSet.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -343,41 +329,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	// These are semantic flag-combination checks that run after Parse succeeds.
 	// flag.ContinueOnError only covers parse-time failures, so we still print usage here.
-	if *fullscan != "" {
-		if *knownFlag != "" {
-			const msg = "--full-scan and --known-flag are mutually exclusive"
-			_, _ = fmt.Fprintln(stderr, msg)
-			flagSet.Usage()
-			return &usageError{err: errors.New(msg)}
-		}
-
-		_, _ = fmt.Fprintln(stderr, "--full-scan is deprecated. You must migrate to --known-flag.")
-
-		*knownFlag = *fullscan
-	}
-
-	if len(custom) > 0 && *customFile != "" {
-		const msg = "--custom and --custom-file are mutually exclusive"
-		_, _ = fmt.Fprintln(stderr, msg)
-		flagSet.Usage()
-		return &usageError{err: errors.New(msg)}
-	}
 	if len(customColumn) > 0 && *customFile != "" {
 		const msg = "--custom-column and --custom-file are mutually exclusive"
 		_, _ = fmt.Fprintln(stderr, msg)
 		flagSet.Usage()
 		return &usageError{err: errors.New(msg)}
 	}
-	if len(custom) > 0 && len(customColumn) > 0 {
-		const msg = "--custom and --custom-column are mutually exclusive"
-		_, _ = fmt.Fprintln(stderr, msg)
-		flagSet.Usage()
-		return &usageError{err: errors.New(msg)}
-	}
-	if len(custom) > 0 {
-		_, _ = fmt.Fprintln(stderr, "--custom is deprecated. You must migrate to --custom-column or --custom-file.")
-	}
-
 	printSections, err := parsePrintSections(*printSectionsStr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "Invalid value for -print flag: %v\n", err)
@@ -482,11 +439,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	var renderDef tableRenderDef
 	if len(customColumn) > 0 {
 		renderDef, err = customColumnListToTableRenderDef(customColumn)
-		if err != nil {
-			return err
-		}
-	} else if len(custom) > 0 {
-		renderDef, err = customListToTableRenderDef(custom)
 		if err != nil {
 			return err
 		}
@@ -673,52 +625,6 @@ func parseInlineType(s string) (inlineType, error) {
 	default:
 		return "", fmt.Errorf("inlineType must be one of ALWAYS, CAN, NEVER, but: %v", s)
 	}
-}
-
-func customListToTableRenderDef(custom []string) (tableRenderDef, error) {
-	var columns []columnRenderDef
-	for _, s := range custom {
-		split := strings.SplitN(s, ":", 4)
-
-		var err error
-		if len(split) < 2 || len(split) > 4 {
-			return tableRenderDef{}, fmt.Errorf(`invalid format: must be "<name>:<template>[:<alignment>[:<inline_type>]]", but: %v`, s)
-		}
-
-		inline := inlineTypeUnspecified
-		if len(split) == 4 {
-			if inlineStr := split[3]; inlineStr != "" {
-				inline, err = parseInlineType(inlineStr)
-				if err != nil {
-					return tableRenderDef{}, fmt.Errorf("failed on parse inline_type: %w", err)
-				}
-			}
-		}
-
-		align := tw.AlignNone
-		if len(split) >= 3 {
-			if alignStr := split[2]; alignStr != "" {
-				align, err = parseAlignment(alignStr)
-				if err != nil {
-					return tableRenderDef{}, fmt.Errorf("failed on parse alignment: %w", err)
-				}
-			}
-		}
-
-		name, templateStr := split[0], split[1]
-		mapFunc, err := templateMapFunc(name, templateStr)
-		if err != nil {
-			return tableRenderDef{}, err
-		}
-
-		columns = append(columns, columnRenderDef{
-			MapFunc:   mapFunc,
-			Name:      name,
-			Alignment: align,
-			Inline:    inline,
-		})
-	}
-	return tableRenderDef{Columns: columns}, nil
 }
 
 type printResultOptions struct {
