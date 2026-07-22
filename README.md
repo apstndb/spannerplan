@@ -91,24 +91,14 @@ The tableless layout is compact, human-oriented text rather than an escaped
 pipe-delimited interchange format. Use keyed `reference.RenderConfig` literals
 in Go so additive configuration fields remain source-compatible.
 
-## Disclaimer
+## Releases
 
-This module is pre-v1. The non-prerelease v0.3.0 release remains a ZeroVer
-release and does not promise v1 API compatibility.
+Version-specific breaking changes, migration instructions, compatibility
+notes, and toolchain requirements are documented in
+[GitHub Releases](https://github.com/apstndb/spannerplan/releases). Review the
+notes for the target version before upgrading, especially across v0 minor
+versions.
 
-The `v0.3.0` line removes the deprecated
-`github.com/apstndb/spannerplan/protoyaml` compatibility package. Import
-[`github.com/apstndb/protoyaml`](https://github.com/apstndb/protoyaml)
-directly. Migrations of the known downstream projects have been validated
-locally; compatible downstream changes and releases are still pending.
-
-It also replaces the ambiguous `QueryPlan.GetLinkType(link)` API with
-`QueryPlan.LinkTypeInParent(parent, rawChildLinkIndex)`. Callers that render
-links must preserve the raw position in the actual parent's `ChildLinks` slice:
-a shared child PlanNode can have different link labels at different occurrences.
-
-Plantree now rejects rendered trees deeper than 256 edges from the root or
-with more than 4096 visible node occurrences. Callers can identify those
-renderer-budget failures with `errors.Is(err, plantree.ErrTraversalLimitExceeded)`
-and inspect `*plantree.TraversalLimitError`; the conservative alpha budgets may
-be raised non-breakingly when real Spanner captures require it.
+The ecosystem matrix records observed consumer pins. It does not claim that
+every downstream public branch or release has adopted the latest spannerplan
+version.
