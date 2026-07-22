@@ -93,12 +93,14 @@ in Go so additive configuration fields remain source-compatible.
 
 ## Disclaimer
 
-This module is alpha quality.
+This module is pre-v1. The non-prerelease v0.3.0 release remains a ZeroVer
+release and does not promise v1 API compatibility.
 
-The `v0.3.0` prerelease line removes the deprecated
+The `v0.3.0` line removes the deprecated
 `github.com/apstndb/spannerplan/protoyaml` compatibility package. Import
 [`github.com/apstndb/protoyaml`](https://github.com/apstndb/protoyaml)
-directly; `spanner-mycli` and the Spanner plan ecosystem have already migrated.
+directly. Migrations of the known downstream projects have been validated
+locally; compatible downstream changes and releases are still pending.
 
 It also replaces the ambiguous `QueryPlan.GetLinkType(link)` API with
 `QueryPlan.LinkTypeInParent(parent, rawChildLinkIndex)`. Callers that render
