@@ -12,7 +12,7 @@ and the local unpublished diagnostics viewer.
 
 ## Directory overview
 
-- [`asciitable`](./asciitable): Generic ASCII table and appendix rendering helpers.
+- [`asciitable`](./asciitable): Generic ASCII table, tableless row, and appendix rendering helpers.
 - [`cmd/lintplan`](./cmd/lintplan): CLI for printing heuristic warnings about expensive plan operators.
 - [`cmd/rendertree`](./cmd/rendertree): CLI for rendering Spanner query plans and profiles as ASCII tables.
 - [`examples/pgexplainjson`](./examples/pgexplainjson): Example renderer for PostgreSQL `EXPLAIN (ANALYZE, FORMAT JSON)` output.
@@ -77,7 +77,7 @@ const result = globalThis.spannerplanRenderTreeTable(
   queryPlanJson,
   "AUTO",
   "CURRENT",
-  {wrapWidth: 80, hangingIndent: true},
+  {wrapWidth: 80, hangingIndent: true, layout: "tableless"},
 )
 
 if (result.error) {
@@ -86,6 +86,10 @@ if (result.error) {
 
 console.log(result.output)
 ```
+
+The tableless layout is compact, human-oriented text rather than an escaped
+pipe-delimited interchange format. Use keyed `reference.RenderConfig` literals
+in Go so additive configuration fields remain source-compatible.
 
 ## Disclaimer
 

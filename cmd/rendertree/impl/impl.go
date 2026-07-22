@@ -277,6 +277,24 @@ func parseExplainMode(s string) (explainMode, error) {
 	}
 }
 
+type layout string
+
+const (
+	layoutTable     layout = "table"
+	layoutTableless layout = "tableless"
+)
+
+func parseLayout(s string) (layout, error) {
+	switch strings.ToLower(s) {
+	case string(layoutTable):
+		return layoutTable, nil
+	case string(layoutTableless):
+		return layoutTableless, nil
+	default:
+		return "", fmt.Errorf("invalid input: %s. Must be one of table, tableless (case-insensitive)", s)
+	}
+}
+
 const printFlagUsage = "print appendix preset (basic, enhanced, full, none; empty value suppresses appendices) or comma-separated sections (predicates, ordering, aggregate, typed, full); presets are standalone; typed/full cannot be combined"
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -290,10 +308,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	resolveScalarVars := flagSet.Bool("resolve-vars", false, "EXPERIMENTAL: resolve scalar variable aliases in semantic appendix sections")
 	resolveScalarVarsRecursive := flagSet.Bool("resolve-vars-recursive", false, "EXPERIMENTAL: recursively resolve scalar variable aliases in semantic appendix sections")
 	disallowUnknownStats := flagSet.Bool("disallow-unknown-stats", false, "error on unknown stats field")
+	layoutStr := flagSet.String("layout", string(layoutTable), "Render layout: 'table' or 'tableless' (default: table)")
 	executionMethod := flagSet.String("execution-method", "angle", "Format execution method metadata: 'angle' or 'raw' (default: angle)")
 	targetMetadata := flagSet.String("target-metadata", "on", "Format target metadata: 'on' or 'raw' (default: on)")
 	knownFlag := flagSet.String("known-flag", "", "Format known flags: 'label' or 'raw' (default: label)")
 	compact := flagSet.Bool("compact", false, "Enable compact format")
+	tableless := flagSet.Bool("tableless", false, "Shortcut for --layout=tableless")
 	inlineStats := flagSet.Bool("inline-stats", false, "Enable inline stats")
 	wrapWidth := flagSet.Int("wrap-width", 0, "Number of characters at which to wrap the Operator column content. 0 means no wrapping.")
 	hangingIndent := flagSet.Bool("hanging-indent", false, "Enable hanging indent for wrapped lines after node-local prefixes such as [Input] and [Map]")
@@ -327,6 +347,28 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintf(stderr, "Invalid value for -mode flag: %v\n", err)
 		flagSet.Usage()
 		return &usageError{err: err}
+	}
+
+	var layoutExplicit bool
+	flagSet.Visit(func(f *flag.Flag) {
+		if f.Name == "layout" {
+			layoutExplicit = true
+		}
+	})
+	parsedLayout, err := parseLayout(*layoutStr)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Invalid value for -layout flag: %v\n", err)
+		flagSet.Usage()
+		return &usageError{err: err}
+	}
+	if *tableless {
+		if layoutExplicit && parsedLayout != layoutTableless {
+			const msg = "--tableless and --layout=table are mutually exclusive"
+			_, _ = fmt.Fprintln(stderr, msg)
+			flagSet.Usage()
+			return &usageError{err: errors.New(msg)}
+		}
+		parsedLayout = layoutTableless
 	}
 
 	var opts []plantree.Option
@@ -416,6 +458,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	s, err := renderTreeImpl(planNodes, renderTreeOptions{
 		renderDef:                  renderDef,
+		layout:                     parsedLayout,
 		printSections:              printSections,
 		showScalarVars:             *showScalarVars,
 		resolveScalarVars:          *resolveScalarVars,
@@ -434,6 +477,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 type renderTreeOptions struct {
 	renderDef                  tableRenderDef
+	layout                     layout
 	printSections              PrintSections
 	showScalarVars             bool
 	resolveScalarVars          bool
@@ -466,6 +510,7 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderOpts renderTreeOptions) (s
 				return !def.shouldInline(renderOpts.inlineStats)
 			}),
 		},
+		layout:                     renderOpts.layout,
 		printSections:              renderOpts.printSections,
 		showScalarVars:             renderOpts.showScalarVars,
 		resolveScalarVars:          renderOpts.resolveScalarVars,
@@ -584,6 +629,7 @@ func parseInlineType(s string) (inlineType, error) {
 
 type printResultOptions struct {
 	renderDef                  tableRenderDef
+	layout                     layout
 	printSections              PrintSections
 	showScalarVars             bool
 	resolveScalarVars          bool
@@ -594,7 +640,7 @@ func printResult(rows []plantree.RowWithPredicates, printOpts printResultOptions
 	var b strings.Builder
 
 	if len(rows) > 0 && len(printOpts.renderDef.Columns) > 0 {
-		tablePart, err := renderTablePart(printOpts.renderDef, rows)
+		tablePart, err := renderTablePartForLayout(printOpts.renderDef, rows, printOpts.layout)
 		if err != nil {
 			return "", err
 		}
@@ -638,23 +684,63 @@ func printSectionsFromScalarAppendix(sections scalarappendix.Sections) PrintSect
 
 type renderedTableRow []string
 
+func renderTablePartForLayout(renderDef tableRenderDef, rows []plantree.RowWithPredicates, tableLayout layout) (string, error) {
+	switch tableLayout {
+	case "", layoutTable:
+		return renderTablePart(renderDef, rows)
+	case layoutTableless:
+		return renderTablelessPart(renderDef, rows)
+	default:
+		return "", fmt.Errorf("unsupported layout: %s", tableLayout)
+	}
+}
+
 func renderTablePart(renderDef tableRenderDef, rows []plantree.RowWithPredicates) (string, error) {
+	tableRows, err := renderedRows(renderDef, rows)
+	if err != nil {
+		return "", err
+	}
+
+	spec, err := renderedTableSpec(renderDef)
+	if err != nil {
+		return "", err
+	}
+	return asciitable.RenderTable(tableRows, spec)
+}
+
+func renderTablelessPart(renderDef tableRenderDef, rows []plantree.RowWithPredicates) (string, error) {
+	tableRows, err := renderedRows(renderDef, rows)
+	if err != nil {
+		return "", err
+	}
+
+	spec, err := renderedTableSpec(renderDef)
+	if err != nil {
+		return "", err
+	}
+	return asciitable.RenderTableless(tableRows, spec)
+}
+
+func renderedRows(renderDef tableRenderDef, rows []plantree.RowWithPredicates) ([]renderedTableRow, error) {
 	tableRows := make([]renderedTableRow, 0, len(rows))
 	for _, row := range rows {
 		values, err := renderDef.ColumnMapFunc(row)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		tableRows = append(tableRows, renderedTableRow(values))
 	}
+	return tableRows, nil
+}
 
+func renderedTableSpec(renderDef tableRenderDef) (asciitable.TableSpec[renderedTableRow], error) {
 	spec := asciitable.TableSpec[renderedTableRow]{
 		Columns: make([]asciitable.Column[renderedTableRow], 0, len(renderDef.Columns)),
 	}
 	for i, col := range renderDef.Columns {
 		alignment, err := tableAlignment(col.Alignment)
 		if err != nil {
-			return "", fmt.Errorf("column %d (%q): %w", i, col.Name, err)
+			return asciitable.TableSpec[renderedTableRow]{}, fmt.Errorf("column %d (%q): %w", i, col.Name, err)
 		}
 		index := i
 		spec.Columns = append(spec.Columns, asciitable.Column[renderedTableRow]{
@@ -668,7 +754,7 @@ func renderTablePart(renderDef tableRenderDef, rows []plantree.RowWithPredicates
 			},
 		})
 	}
-	return asciitable.RenderTable(tableRows, spec)
+	return spec, nil
 }
 
 func tableAlignment(alignment tw.Align) (asciitable.Alignment, error) {

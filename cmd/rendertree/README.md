@@ -283,6 +283,12 @@ Predicates(identified by ID):
 
 `rendertree` supports compact formatting and wrapping for limited-width environments.
 
+- `--layout=tableless` removes the ASCII table grid and headers and renders pipe-separated physical lines.
+  - `--tableless` is a shortcut for `--layout=tableless`.
+  - This layout can be combined with `--compact`, `--wrap-width`, and `--inline-stats`.
+  - The output is human-oriented: `|` is not escaped, trailing empty cells are omitted, and physical lines may have different field counts. Empty physical lines are preserved.
+  - PROFILE output without `--inline-stats` adds separate stats fields when present; rows without stats have fewer fields, and the unpadded Operator field means stats do not form vertically aligned columns.
+  - Custom columns using center alignment are emitted without centering or padding.
 - `--compact` enables the compact format:
   - Each level of depth in the Query Plan tree adds only one character to its indentation.
   - Whitespaces are not inserted for operator and metadata display unless it causes ambiguity.
@@ -316,6 +322,15 @@ $ rendertree --compact --wrap-width=60 < testdata/distributed_cross_apply.yaml
 Predicates(identified by ID):
   1: Split Range: ($AlbumId = $AlbumId_1)
  17: Residual Condition: ($AlbumId = $batched_AlbumId_1)
+```
+
+```
+$ rendertree --tableless --compact --wrap-width=40 < testdata/distributed_cross_apply.yaml
+  0|Distributed Union on AlbumsByAlbumTitle<
+   |Row>
+ *1|+Distributed Cross Apply<Row>
+  2| +[Input]Create Batch<Row>
+...
 ```
 
 ```

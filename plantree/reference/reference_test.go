@@ -387,6 +387,43 @@ func TestParseFormat(t *testing.T) {
 	}
 }
 
+func TestParseLayout(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    Layout
+		wantErr bool
+	}{
+		{"valid TABLE", "TABLE", LayoutTable, false},
+		{"valid table lowercase", "table", LayoutTable, false},
+		{"valid TABLELESS", "TABLELESS", LayoutTableless, false},
+		{"valid mixed case", "TaBlElEsS", LayoutTableless, false},
+		{"invalid layout", "INVALID", "", true},
+		{"empty string", "", "", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseLayout(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, got nil", tc.input)
+				}
+				if !strings.Contains(err.Error(), "unknown layout") {
+					t.Errorf("expected error message to contain 'unknown layout', got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Errorf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestParsePrintSections(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -864,6 +901,16 @@ func TestRenderTreeTableWithConfig(t *testing.T) {
 			config: RenderConfig{WrapWidth: 50, HangingIndent: true},
 			opts:   []Option{WithWrapWidth(50), WithHangingIndent()},
 		},
+		{
+			name:   "tableless layout matches WithLayout",
+			config: RenderConfig{Layout: Layout("tableless")},
+			opts:   []Option{WithLayout(LayoutTableless)},
+		},
+		{
+			name:   "wrap width and tableless layout match options",
+			config: RenderConfig{WrapWidth: 50, Layout: Layout("tableless")},
+			opts:   []Option{WithWrapWidth(50), WithLayout(LayoutTableless)},
+		},
 	}
 
 	for _, tc := range tests {
@@ -885,6 +932,41 @@ func TestRenderTreeTableWithConfig(t *testing.T) {
 	}
 }
 
+func TestRenderTreeTable_TablelessLayout(t *testing.T) {
+	input := loadWrappedPlan(t)
+	stats, _, err := queryplan.ExtractQueryPlan([]byte(input))
+	if err != nil {
+		t.Fatalf("Failed to extract query plan: %v", err)
+	}
+
+	got, err := RenderTreeTableWithOptions(
+		stats.GetQueryPlan().GetPlanNodes(),
+		RenderModePlan,
+		FormatCompact,
+		WithWrapWidth(40),
+		WithLayout(LayoutTableless),
+	)
+	if err != nil {
+		t.Fatalf("RenderTreeTableWithOptions() error = %v", err)
+	}
+
+	for _, notWant := range []string{"+-----", "| ID "} {
+		if strings.Contains(got, notWant) {
+			t.Fatalf("RenderTreeTableWithOptions() output contains table grid/header %q:\n%s", notWant, got)
+		}
+	}
+	for _, want := range []string{
+		"  0|Distributed Union on AlbumsByAlbumTitle<\n   |Row>",
+		" *1|+Distributed Cross Apply<Row>",
+		"*17|    +Filter Scan<Row>(seekable_key_size:",
+		"Predicates(identified by ID):",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("RenderTreeTableWithOptions() output does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderTreeTableWithConfig_NegativeWrapWidth(t *testing.T) {
 	_, err := RenderTreeTableWithConfig(
 		[]*sppb.PlanNode{{}},
@@ -897,6 +979,21 @@ func TestRenderTreeTableWithConfig_NegativeWrapWidth(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "wrapWidth cannot be negative") {
 		t.Fatalf("RenderTreeTableWithConfig() error = %q, want wrapWidth cannot be negative", err)
+	}
+}
+
+func TestRenderTreeTableWithConfig_InvalidLayout(t *testing.T) {
+	_, err := RenderTreeTableWithConfig(
+		[]*sppb.PlanNode{{}},
+		RenderModeAuto,
+		FormatCurrent,
+		RenderConfig{Layout: Layout("broken")},
+	)
+	if err == nil {
+		t.Fatal("RenderTreeTableWithConfig() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "unknown layout") {
+		t.Fatalf("RenderTreeTableWithConfig() error = %q, want unknown layout", err)
 	}
 }
 
