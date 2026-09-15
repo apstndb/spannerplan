@@ -192,11 +192,18 @@ func ValidateSections(sections Sections) error {
 	return nil
 }
 
-// Render renders the configured scalar appendices without a leading separator.
-func Render(rows []plantree.RowWithPredicates, opts Options) (string, error) {
+// Appendix is a selected section with aligned, unindented item lines.
+type Appendix struct {
+	Section Section
+	Title   string
+	Lines   []string
+}
+
+// Build returns nonempty appendices in the configured section order.
+func Build(rows []plantree.RowWithPredicates, opts Options) ([]Appendix, error) {
 	sections, err := resolvedSections(opts.Sections)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	resolveVars := opts.ResolveScalarVars || opts.ResolveScalarVarsRecursive
@@ -205,29 +212,26 @@ func Render(rows []plantree.RowWithPredicates, opts Options) (string, error) {
 		resolver = newScalarLinkResolver(rows)
 	}
 
-	var b strings.Builder
+	var appendices []Appendix
 	for _, section := range sections {
-		var (
-			part string
-			err  error
-		)
+		var spec asciitable.AppendixSpec[plantree.RowWithPredicates]
 		switch section {
 		case SectionFull, SectionTyped:
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+			spec = scalarAppendixSpec(
 				"Node Parameters(identified by ID):",
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, func(_ plantree.RowWithPredicates, link plantree.ScalarChildLink) bool {
 						return section == SectionFull || link.Type != ""
 					}, formatRawScalarLink)
 				},
-			))
+			)
 		case SectionPredicates:
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+			spec = scalarAppendixSpec(
 				"Predicates(identified by ID):",
 				func(row plantree.RowWithPredicates) []string {
 					return row.Predicates
 				},
-			))
+			)
 		case SectionOrdering:
 			format := semanticScalarLinkFormatter(opts.ShowScalarVars, keyScalarLinkDescription)
 			if resolveVars {
@@ -235,12 +239,12 @@ func Render(rows []plantree.RowWithPredicates, opts Options) (string, error) {
 					return resolver.formatKeyScalarLink(link, opts.ResolveScalarVarsRecursive)
 				})
 			}
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+			spec = scalarAppendixSpec(
 				"Ordering(identified by ID):",
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, isOrderingScalarLink, format)
 				},
-			))
+			)
 		case SectionAggregate:
 			format := semanticScalarLinkFormatter(opts.ShowScalarVars, scalarLinkDescription)
 			if resolveVars {
@@ -248,26 +252,37 @@ func Render(rows []plantree.RowWithPredicates, opts Options) (string, error) {
 					return resolver.formatAggregateScalarLink(link, opts.ResolveScalarVarsRecursive)
 				})
 			}
-			part, err = asciitable.RenderAppendix(rows, scalarAppendixSpec(
+			spec = scalarAppendixSpec(
 				"Aggregates(identified by ID):",
 				func(row plantree.RowWithPredicates) []string {
 					return scalarLinkLines(row, isAggregateScalarLink, format)
 				},
-			))
+			)
 		default:
-			return "", fmt.Errorf("unsupported print section: %s", section)
+			return nil, fmt.Errorf("unsupported print section: %s", section)
 		}
+		lines, err := asciitable.AppendixLines(rows, spec)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		if part != "" {
-			if b.Len() > 0 {
-				b.WriteString("\n")
-			}
-			b.WriteString(part)
+		if len(lines) > 0 {
+			appendices = append(appendices, Appendix{Section: section, Title: spec.Title, Lines: lines})
 		}
 	}
-	return b.String(), nil
+	return appendices, nil
+}
+
+// Render renders the configured scalar appendices without a leading separator.
+func Render(rows []plantree.RowWithPredicates, opts Options) (string, error) {
+	appendices, err := Build(rows, opts)
+	if err != nil {
+		return "", err
+	}
+	parts := make([]string, 0, len(appendices))
+	for _, appendix := range appendices {
+		parts = append(parts, appendix.Title+"\n "+strings.Join(appendix.Lines, "\n ")+"\n")
+	}
+	return strings.Join(parts, "\n"), nil
 }
 
 func resolvedSections(sections *Sections) (Sections, error) {
