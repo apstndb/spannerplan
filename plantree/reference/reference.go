@@ -2,6 +2,8 @@
 // Spanner query plans as ASCII tables with various formatting options.
 //
 // Go callers should prefer [RenderTreeTableWithOptions] with functional options.
+// Applications that render their own tables can use [BuildAppendices] to obtain
+// structured scalar appendices from processed plan rows.
 // Cross-language integrations, such as WebAssembly or JavaScript wrappers that
 // start from JSON-like configuration, can use [RenderTreeTableWithConfig] and
 // [RenderConfig].

@@ -59,7 +59,6 @@ type AppendixSpec[T any] struct {
 
 type appendixRows struct {
 	rows        []appendixRow
-	hasItems    bool
 	maxIDLength int
 }
 
@@ -147,16 +146,23 @@ func RenderTableless[T any](rows []T, spec TableSpec[T]) (string, error) {
 
 // RenderAppendix formats an appendix for rows with associated items.
 func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
-	resolved, err := collectAppendixRows(rows, spec)
-	if err != nil {
+	lines, err := AppendixLines(rows, spec)
+	if err != nil || len(lines) == 0 {
 		return "", err
 	}
-	if !resolved.hasItems {
-		return "", nil
-	}
+	return spec.Title + "\n " + strings.Join(lines, "\n ") + "\n", nil
+}
 
-	var sb strings.Builder
-	_, _ = fmt.Fprintln(&sb, spec.Title)
+// AppendixLines returns ID-aligned item lines without a title, outer indentation,
+// or trailing newline. Input item text, including embedded newlines, is preserved.
+// IDs from all rows determine alignment, even when a row has no items.
+// Validation matches [RenderAppendix]; no items returns a nil slice.
+func AppendixLines[T any](rows []T, spec AppendixSpec[T]) ([]string, error) {
+	resolved, err := collectAppendixRows(rows, spec)
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
 	for _, row := range resolved.rows {
 		for i, item := range row.items {
 			idPartStr := ""
@@ -165,10 +171,10 @@ func RenderAppendix[T any](rows []T, spec AppendixSpec[T]) (string, error) {
 			}
 
 			prefix := tabwrap.FillLeft(idPartStr, resolved.maxIDLength+1)
-			_, _ = fmt.Fprintf(&sb, " %s %s\n", prefix, item)
+			lines = append(lines, prefix+" "+item)
 		}
 	}
-	return sb.String(), nil
+	return lines, nil
 }
 
 func collectTableRows[T any](rows []T, spec TableSpec[T]) ([][]string, []string, []tw.Align, error) {
@@ -276,7 +282,6 @@ func collectAppendixRows[T any](rows []T, spec AppendixSpec[T]) (appendixRows, e
 			resolved.maxIDLength = idLength
 		}
 		if len(items) > 0 {
-			resolved.hasItems = true
 			resolved.rows = append(resolved.rows, appendixRow{
 				id:    id,
 				items: items,

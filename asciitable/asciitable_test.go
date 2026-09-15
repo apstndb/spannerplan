@@ -468,3 +468,25 @@ func testAppendixSpec(title string) asciitable.AppendixSpec[testRow] {
 		},
 	}
 }
+
+func TestAppendixLines(t *testing.T) {
+	rows := []testRow{{id: 1, predicates: []string{"first\ncontinued", "second"}}, {id: 100}}
+	got, err := asciitable.AppendixLines(rows, testAppendixSpec("Title"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"  1: first\ncontinued", "     second"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("lines (-want +got):\n%s", diff)
+	}
+	got[0] = "changed"
+	if rows[0].predicates[0] != "first\ncontinued" {
+		t.Fatal("lines alias input items")
+	}
+	for _, rows := range [][]testRow{nil, {{id: 1}}} {
+		got, err := asciitable.AppendixLines(rows, testAppendixSpec("Title"))
+		if err != nil || got != nil {
+			t.Fatalf("empty result = (%v, %v)", got, err)
+		}
+	}
+}

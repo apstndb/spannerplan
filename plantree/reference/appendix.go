@@ -24,6 +24,40 @@ const (
 // PrintSections is an ordered list of appendix sections.
 type PrintSections []PrintSection
 
+// Appendix is a nonempty, titled section built from processed plan rows.
+// Lines have aligned node-ID prefixes but no outer indentation or trailing
+// newline. Input item text, including embedded newlines, is preserved.
+// The returned slice and Lines slices are caller-owned.
+type Appendix struct {
+	Section PrintSection
+	Title   string
+	Lines   []string
+}
+
+// BuildAppendices builds scalar appendices without rendering a tree or table.
+// Omitted print sections select [PrintPredicates]; [WithPrintSections] with no
+// arguments suppresses all sections. Empty sections are omitted, and selected
+// sections retain their requested order. Print-section and scalar-variable
+// options apply; layout, wrapping, and hanging-indent options do not.
+// It uses the same builder as [RenderTreeTableWithOptions].
+func BuildAppendices(rows []plantree.RowWithPredicates, opts ...Option) ([]Appendix, error) {
+	o := options{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&o)
+		}
+	}
+	parts, err := scalarappendix.Build(rows, printOptionsFromOptions(o))
+	if err != nil {
+		return nil, err
+	}
+	var result []Appendix
+	for _, part := range parts {
+		result = append(result, Appendix{Section: PrintSection(part.Section), Title: part.Title, Lines: part.Lines})
+	}
+	return result, nil
+}
+
 // PrintPreset selects an intent-based appendix section set.
 type PrintPreset string
 

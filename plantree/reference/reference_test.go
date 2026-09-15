@@ -2,6 +2,7 @@ package reference
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/MakeNowJust/heredoc/v2"
 	queryplan "github.com/apstndb/spannerplan"
+	"github.com/apstndb/spannerplan/plantree"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -1027,4 +1029,68 @@ func lineContaining(s, needle string) string {
 		}
 	}
 	return ""
+}
+
+func TestBuildAppendices(t *testing.T) {
+	rows := []plantree.RowWithPredicates{
+		{ID: 1, DisplayName: "Sort", Predicates: []string{"Condition: active"}, ScalarChildLinks: []plantree.ScalarChildLink{{Type: "Key", Description: "$alias (DESC)", Variable: "sort"}}},
+		{ID: 100, DisplayName: "Scan", ScalarChildLinks: []plantree.ScalarChildLink{{Variable: "alias", Description: "$column"}, {Variable: "column", Description: "name"}}},
+	}
+	predicates := Appendix{Section: PrintPredicates, Title: "Predicates(identified by ID):", Lines: []string{"  1: Condition: active"}}
+	for _, tc := range []struct {
+		name    string
+		opts    []Option
+		want    []Appendix
+		wantErr string
+	}{
+		{name: "default and nil option", opts: []Option{nil}, want: []Appendix{predicates}},
+		{name: "explicit none", opts: []Option{WithPrintSections()}},
+		{name: "omit empty and preserve order", opts: []Option{WithPrintSections(PrintAggregate, PrintOrdering, PrintPredicates)}, want: []Appendix{
+			{Section: PrintOrdering, Title: "Ordering(identified by ID):", Lines: []string{"  1: Key: $alias DESC"}}, predicates,
+		}},
+		{name: "direct resolution and assignment", opts: []Option{WithPrintSections(PrintOrdering), WithResolveScalarVars(), WithShowScalarVars()}, want: []Appendix{
+			{Section: PrintOrdering, Title: "Ordering(identified by ID):", Lines: []string{"  1: Key: $sort=$column DESC"}},
+		}},
+		{name: "recursive resolution", opts: []Option{WithPrintSections(PrintOrdering), WithResolveScalarVarsRecursive()}, want: []Appendix{
+			{Section: PrintOrdering, Title: "Ordering(identified by ID):", Lines: []string{"  1: Key: name DESC"}},
+		}},
+		{name: "layout options ignored", opts: []Option{WithWrapWidth(-1), WithLayout("unknown"), WithHangingIndent()}, want: []Appendix{predicates}},
+		{name: "invalid sections", opts: []Option{WithPrintSections(PrintFull, PrintPredicates)}, wantErr: `print section "full" cannot be combined with other sections`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := BuildAppendices(rows, tc.opts...)
+			if tc.wantErr != "" {
+				if err == nil || err.Error() != tc.wantErr {
+					t.Fatalf("error = %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Fatalf("appendices (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func ExampleBuildAppendices() {
+	rows := []plantree.RowWithPredicates{{ID: 2, Predicates: []string{"Condition: active"}}}
+	appendices, err := BuildAppendices(rows)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	for _, appendix := range appendices {
+		fmt.Println(appendix.Section)
+		fmt.Println(appendix.Title)
+		for _, line := range appendix.Lines {
+			fmt.Println(line)
+		}
+	}
+	// Output:
+	// predicates
+	// Predicates(identified by ID):
+	// 2: Condition: active
 }
