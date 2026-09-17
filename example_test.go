@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spannerplan"
 )
@@ -31,4 +32,19 @@ func ExampleNew_invalidPlan() {
 	// is ErrInvalidPlan: true
 	// is ErrChildLinkIndexOutOfRange: true
 	// node 0, child link 0
+}
+
+func ExampleWithConciseMetadata() {
+	node := &sppb.PlanNode{DisplayName: "Filter Scan", Metadata: &structpb.Struct{Fields: map[string]*structpb.Value{
+		"seekable_key_size": structpb.NewStringValue("0"),
+		"scan_method":       structpb.NewStringValue("Automatic"),
+		"execution_method":  structpb.NewStringValue("Row"),
+	}}}
+	fmt.Println(spannerplan.NodeTitle(node))
+	fmt.Println(spannerplan.NodeTitle(node, spannerplan.WithConciseMetadata(true)))
+	fmt.Println(node.Metadata.Fields["scan_method"].GetStringValue())
+	// Output:
+	// Filter Scan (execution_method: Row, scan_method: Automatic, seekable_key_size: 0)
+	// Filter Scan (execution_method: Row)
+	// Automatic
 }

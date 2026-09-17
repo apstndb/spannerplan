@@ -229,6 +229,7 @@ type option struct {
 	compact               bool
 	inlineStatsFunc       func(*sppb.PlanNode) []string
 	hideMetadata          bool
+	conciseMetadata       bool
 }
 
 type Option func(o *option)
@@ -331,6 +332,17 @@ func EnableCompact() Option {
 	}
 }
 
+// WithConciseMetadata opts into omitting seekable_key_size "0" and scan_method
+// "Auto" or "Automatic" from node titles. Matching is exact and case-sensitive;
+// other values and metadata retain their existing rendering. The default is false.
+// This only changes display: the input plan is not modified. It composes with
+// compact spacing and other formatting options; HideMetadata still hides all metadata.
+func WithConciseMetadata(enabled bool) Option {
+	return func(o *option) {
+		o.conciseMetadata = enabled
+	}
+}
+
 // HideMetadata hides all metadata and labels even if KnownFlagFormatLabel is set.
 // It is used by spannerplanviz.
 func HideMetadata() Option {
@@ -383,6 +395,10 @@ func NodeTitle(node *sppb.PlanNode, opts ...Option) string {
 	var fields []string
 	if !o.hideMetadata {
 		for k, v := range metadataFields {
+			if o.conciseMetadata && ((k == "seekable_key_size" && v.GetStringValue() == "0") ||
+				(k == "scan_method" && (v.GetStringValue() == "Auto" || v.GetStringValue() == "Automatic"))) {
+				continue
+			}
 			if o.targetMetadataFormat != TargetMetadataFormatRaw && slices.Contains(targetMetadataKeys, k) {
 				continue
 			}

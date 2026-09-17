@@ -2,9 +2,11 @@ package spannerplan
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -448,6 +450,58 @@ func TestIsPredicate(t *testing.T) {
 
 			if got := qp.IsPredicate(tt.childLink); got != tt.want {
 				t.Fatalf("IsPredicate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNodeTitleConciseMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		key, value string
+		omitted    bool
+	}{
+		{"seekable_key_size", "0", true},
+		{"seekable_key_size", "1", false},
+		{"seekable_key_size", "00", false},
+		{"seekable_key_size", "unknown", false},
+		{"scan_method", "Auto", true},
+		{"scan_method", "Automatic", true},
+		{"scan_method", "Row", false},
+		{"scan_method", "Batch", false},
+		{"scan_method", "automatic", false},
+		{"scan_method", "Future", false},
+		{"unknown", "0", false},
+		{"unknown", "Auto", false},
+	} {
+		t.Run(tc.key+"/"+tc.value, func(t *testing.T) {
+			node := &sppb.PlanNode{DisplayName: "Scan", Metadata: &structpb.Struct{Fields: map[string]*structpb.Value{
+				tc.key: structpb.NewStringValue(tc.value),
+			}}}
+			original := proto.Clone(node)
+			full := "Scan (" + tc.key + ": " + tc.value + ")"
+			concise := full
+			if tc.omitted {
+				concise = "Scan"
+			}
+			for _, mode := range []struct {
+				name string
+				opts []Option
+				want string
+			}{
+				{"default", nil, full},
+				{"enabled", []Option{WithConciseMetadata(true)}, concise},
+				{"disabled", []Option{WithConciseMetadata(true), WithConciseMetadata(false)}, full},
+				{"compact", []Option{WithConciseMetadata(true), EnableCompact()}, strings.ReplaceAll(concise, " ", "")},
+				{"hidden", []Option{WithConciseMetadata(true), HideMetadata()}, "Scan"},
+			} {
+				t.Run(mode.name, func(t *testing.T) {
+					if got := NodeTitle(node, mode.opts...); got != mode.want {
+						t.Fatalf("NodeTitle = %q, want %q", got, mode.want)
+					}
+					if !proto.Equal(node, original) {
+						t.Fatal("rendering mutated input metadata")
+					}
+				})
 			}
 		})
 	}
