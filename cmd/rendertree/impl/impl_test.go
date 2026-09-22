@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1048,6 +1049,166 @@ func TestRun_CustomColumn(t *testing.T) {
 	if !strings.Contains(stdout.String(), "a:b,c") {
 		t.Fatalf("stdout = %q, want literal colon/comma content", stdout.String())
 	}
+}
+
+func TestRun_InlineCustomColumnKeepsRowContext(t *testing.T) {
+	t.Parallel()
+
+	plans := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{
+			name: "ids and operator",
+			input: `{"planNodes":[` +
+				`{"index":0,"kind":"RELATIONAL","displayName":"Union","childLinks":[{"childIndex":1}]},` +
+				`{"index":1,"kind":"RELATIONAL","displayName":"Scan"}]}`,
+			want: []string{
+				"0|Union (node=0, name=Union, fid=0, op=Union)",
+				"1|+- Scan (node=1, name=Scan, fid=1, op=+- Scan)",
+			},
+		},
+		{
+			name: "predicate format id",
+			input: `{"planNodes":[` +
+				`{"index":0,"kind":"RELATIONAL","displayName":"Filter","childLinks":[{"childIndex":1,"type":"Condition"},{"childIndex":2}]},` +
+				`{"index":1,"kind":"SCALAR","displayName":"Function","shortRepresentation":{"description":"a > 1"}},` +
+				`{"index":2,"kind":"RELATIONAL","displayName":"Scan"}]}`,
+			want: []string{
+				"*0|Filter (node=0, name=Filter, fid=*0, op=Filter)",
+				"2|+- Scan (node=2, name=Scan, fid=2, op=+- Scan)",
+			},
+		},
+	}
+
+	always := []string{
+		"-mode", "PLAN",
+		"-print", "none",
+		"-tableless",
+		"-custom-column", `{"name":"ID","template":"{{.FormatID}}","inline":"NEVER"}`,
+		"-custom-column", `{"name":"Operator","template":"{{.Text}}","inline":"NEVER"}`,
+		"-custom-column", `{"name":"node","template":"{{.ID}}","inline":"ALWAYS"}`,
+		"-custom-column", `{"name":"name","template":"{{.DisplayName}}","inline":"ALWAYS"}`,
+		"-custom-column", `{"name":"fid","template":"{{.FormatID}}","inline":"ALWAYS"}`,
+		"-custom-column", `{"name":"op","template":"{{.Text}}","inline":"ALWAYS"}`,
+	}
+	for _, tc := range plans {
+		t.Run(tc.name+"/always", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if err := run(always, strings.NewReader(tc.input), &stdout, &stderr); err != nil {
+				t.Fatalf("run() error = %v\nstderr=%s", err, stderr.String())
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(stdout.String(), want) {
+					t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
+				}
+			}
+		})
+		t.Run(tc.name+"/never", func(t *testing.T) {
+			args := []string{
+				"-mode", "PLAN",
+				"-print", "none",
+				"-tableless",
+				"-custom-column", `{"name":"ID","template":"{{.FormatID}}","inline":"NEVER"}`,
+				"-custom-column", `{"name":"Operator","template":"{{.Text}}","inline":"NEVER"}`,
+				"-custom-column", `{"name":"node","template":"{{.ID}}","inline":"NEVER"}`,
+			}
+			var stdout, stderr bytes.Buffer
+			if err := run(args, strings.NewReader(tc.input), &stdout, &stderr); err != nil {
+				t.Fatalf("run() error = %v\nstderr=%s", err, stderr.String())
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
+			}
+			for _, want := range []string{"|0", "|1", "|2"} {
+				if tc.name == "ids and operator" && want == "|2" {
+					continue
+				}
+				if tc.name == "predicate format id" && want == "|1" {
+					continue
+				}
+				if !strings.Contains(stdout.String(), want) {
+					t.Fatalf("stdout = %q, want substring %q", stdout.String(), want)
+				}
+			}
+		})
+	}
+}
+
+func TestRun_InlineSharedNodeKeepsOccurrenceContext(t *testing.T) {
+	t.Parallel()
+
+	plan := `{"planNodes":[` +
+		`{"kind":"RELATIONAL","displayName":"Cross Apply","childLinks":[{"childIndex":1},{"childIndex":1,"type":"Map"}]},` +
+		`{"index":1,"kind":"RELATIONAL","displayName":"Scan","metadata":{"scan_target":"Albums","execution_method":"Batch","scan_method":"Auto"},"childLinks":[{"childIndex":2,"type":"Condition","variable":"$v1"}]},` +
+		`{"index":2,"kind":"SCALAR","displayName":"Function","shortRepresentation":{"description":"x > 0"}}]}`
+	ctxTemplate := `<CTX>{{.ID}}/{{.DisplayName}}/{{.FormatID}}/{{len .Predicates}}/{{len .ScalarChildLinks}}/{{printf "%q" .NodeText}}/{{printf "%q" .TreePart}}/{{printf "%q" .Text}}</CTX>`
+	ctxPattern := regexp.MustCompile(`<CTX>.*?</CTX>`)
+	policies := []struct {
+		name   string
+		inline string
+		flag   bool
+	}{
+		{name: "NEVER", inline: "NEVER"},
+		{name: "ALWAYS", inline: "ALWAYS"},
+		{name: "flag", inline: "CAN", flag: true},
+	}
+
+	for _, compact := range []bool{false, true} {
+		var want []string
+		for _, policy := range policies {
+			name := "standard/" + policy.name
+			if compact {
+				name = "compact/" + policy.name
+			}
+			t.Run(name, func(t *testing.T) {
+				args := []string{"-mode", "PLAN", "-print", "none", "-tableless"}
+				if compact {
+					args = append(args, "-compact")
+				}
+				if policy.flag {
+					args = append(args, "-inline-stats")
+				}
+				args = append(args,
+					"-custom-column", `{"name":"ID","template":"{{.FormatID}}","inline":"NEVER"}`,
+					"-custom-column", `{"name":"Operator","template":"{{.Text}}","inline":"NEVER"}`,
+					"-custom-column", `{"name":"ctx","template":`+strconvQuote(ctxTemplate)+`,"inline":"`+policy.inline+`"}`,
+				)
+				var stdout, stderr bytes.Buffer
+				if err := run(args, strings.NewReader(plan), &stdout, &stderr); err != nil {
+					t.Fatalf("run() error = %v\nstderr=%s", err, stderr.String())
+				}
+				if stderr.Len() != 0 {
+					t.Fatalf("stderr = %q, want empty", stderr.String())
+				}
+				got := ctxPattern.FindAllString(stdout.String(), -1)
+				if len(got) != 3 {
+					t.Fatalf("contexts = %#v, want 3\nstdout=%s", got, stdout.String())
+				}
+				if want == nil {
+					want = got
+					if !strings.Contains(got[1], "[Input]") || !strings.Contains(got[2], "[Map]") {
+						t.Fatalf("contexts = %#v, want Input and Map labels", got)
+					}
+					if !strings.Contains(got[1], "/1/1/") || !strings.Contains(got[1], "scan_method") {
+						t.Fatalf("contexts = %#v, want predicate, scalar link, and metadata", got)
+					}
+					return
+				}
+				if diff := cmp.Diff(want, got); diff != "" {
+					t.Fatalf("inline context mismatch (-never +%s):\n%s", policy.name, diff)
+				}
+			})
+		}
+	}
+}
+
+func strconvQuote(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
 
 func lineContaining(s, needle string) string {

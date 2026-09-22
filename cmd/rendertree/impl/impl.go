@@ -22,7 +22,6 @@ import (
 	"github.com/apstndb/spannerplan/asciitable"
 	"github.com/apstndb/spannerplan/internal/scalarappendix"
 	"github.com/apstndb/spannerplan/plantree"
-	"github.com/apstndb/spannerplan/stats"
 )
 
 var customDecodeOptions = []yaml.DecodeOption{yaml.CustomUnmarshaler(unmarshalAlign)}
@@ -488,18 +487,52 @@ type renderTreeOptions struct {
 }
 
 func renderTreeImpl(planNodes []*sppb.PlanNode, renderOpts renderTreeOptions) (string, error) {
-	plantreeOptions := slices.Clone(renderOpts.plantreeOptions)
-	plantreeOptions = append(plantreeOptions,
-		plantree.WithQueryPlanOptions(
-			spannerplan.WithInlineStatsFunc(inlineStatsFuncFromTableRenderDef(renderOpts.disallowUnknownStats, renderOpts.renderDef, renderOpts.inlineStats)),
-		))
-
 	qp, err := spannerplan.New(planNodes)
 	if err != nil {
 		return "", err
 	}
 
-	rows, err := plantree.ProcessPlan(qp, plantreeOptions...)
+	// One pass when nothing inlines. A second pass runs only when a column
+	// actually inlines: the first pass suppresses inline callbacks so each
+	// occurrence has a complete pre-inline row. Templates read that snapshot
+	// in traversal order, not by plan-node ID, so one node reached as both
+	// Input and Map keeps both contexts. Text, NodeText, and TreePart in the
+	// snapshot are the pre-inline rendering. The second pass inserts the
+	// suffix before wrapping, and the final layout can gain lines.
+	// Nil clears any inline callback already present in plantree options, so
+	// the snapshot and the no-inline path cannot observe one. The second
+	// pass appends its own callback after this and therefore still wins.
+	plantreeOptions := append(slices.Clone(renderOpts.plantreeOptions), plantree.WithQueryPlanOptions(
+		spannerplan.WithInlineStatsFunc(nil),
+	))
+	inlineColumns := inlineColumns(renderOpts.renderDef, renderOpts.inlineStats)
+	var rows []plantree.RowWithPredicates
+	if len(inlineColumns) == 0 {
+		rows, err = plantree.ProcessPlan(qp, plantreeOptions...)
+	} else {
+		preRows, preErr := plantree.ProcessPlan(qp, plantreeOptions...)
+		if preErr != nil {
+			return "", preErr
+		}
+		rendered := inlineColumnValues(inlineColumns, preRows)
+		var occurrence int
+		secondPass := append(slices.Clone(plantreeOptions), plantree.WithQueryPlanOptions(
+			spannerplan.WithInlineStatsFunc(func(*sppb.PlanNode) []string {
+				occurrence++
+				if occurrence > len(rendered) {
+					return nil
+				}
+				return rendered[occurrence-1]
+			}),
+		))
+		rows, err = plantree.ProcessPlan(qp, secondPass...)
+		if err != nil {
+			return "", err
+		}
+		if occurrence != len(rendered) {
+			return "", fmt.Errorf("inline stats occurrence count = %d, want %d", occurrence, len(rendered))
+		}
+	}
 	if err != nil {
 		return "", err
 	}
@@ -523,34 +556,29 @@ func renderTreeImpl(planNodes []*sppb.PlanNode, renderOpts renderTreeOptions) (s
 	return s, nil
 }
 
-func inlineStatsFuncFromTableRenderDef(disallowUnknownStats bool, renderDef tableRenderDef, inlineStats bool) func(node *sppb.PlanNode) []string {
-	return func(node *sppb.PlanNode) []string {
-		executionStats, err := stats.Extract(node, disallowUnknownStats)
-		if err != nil {
-			slog.Warn("failed to extract execution stats", "node_id", node.GetIndex(), "err", err)
-			return nil
-		}
+func inlineColumns(renderDef tableRenderDef, inlineStats bool) []columnRenderDef {
+	return lo.Filter(renderDef.Columns, func(def columnRenderDef, _ int) bool {
+		return def.shouldInline(inlineStats)
+	})
+}
 
-		row := plantree.RowWithPredicates{ExecutionStats: *executionStats}
-
-		var result []string
-		for _, def := range renderDef.Columns {
-			if !def.shouldInline(inlineStats) {
-				continue
-			}
-
+func inlineColumnValues(columns []columnRenderDef, rows []plantree.RowWithPredicates) [][]string {
+	rendered := make([][]string, len(rows))
+	for i, row := range rows {
+		var lines []string
+		for _, def := range columns {
 			v, err := def.MapFunc(row)
 			if err != nil {
-				slog.Warn("failed to execute map function for inline stat", "node_id", node.GetIndex(), "name", def.Name, "err", err)
+				slog.Warn("failed to execute map function for inline stat", "node_id", row.ID, "name", def.Name, "err", err)
 				continue
 			}
-
 			if v != "" {
-				result = append(result, fmt.Sprintf("%v=%v", def.Name, v))
+				lines = append(lines, fmt.Sprintf("%v=%v", def.Name, v))
 			}
 		}
-		return result
+		rendered[i] = lines
 	}
+	return rendered
 }
 
 func shouldRenderWithStats(qp []*sppb.PlanNode, parsedMode explainMode) bool {
