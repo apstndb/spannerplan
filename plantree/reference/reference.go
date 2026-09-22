@@ -233,6 +233,13 @@ func renderTreeTable(planNodes []*sppb.PlanNode, mode RenderMode, format Format,
 		return "", fmt.Errorf("unknown render mode: %s", mode)
 	}
 
+	// Reject unknown formats before rendering. The zero Format and other
+	// non-constants used to panic inside optsForFormat. Unlike layout, an
+	// empty format is not a default.
+	if err := validateFormat(format); err != nil {
+		return "", err
+	}
+
 	rendered, err := processTree(planNodes, format, o)
 	if err != nil {
 		return "", err
@@ -376,7 +383,10 @@ func processTree(planNodes []*sppb.PlanNode, format Format, opts options) ([]pla
 		return nil, fmt.Errorf("failed to create query plan: %w", err)
 	}
 
-	plantreeOpts := optsForFormat(format)
+	plantreeOpts, err := optsForFormat(format)
+	if err != nil {
+		return nil, err
+	}
 	if opts.wrapWidth > 0 {
 		plantreeOpts = append(plantreeOpts, plantree.WithWrapWidth(opts.wrapWidth))
 	}
@@ -387,8 +397,23 @@ func processTree(planNodes []*sppb.PlanNode, format Format, opts options) ([]pla
 	return plantree.ProcessPlan(qp, plantreeOpts...)
 }
 
+// validateFormat accepts only the three canonical format constants.
+// It does not case-fold or map the zero value to a default format.
+func validateFormat(format Format) error {
+	switch format {
+	case FormatTraditional, FormatCurrent, FormatCompact:
+		return nil
+	default:
+		return fmt.Errorf("unknown format: %s", format)
+	}
+}
+
 // optsForFormat returns the appropriate rendering options for the given format.
-func optsForFormat(format Format) []plantree.Option {
+func optsForFormat(format Format) ([]plantree.Option, error) {
+	if err := validateFormat(format); err != nil {
+		return nil, err
+	}
+
 	currentOpts := []plantree.Option{
 		plantree.WithQueryPlanOptions(
 			queryplan.WithKnownFlagFormat(queryplan.KnownFlagFormatLabel),
@@ -399,14 +424,13 @@ func optsForFormat(format Format) []plantree.Option {
 
 	switch format {
 	case FormatTraditional:
-		return nil
+		return nil, nil
 	case FormatCurrent:
-		return currentOpts
+		return currentOpts, nil
 	case FormatCompact:
 		return slices.Concat(currentOpts,
-			[]plantree.Option{plantree.EnableCompact()})
+			[]plantree.Option{plantree.EnableCompact()}), nil
 	default:
-		// This should never happen as Format is constrained by type
-		panic(fmt.Sprintf("unexpected format: %v", format))
+		return nil, fmt.Errorf("unknown format: %s", format)
 	}
 }
