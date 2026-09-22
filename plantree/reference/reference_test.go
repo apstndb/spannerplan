@@ -606,6 +606,54 @@ func TestRenderTreeTable_InputValidation(t *testing.T) {
 	}
 }
 
+func TestRenderTreeTable_InvalidFormat(t *testing.T) {
+	planNodes := []*sppb.PlanNode{{Index: 0, DisplayName: "Scan"}}
+	formats := []Format{"", "NOPE", Format("current")}
+	modes := []RenderMode{RenderModeAuto, RenderModePlan, RenderModeProfile}
+	entrypoints := []struct {
+		name   string
+		render func(RenderMode, Format) (string, error)
+	}{
+		{
+			name: "RenderTreeTable",
+			render: func(mode RenderMode, format Format) (string, error) {
+				return RenderTreeTable(planNodes, mode, format, 0)
+			},
+		},
+		{
+			name: "RenderTreeTableWithOptions",
+			render: func(mode RenderMode, format Format) (string, error) {
+				return RenderTreeTableWithOptions(planNodes, mode, format)
+			},
+		},
+		{
+			name: "RenderTreeTableWithConfig",
+			render: func(mode RenderMode, format Format) (string, error) {
+				return RenderTreeTableWithConfig(planNodes, mode, format, RenderConfig{})
+			},
+		},
+	}
+
+	for _, format := range formats {
+		for _, mode := range modes {
+			for _, ep := range entrypoints {
+				t.Run(fmt.Sprintf("%s/%s/%q", ep.name, mode, format), func(t *testing.T) {
+					got, err := ep.render(mode, format)
+					if got != "" {
+						t.Errorf("output = %q, want empty", got)
+					}
+					if err == nil {
+						t.Fatal("error = nil, want unknown format")
+					}
+					if err.Error() != fmt.Sprintf("unknown format: %s", format) {
+						t.Errorf("error = %q, want unknown format: %s", err.Error(), format)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestRenderTreeTableWithOptions_PrintSections(t *testing.T) {
 	got, err := RenderTreeTableWithOptions(
 		scalarAppendixPlanNodes(),
