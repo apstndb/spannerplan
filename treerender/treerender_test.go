@@ -325,6 +325,54 @@ func TestRenderTreeWithOptions_TinyBudgetKeepsUTF8Valid(t *testing.T) {
 	}
 }
 
+func TestRenderTreeWithOptions_TabsPreserveNonWhitespace(t *testing.T) {
+	cases := []struct {
+		name      string
+		text      string
+		wrapWidth int
+		want      string
+	}{
+		{name: "leading tab", text: "\tX", wrapWidth: 4, want: "X"},
+		{name: "tab between letters", text: "a\tbcd", wrapWidth: 4, want: "abcd"},
+		{name: "multiple tabs", text: "a\t\tb\tc", wrapWidth: 4, want: "abc"},
+		{name: "tab after unicode", text: "你\tZ", wrapWidth: 4, want: "你Z"},
+		{name: "tiny budget", text: "\tX", wrapWidth: 1, want: "X"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RenderTreeWithOptions(
+				&Node{Text: tc.text},
+				DefaultStyle(),
+				func(n *Node) string { return n.Text },
+				func(n *Node) []*Node { return n.Children },
+				RenderOptions[Node]{WrapWidth: tc.wrapWidth},
+			)
+			if err != nil {
+				t.Fatalf("RenderTreeWithOptions() error = %v", err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("rows = %d, want 1", len(got))
+			}
+			if !utf8.ValidString(got[0].NodeText) {
+				t.Fatalf("NodeText = %q, want valid UTF-8", got[0].NodeText)
+			}
+			if gotText := strings.Map(dropWrappingSpace, got[0].NodeText); gotText != tc.want {
+				t.Fatalf("non-whitespace NodeText = %q, want %q (raw %q)", gotText, tc.want, got[0].NodeText)
+			}
+		})
+	}
+}
+
+func dropWrappingSpace(r rune) rune {
+	switch r {
+	case ' ', '\t', '\n', '\r':
+		return -1
+	default:
+		return r
+	}
+}
+
 func TestRenderTreeWithOptions_SkipsAnchorCallbackWhenUnused(t *testing.T) {
 	root := &Node{
 		Text: "root",
