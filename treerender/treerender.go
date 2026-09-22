@@ -382,6 +382,13 @@ func wrapChunks(text string, firstBudget, continuationBudget int, wrapCondition 
 			budget = continuationBudget
 			continue
 		}
+		// Truncate expands tabs before cutting, so its result is not a byte
+		// prefix of a source line that still contains tabs. Expand first and
+		// slice that expanded line. Tab stops stay relative to the start of
+		// this logical line, and every non-tab character remains in order.
+		if strings.Contains(rawLine, "\t") {
+			rawLine = wrapCondition.ExpandTab(rawLine)
+		}
 		for rawLine != "" {
 			rawChunk := wrapCondition.Truncate(rawLine, budget, "")
 			if rawChunk == "" {
