@@ -170,6 +170,8 @@ $ cat custom.yaml
 `inline` field in the custom configuration and the `--inline-stats` command-line flag together control how execution statistics are rendered.
 Inline stats are particularly useful for displaying *sparse* statistics (those that only appear on a few operators) without adding many empty columns to the main table, thus improving readability.
 
+An inline template sees the complete pre-inline row. `Text`, `NodeText`, and `TreePart` describe that rendering, including tree prefixes and per-occurrence labels, not the title after the inline suffix is inserted. Adding inline content can change where the final lines wrap.
+
 The following table shows how the `inline` field setting for a specific statistic interacts with the `--inline-stats` flag to determine its display location:
 
 | `inline`/`--inline-stats`                | true     | false    |
