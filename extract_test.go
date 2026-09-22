@@ -6,6 +6,8 @@ import (
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/goccy/go-yaml"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/apstndb/protoyaml"
 )
@@ -116,6 +118,99 @@ foo: bar
 			}
 			if got := gotRowType != nil; got != tt.wantRowType {
 				t.Fatalf("ExtractQueryPlan() rowType presence = %v, want %v", got, tt.wantRowType)
+			}
+		})
+	}
+}
+
+func TestExtractQueryPlan_FieldNameSpellings(t *testing.T) {
+	qp := &sppb.QueryPlan{PlanNodes: []*sppb.PlanNode{{
+		Kind:        sppb.PlanNode_RELATIONAL,
+		DisplayName: "Scan",
+	}}}
+	rss := &sppb.ResultSetStats{QueryPlan: qp}
+	rs := &sppb.ResultSet{
+		Metadata: &sppb.ResultSetMetadata{RowType: &sppb.StructType{Fields: []*sppb.StructType_Field{{
+			Name: "SingerId",
+			Type: &sppb.Type{Code: sppb.TypeCode_INT64},
+		}}}},
+		Stats: rss,
+	}
+
+	cases := []struct {
+		name        string
+		msg         proto.Message
+		wantRowType bool
+	}{
+		{name: "bare QueryPlan", msg: qp},
+		{name: "bare ResultSetStats", msg: rss},
+		{name: "ResultSet", msg: rs, wantRowType: true},
+	}
+	spellings := []struct {
+		name string
+		opts protojson.MarshalOptions
+	}{
+		{name: "json names", opts: protojson.MarshalOptions{}},
+		{name: "proto names", opts: protojson.MarshalOptions{UseProtoNames: true}},
+	}
+
+	for _, tc := range cases {
+		for _, spelling := range spellings {
+			t.Run(tc.name+"/"+spelling.name, func(t *testing.T) {
+				input, err := spelling.opts.Marshal(tc.msg)
+				if err != nil {
+					t.Fatalf("protojson.Marshal() error = %v", err)
+				}
+				gotStats, gotRowType, err := ExtractQueryPlan(input)
+				if err != nil {
+					t.Fatalf("ExtractQueryPlan(%s) error = %v\ninput: %s", spelling.name, err, input)
+				}
+				if gotStats == nil || len(gotStats.GetQueryPlan().GetPlanNodes()) != 1 {
+					t.Fatalf("plan nodes = %d, want 1", len(gotStats.GetQueryPlan().GetPlanNodes()))
+				}
+				if got := gotStats.GetQueryPlan().GetPlanNodes()[0].GetDisplayName(); got != "Scan" {
+					t.Errorf("display name = %q, want Scan", got)
+				}
+				if got := gotRowType != nil; got != tc.wantRowType {
+					t.Errorf("row type presence = %v, want %v", got, tc.wantRowType)
+				}
+			})
+		}
+	}
+}
+
+func TestExtractQueryPlan_DuplicateAliasAndMalformed(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name: "duplicate query plan alias",
+			input: `{"queryPlan":{"planNodes":[{"kind":"RELATIONAL","displayName":"Scan"}]},` +
+				`"query_plan":{"plan_nodes":[{"kind":"RELATIONAL","display_name":"Scan"}]}}`,
+		},
+		{
+			name: "duplicate plan nodes alias",
+			input: `{"planNodes":[{"kind":"RELATIONAL","displayName":"Scan"}],` +
+				`"plan_nodes":[{"kind":"RELATIONAL","display_name":"Scan"}]}`,
+		},
+		{
+			name:  "malformed json-name plan nodes",
+			input: `{"planNodes":"not-an-array"}`,
+		},
+		{
+			name:  "malformed proto-name plan nodes",
+			input: `{"plan_nodes":"not-an-array"}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := ExtractQueryPlan([]byte(tc.input))
+			if err == nil {
+				t.Fatal("ExtractQueryPlan() error = nil, want decoder rejection")
+			}
+			if err.Error() == "unknown input format" {
+				t.Fatalf("ExtractQueryPlan() error = %v, want the decoder to reject the payload", err)
 			}
 		})
 	}
