@@ -480,8 +480,10 @@ type ResolvedChildLink struct {
 }
 
 func HasStats(nodes []*sppb.PlanNode) bool {
-	// hasStats returns true only if the first node has ExecutionStats.
-	if len(nodes) == 0 {
+	// True only when the first node carries ExecutionStats.
+	// AUTO rendering calls this before New validates the slice. A nil first
+	// node has no stats and must not panic; New still rejects that input.
+	if len(nodes) == 0 || nodes[0] == nil {
 		return false
 	}
 

@@ -204,6 +204,11 @@ func TestHasStats(t *testing.T) {
 			nil,
 			false,
 		},
+		{
+			"nil root",
+			[]*sppb.PlanNode{nil},
+			false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

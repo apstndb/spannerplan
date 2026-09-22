@@ -2,6 +2,7 @@ package reference
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	queryplan "github.com/apstndb/spannerplan"
 	"github.com/apstndb/spannerplan/plantree"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // loadRealPlan reads the dca.yaml real plan used for integration-like tests.
@@ -647,6 +649,87 @@ func TestRenderTreeTable_InvalidFormat(t *testing.T) {
 					}
 					if err.Error() != fmt.Sprintf("unknown format: %s", format) {
 						t.Errorf("error = %q, want unknown format: %s", err.Error(), format)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestRenderTreeTable_NilPlanNode(t *testing.T) {
+	cases := []struct {
+		name      string
+		planNodes []*sppb.PlanNode
+		nodeIndex int
+	}{
+		{
+			name:      "nil root",
+			planNodes: []*sppb.PlanNode{nil},
+			nodeIndex: 0,
+		},
+		{
+			name: "nil middle node",
+			planNodes: []*sppb.PlanNode{
+				{Index: 0, ExecutionStats: &structpb.Struct{}},
+				nil,
+			},
+			nodeIndex: 1,
+		},
+	}
+	modes := []RenderMode{RenderModeAuto, RenderModePlan, RenderModeProfile}
+	entrypoints := []struct {
+		name   string
+		render func([]*sppb.PlanNode, RenderMode) (string, error)
+	}{
+		{
+			name: "RenderTreeTable",
+			render: func(nodes []*sppb.PlanNode, mode RenderMode) (string, error) {
+				return RenderTreeTable(nodes, mode, FormatCurrent, 0)
+			},
+		},
+		{
+			name: "RenderTreeTableWithOptions",
+			render: func(nodes []*sppb.PlanNode, mode RenderMode) (string, error) {
+				return RenderTreeTableWithOptions(nodes, mode, FormatCurrent)
+			},
+		},
+		{
+			name: "RenderTreeTableWithConfig",
+			render: func(nodes []*sppb.PlanNode, mode RenderMode) (string, error) {
+				return RenderTreeTableWithConfig(nodes, mode, FormatCurrent, RenderConfig{})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		for _, mode := range modes {
+			for _, ep := range entrypoints {
+				t.Run(tc.name+"/"+string(mode)+"/"+ep.name, func(t *testing.T) {
+					got, err := ep.render(tc.planNodes, mode)
+					if got != "" {
+						t.Errorf("output = %q, want empty", got)
+					}
+					if err == nil {
+						t.Fatal("error = nil, want validation error")
+					}
+					if !errors.Is(err, queryplan.ErrInvalidPlan) {
+						t.Errorf("errors.Is(err, ErrInvalidPlan) = false, want true (err = %v)", err)
+					}
+					if !errors.Is(err, queryplan.ErrNilPlanNode) {
+						t.Errorf("errors.Is(err, ErrNilPlanNode) = false, want true (err = %v)", err)
+					}
+					var verr *queryplan.ValidationError
+					if !errors.As(err, &verr) {
+						t.Fatalf("errors.As(err, *ValidationError) = false, want true (err = %v)", err)
+					}
+					if verr.Kind != queryplan.ErrNilPlanNode {
+						t.Errorf("verr.Kind = %v, want ErrNilPlanNode", verr.Kind)
+					}
+					if verr.NodeIndex != tc.nodeIndex {
+						t.Errorf("verr.NodeIndex = %d, want %d", verr.NodeIndex, tc.nodeIndex)
+					}
+					if verr.ChildIndex != -1 {
+						t.Errorf("verr.ChildIndex = %d, want -1", verr.ChildIndex)
 					}
 				})
 			}
